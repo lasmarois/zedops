@@ -1003,7 +1003,7 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                                 Stop
                               </button>
                               <button
-                                onClick={() => handleRebuildServer(server.id, server.name, server.container_id!)}
+                                onClick={() => handleRebuildServer(server.id, server.name)}
                                 disabled={rebuildServerMutation.isPending}
                                 style={{
                                   padding: '0.375rem 0.75rem',

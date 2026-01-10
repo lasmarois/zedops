@@ -261,7 +261,9 @@ export interface Server {
   game_port: number;
   udp_port: number;
   rcon_port: number;
-  status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting';
+  status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting' | 'missing' | 'deleted';
+  data_exists: boolean;
+  deleted_at: number | null;
   created_at: number;
   updated_at: number;
 }
