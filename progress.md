@@ -98,6 +98,58 @@
 
 ---
 
+## Session 3: 2026-01-10 (Manager Message Handlers)
+
+**Time:** 02:42 - 03:00
+
+**Goals:**
+- Define TypeScript types for container messages
+- Add container.* handlers to AgentConnection
+- Implement message routing to agents
+- Implement HTTP endpoints for UI requests
+- Add request/reply pattern support
+
+**Work Completed:**
+- ✅ Added container message routing to AgentConnection.ts
+  - handleContainerList() - forwards container.list to agent
+  - handleContainerOperation() - forwards start/stop/restart to agent
+- ✅ Added HTTP endpoints to Durable Object
+  - GET /containers - list containers endpoint
+  - POST /containers/:id/:operation - container operation endpoint
+- ✅ Implemented request/reply pattern handlers
+  - handleContainersRequest() - HTTP → WebSocket with reply inbox (10s timeout)
+  - handleContainerOperationRequest() - HTTP → WebSocket with reply inbox (30s timeout)
+  - Uses pendingReplies Map for async request/reply
+- ✅ Updated agent to support request/reply pattern
+  - All container handlers now check for msg.Reply field
+  - sendContainerSuccessWithReply() - sends to reply inbox if specified
+  - sendContainerErrorWithReply() - sends error to reply inbox if specified
+  - Updated handleContainerList, handleContainerStart/Stop/Restart
+- ✅ Built agent successfully with new request/reply pattern
+- ✅ Fixed field name: replyTo → reply (matches Message interface)
+
+**Blockers Encountered:**
+- None
+
+**Next Steps:**
+- Phase 4: UI Container List (create ContainerList.tsx component)
+- Phase 5: UI Container Actions (add Start/Stop/Restart buttons)
+- Phase 6: End-to-end testing with real containers
+
+**Notes:**
+- Request/reply pattern enables synchronous HTTP-style requests over WebSocket
+- Manager generates unique inbox subjects (_INBOX.{uuid}) for each request
+- Agent responds to reply inbox if msg.Reply is set, otherwise uses default subject
+- HTTP endpoints return proper status codes:
+  - 200: Success
+  - 400: Invalid operation
+  - 500: Operation failed
+  - 503: Agent not connected
+  - 504: Timeout
+- Phase 3 complete: Manager can now route container messages bi-directionally
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

@@ -49,9 +49,26 @@ export class AgentConnection extends DurableObject {
       return new Response(JSON.stringify({
         connected: this.ws !== null,
         agentId: this.agentId,
+        isRegistered: this.isRegistered,
       }), {
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    // Container list endpoint
+    if (url.pathname === "/containers" && request.method === "GET") {
+      return this.handleContainersRequest();
+    }
+
+    // Container operation endpoint
+    if (url.pathname.startsWith("/containers/") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const containerId = parts[2];
+      const operation = parts[3]; // start, stop, restart
+
+      if (containerId && operation) {
+        return this.handleContainerOperationRequest(containerId, operation);
+      }
     }
 
     return new Response("Not Found", { status: 404 });
@@ -157,6 +174,22 @@ export class AgentConnection extends DurableObject {
     switch (subject) {
       case "agent.heartbeat":
         await this.handleAgentHeartbeat(message);
+        break;
+
+      case "container.list":
+        await this.handleContainerList(message);
+        break;
+
+      case "container.start":
+        await this.handleContainerOperation(message, "start");
+        break;
+
+      case "container.stop":
+        await this.handleContainerOperation(message, "stop");
+        break;
+
+      case "container.restart":
+        await this.handleContainerOperation(message, "restart");
         break;
 
       case "test.echo":
@@ -439,5 +472,171 @@ export class AgentConnection extends DurableObject {
     this.agentId = null;
     this.agentName = null;
     this.isRegistered = false;
+  }
+
+  /**
+   * Handle container.list message
+   * Request list of containers from agent
+   */
+  private async handleContainerList(message: Message): Promise<void> {
+    console.log(`[AgentConnection] Requesting container list from agent ${this.agentId}`);
+
+    // Simply forward the request to the agent
+    // Agent will respond with container.list.response
+    this.send(createMessage("container.list", {}));
+  }
+
+  /**
+   * Handle container operations (start, stop, restart)
+   * Forward operation request to agent
+   */
+  private async handleContainerOperation(message: Message, operation: string): Promise<void> {
+    const { containerId } = message.data as { containerId?: string };
+
+    if (!containerId) {
+      this.sendError("Container operation requires containerId");
+      return;
+    }
+
+    console.log(`[AgentConnection] Requesting container.${operation} for ${containerId} on agent ${this.agentId}`);
+
+    // Forward operation to agent
+    this.send(createMessage(`container.${operation}`, {
+      containerId,
+      operation,
+    }));
+  }
+
+  /**
+   * HTTP handler for container list request
+   * Implements request/reply pattern with agent
+   */
+  private async handleContainersRequest(): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (10 seconds)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Request timeout"));
+      }, 10000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send request to agent with reply inbox
+    this.send({
+      subject: "container.list",
+      data: {},
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Request failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for container operation request
+   * Implements request/reply pattern with agent
+   */
+  private async handleContainerOperationRequest(
+    containerId: string,
+    operation: string
+  ): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate operation
+    if (!["start", "stop", "restart"].includes(operation)) {
+      return new Response(JSON.stringify({
+        error: `Invalid operation: ${operation}`,
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (30 seconds for operations)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Operation timeout"));
+      }, 30000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send operation request to agent with reply inbox
+    this.send({
+      subject: `container.${operation}`,
+      data: {
+        containerId,
+        operation,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Operation failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 }

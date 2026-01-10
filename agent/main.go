@@ -283,7 +283,7 @@ func (a *Agent) handleContainerList(msg Message) {
 
 	// Check if Docker client is available
 	if a.docker == nil {
-		a.sendContainerError("", "list", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		a.sendContainerErrorWithReply("", "list", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
 		return
 	}
 
@@ -291,17 +291,26 @@ func (a *Agent) handleContainerList(msg Message) {
 	containers, err := a.docker.ListContainers(ctx)
 	if err != nil {
 		log.Printf("Failed to list containers: %v", err)
-		a.sendContainerError("", "list", err.Error(), "DOCKER_LIST_FAILED")
+		a.sendContainerErrorWithReply("", "list", err.Error(), "DOCKER_LIST_FAILED", msg.Reply)
 		return
 	}
 
 	log.Printf("Listed %d containers", len(containers))
 
-	// Send response
-	response := NewMessage("container.list.response", map[string]interface{}{
-		"containers": containers,
-		"count":      len(containers),
-	})
+	// Send response to reply subject if specified, otherwise use default
+	subject := "container.list.response"
+	if msg.Reply != "" {
+		subject = msg.Reply
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"containers": containers,
+			"count":      len(containers),
+		},
+		Timestamp: time.Now().Unix(),
+	}
 	a.sendMessage(response)
 }
 
@@ -311,7 +320,7 @@ func (a *Agent) handleContainerStart(msg Message) {
 
 	// Check if Docker client is available
 	if a.docker == nil {
-		a.sendContainerError("", "start", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		a.sendContainerErrorWithReply("", "start", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
 		return
 	}
 
@@ -319,7 +328,7 @@ func (a *Agent) handleContainerStart(msg Message) {
 	data, _ := json.Marshal(msg.Data)
 	var op ContainerOperation
 	if err := json.Unmarshal(data, &op); err != nil {
-		a.sendContainerError("", "start", "Invalid request format", "INVALID_REQUEST")
+		a.sendContainerErrorWithReply("", "start", "Invalid request format", "INVALID_REQUEST", msg.Reply)
 		return
 	}
 
@@ -327,12 +336,12 @@ func (a *Agent) handleContainerStart(msg Message) {
 	err := a.docker.StartContainer(ctx, op.ContainerID)
 	if err != nil {
 		log.Printf("Failed to start container %s: %v", op.ContainerID, err)
-		a.sendContainerError(op.ContainerID, "start", err.Error(), "DOCKER_START_FAILED")
+		a.sendContainerErrorWithReply(op.ContainerID, "start", err.Error(), "DOCKER_START_FAILED", msg.Reply)
 		return
 	}
 
 	// Send success response
-	a.sendContainerSuccess(op.ContainerID, "start")
+	a.sendContainerSuccessWithReply(op.ContainerID, "start", msg.Reply)
 }
 
 // handleContainerStop handles container.stop messages
@@ -341,7 +350,7 @@ func (a *Agent) handleContainerStop(msg Message) {
 
 	// Check if Docker client is available
 	if a.docker == nil {
-		a.sendContainerError("", "stop", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		a.sendContainerErrorWithReply("", "stop", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
 		return
 	}
 
@@ -349,7 +358,7 @@ func (a *Agent) handleContainerStop(msg Message) {
 	data, _ := json.Marshal(msg.Data)
 	var op ContainerOperation
 	if err := json.Unmarshal(data, &op); err != nil {
-		a.sendContainerError("", "stop", "Invalid request format", "INVALID_REQUEST")
+		a.sendContainerErrorWithReply("", "stop", "Invalid request format", "INVALID_REQUEST", msg.Reply)
 		return
 	}
 
@@ -357,12 +366,12 @@ func (a *Agent) handleContainerStop(msg Message) {
 	err := a.docker.StopContainer(ctx, op.ContainerID)
 	if err != nil {
 		log.Printf("Failed to stop container %s: %v", op.ContainerID, err)
-		a.sendContainerError(op.ContainerID, "stop", err.Error(), "DOCKER_STOP_FAILED")
+		a.sendContainerErrorWithReply(op.ContainerID, "stop", err.Error(), "DOCKER_STOP_FAILED", msg.Reply)
 		return
 	}
 
 	// Send success response
-	a.sendContainerSuccess(op.ContainerID, "stop")
+	a.sendContainerSuccessWithReply(op.ContainerID, "stop", msg.Reply)
 }
 
 // handleContainerRestart handles container.restart messages
@@ -371,7 +380,7 @@ func (a *Agent) handleContainerRestart(msg Message) {
 
 	// Check if Docker client is available
 	if a.docker == nil {
-		a.sendContainerError("", "restart", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		a.sendContainerErrorWithReply("", "restart", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
 		return
 	}
 
@@ -379,7 +388,7 @@ func (a *Agent) handleContainerRestart(msg Message) {
 	data, _ := json.Marshal(msg.Data)
 	var op ContainerOperation
 	if err := json.Unmarshal(data, &op); err != nil {
-		a.sendContainerError("", "restart", "Invalid request format", "INVALID_REQUEST")
+		a.sendContainerErrorWithReply("", "restart", "Invalid request format", "INVALID_REQUEST", msg.Reply)
 		return
 	}
 
@@ -387,12 +396,12 @@ func (a *Agent) handleContainerRestart(msg Message) {
 	err := a.docker.RestartContainer(ctx, op.ContainerID)
 	if err != nil {
 		log.Printf("Failed to restart container %s: %v", op.ContainerID, err)
-		a.sendContainerError(op.ContainerID, "restart", err.Error(), "DOCKER_RESTART_FAILED")
+		a.sendContainerErrorWithReply(op.ContainerID, "restart", err.Error(), "DOCKER_RESTART_FAILED", msg.Reply)
 		return
 	}
 
 	// Send success response
-	a.sendContainerSuccess(op.ContainerID, "restart")
+	a.sendContainerSuccessWithReply(op.ContainerID, "restart", msg.Reply)
 }
 
 // sendContainerSuccess sends a success response for a container operation
@@ -414,5 +423,45 @@ func (a *Agent) sendContainerError(containerID, operation, errorMsg, errorCode s
 		Error:       errorMsg,
 		ErrorCode:   errorCode,
 	})
+	a.sendMessage(response)
+}
+
+// sendContainerSuccessWithReply sends a success response with optional reply-to subject
+func (a *Agent) sendContainerSuccessWithReply(containerID, operation, replyTo string) {
+	subject := "container.operation.success"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: ContainerOperationResponse{
+			Success:     true,
+			ContainerID: containerID,
+			Operation:   operation,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// sendContainerErrorWithReply sends an error response with optional reply-to subject
+func (a *Agent) sendContainerErrorWithReply(containerID, operation, errorMsg, errorCode, replyTo string) {
+	subject := "container.operation.error"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: ContainerOperationResponse{
+			Success:     false,
+			ContainerID: containerID,
+			Operation:   operation,
+			Error:       errorMsg,
+			ErrorCode:   errorCode,
+		},
+		Timestamp: time.Now().Unix(),
+	}
 	a.sendMessage(response)
 }

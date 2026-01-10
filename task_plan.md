@@ -18,11 +18,10 @@
 |-------|--------|-------------|
 | 1. Research | complete | Docker SDK options, message protocol design, UI architecture |
 | 2. Agent Docker Integration | complete | Implement Docker client in Go agent |
-| 3. Message Protocol | in_progress | Define container control messages (list, start, stop, restart) |
-| 4. Manager Message Handlers | pending | Add container control handlers to AgentConnection |
-| 5. UI Container List | pending | Display containers in React UI |
-| 6. UI Container Actions | pending | Start/stop/restart buttons with real-time updates |
-| 7. Testing | pending | End-to-end validation of all operations |
+| 3. Manager Message Handlers | complete | HTTP endpoints + request/reply pattern for container control |
+| 4. UI Container List | pending | Display containers in React UI |
+| 5. UI Container Actions | pending | Start/stop/restart buttons with real-time updates |
+| 6. Testing | pending | End-to-end validation of all operations |
 
 ---
 
@@ -71,68 +70,39 @@
 
 ---
 
-## Phase 3: Message Protocol
+## Phase 3: Manager Message Handlers ✅ complete
 
-**Status:** pending
-
-**Goals:**
-- Define NATS-style subjects for container operations
-- Define request/response data structures
-
-**Proposed Subjects:**
-- `container.list` - Request list of containers
-- `container.list.response` - List of containers with metadata
-- `container.start` - Start a container by ID
-- `container.stop` - Stop a container by ID
-- `container.restart` - Restart a container by ID
-- `container.status` - Query container status
-- `container.operation.success` - Success response
-- `container.operation.error` - Error response
-
-**Data Structures (Draft):**
-```go
-type Container struct {
-    ID      string
-    Name    string
-    Image   string
-    Status  string // running, stopped, paused, etc.
-    State   string // created, running, paused, restarting, removing, exited, dead
-    Ports   []PortMapping
-    Created int64
-}
-
-type PortMapping struct {
-    PrivatePort int
-    PublicPort  int
-    Type        string // tcp, udp
-}
-
-type ContainerOperation struct {
-    ContainerID string
-    Operation   string // start, stop, restart
-}
-```
-
----
-
-## Phase 4: Manager Message Handlers
-
-**Status:** pending
+**Status:** complete
 
 **Goals:**
 - Add container control handlers to AgentConnection
 - Route messages to connected agents
-- Forward responses to UI
+- Implement HTTP endpoints for UI requests
+- Implement request/reply pattern for synchronous operations
 
-**Tasks:**
-- [ ] Add container.* handlers to routeMessage()
-- [ ] Implement message forwarding from UI to agent
-- [ ] Implement response forwarding from agent to UI
-- [ ] Add validation for container operations
+**Tasks Completed:**
+- [x] Add container.* message routing to routeMessage()
+- [x] Implement handleContainerList() and handleContainerOperation()
+- [x] Add HTTP endpoints to Durable Object (GET /containers, POST /containers/:id/:operation)
+- [x] Implement request/reply pattern handlers with inbox subjects
+- [x] Add handleContainersRequest() - HTTP → WebSocket with 10s timeout
+- [x] Add handleContainerOperationRequest() - HTTP → WebSocket with 30s timeout
+- [x] Update agent to support msg.Reply field
+- [x] Add sendContainerSuccessWithReply() and sendContainerErrorWithReply()
+- [x] Update all container handlers to use reply inbox when specified
+- [x] Build and test agent with new request/reply pattern
 
-**Files to Modify:**
-- manager/src/durable-objects/AgentConnection.ts
-- manager/src/types/Message.ts (if needed for new types)
+**Files Modified:**
+- manager/src/durable-objects/AgentConnection.ts (added 6 new methods, ~160 lines)
+- agent/main.go (updated 4 handlers + added 2 helper functions, ~50 lines)
+
+**Implementation Details:**
+- Request/reply pattern: Manager generates unique inbox subjects (_INBOX.{uuid})
+- Agent checks msg.Reply and responds to inbox if specified
+- HTTP endpoints provide synchronous API for UI
+- Timeouts: 10s for list operations, 30s for container operations
+- Proper HTTP status codes (200, 400, 500, 503, 504)
+- pendingReplies Map manages async request/reply promises
 
 ---
 
