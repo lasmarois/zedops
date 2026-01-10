@@ -13,9 +13,10 @@ name = "AGENT_CONNECTION"
 class_name = "AgentConnection"
 
 # Durable Objects migrations
+# For free plan, use new_sqlite_classes instead of new_classes
 [[migrations]]
 tag = "v1"
-new_classes = ["AgentConnection"]
+new_sqlite_classes = ["AgentConnection"]
 
 # D1 Database
 [[d1_databases]]
