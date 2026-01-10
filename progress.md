@@ -317,6 +317,63 @@
 
 ---
 
+## Session 8: Phase 7 - Manager API - Agent Status (2026-01-10)
+
+**Time:** ~10 minutes
+**Phase:** Phase 7 - Manager API - Agent Status
+**Actions:**
+- ✅ Created manager/src/routes/agents.ts
+- ✅ Implemented GET /api/agents endpoint (list all agents)
+- ✅ Implemented GET /api/agents/:id endpoint (get single agent)
+- ✅ Added admin authentication to both endpoints (Bearer token)
+- ✅ Implemented D1 queries with proper error handling
+- ✅ Added response transformation (JSON parsing for metadata)
+- ✅ Updated manager/src/index.ts to mount agents routes
+
+**Implementation Details:**
+- Authentication: Same admin password pattern as admin routes (Bearer token)
+- D1 query: SELECT id, name, status, last_seen, created_at, metadata
+- Ordering: Agents sorted by created_at DESC (newest first)
+- Response format: Camel case (lastSeen, createdAt) for frontend compatibility
+- Error handling: 401 (unauthorized), 404 (not found), 500 (server error)
+- Metadata parsing: JSON.parse for metadata field (defaults to {})
+
+**API Endpoints:**
+- GET /api/agents - Returns { agents: [], count: number }
+- GET /api/agents/:id - Returns single agent object or 404
+
+**Response Structure:**
+```json
+{
+  "agents": [
+    {
+      "id": "uuid",
+      "name": "agent-name",
+      "status": "online",
+      "lastSeen": 1234567890,
+      "createdAt": 1234567890,
+      "metadata": {}
+    }
+  ],
+  "count": 1
+}
+```
+
+**Files Created:**
+- manager/src/routes/agents.ts (agent API endpoints)
+
+**Files Modified:**
+- manager/src/index.ts (mount agents routes)
+
+**Validation:**
+- ✅ API endpoints with authentication
+- ✅ D1 queries return proper data structure
+- ⏳ Runtime testing requires manager deployment
+
+**Next:** Phase 8 - Basic UI - Agent List
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |

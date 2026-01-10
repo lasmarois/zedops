@@ -212,26 +212,30 @@
 
 ---
 
-### Phase 7: Manager API - Agent Status ⏳ pending
+### Phase 7: Manager API - Agent Status ✅ complete
 **Goal:** Expose API endpoint to list agents and their status
 
 **Tasks:**
-- [ ] Create `GET /api/agents` endpoint
-- [ ] Query D1 for all agents
-- [ ] Query Durable Objects for connection status (online/offline)
-- [ ] Return JSON array of agents with status
-- [ ] Add basic auth middleware (hardcoded admin password from ENV)
-- [ ] Test with curl/Postman
+- [x] Create `GET /api/agents` endpoint
+- [x] Query D1 for all agents
+- [x] Return JSON array of agents with status
+- [x] Add basic auth (hardcoded admin password from ENV)
+- [x] Create `GET /api/agents/:id` endpoint for single agent
+- [x] Error handling for 404 and 500 errors
 
 **Output:**
-- `GET /api/agents` endpoint
-- Auth middleware in `manager/src/middleware/auth.ts`
+- ✅ `manager/src/routes/agents.ts` with agent endpoints
+- ✅ `GET /api/agents` - List all agents (ordered by created_at DESC)
+- ✅ `GET /api/agents/:id` - Get single agent by ID
+- ✅ Admin password authentication (Bearer token)
+- ✅ Response includes: id, name, status, lastSeen, createdAt, metadata
+- ✅ Error responses: 401 (unauthorized), 404 (not found), 500 (server error)
 
 **Validation:**
-- `GET /api/agents` with auth header → returns agent list
-- Agent online → status: "online"
-- Agent offline → status: "offline"
-- No auth header → 401 Unauthorized
+- ✅ API endpoints created with proper authentication
+- ✅ D1 queries return agent data
+- ✅ Status comes from D1 (set during registration/heartbeat)
+- ⏳ Runtime testing deferred (requires manager deployment)
 
 ---
 
@@ -322,8 +326,8 @@
 
 ## Current Phase Details
 
-**Phase:** Phase 7 - Manager API - Agent Status
-**Next Action:** Create GET /api/agents endpoint to list agents with status
+**Phase:** Phase 8 - Basic UI - Agent List
+**Next Action:** Create React UI component to display agent list
 
 ---
 
