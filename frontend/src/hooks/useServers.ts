@@ -9,6 +9,11 @@ import {
   deleteServer,
   rebuildServer,
   cleanupFailedServers,
+  startServer,
+  stopServer,
+  purgeServer,
+  restoreServer,
+  syncServers,
   type CreateServerRequest,
 } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -125,6 +130,137 @@ export function useCleanupFailedServers() {
       agentId: string;
       removeVolumes: boolean;
     }) => cleanupFailedServers(agentId, removeVolumes, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to start a server (with container recreation if missing)
+ */
+export function useStartServer() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+    }: {
+      agentId: string;
+      serverId: string;
+    }) => startServer(agentId, serverId, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to stop a server
+ */
+export function useStopServer() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+    }: {
+      agentId: string;
+      serverId: string;
+    }) => stopServer(agentId, serverId, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to purge a server (hard delete)
+ */
+export function usePurgeServer() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+      removeData,
+    }: {
+      agentId: string;
+      serverId: string;
+      removeData: boolean;
+    }) => purgeServer(agentId, serverId, removeData, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to restore a soft-deleted server
+ */
+export function useRestoreServer() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+    }: {
+      agentId: string;
+      serverId: string;
+    }) => restoreServer(agentId, serverId, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to sync server statuses with agent
+ */
+export function useSyncServers() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ agentId }: { agentId: string }) => syncServers(agentId, password!),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({

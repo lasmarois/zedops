@@ -105,7 +105,27 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
      - User can then start server to recreate container
      - Only works on deleted servers
 
-**Next Steps**: Implement Phase 6 (UI updates)
+14. **Committed and Pushed Phase 5** ✅
+   - Commit: c22e103 - "Add server lifecycle management Phase 5 (soft delete and purge)"
+   - Pushed to main branch
+   - All Phase 5 changes committed
+
+15. **Phase 6: UI Updates (API Layer)** ✅
+   - Added API functions in `frontend/src/lib/api.ts`:
+     - `startServer()` - Start server with container recreation
+     - `stopServer()` - Stop server by server ID
+     - `purgeServer()` - Hard delete with optional data removal
+     - `restoreServer()` - Restore soft-deleted server
+     - `syncServers()` - Manual server status sync
+   - Added hooks in `frontend/src/hooks/useServers.ts`:
+     - `useStartServer()` - Hook for starting servers
+     - `useStopServer()` - Hook for stopping servers
+     - `usePurgeServer()` - Hook for purging servers
+     - `useRestoreServer()` - Hook for restoring servers
+     - `useSyncServers()` - Hook for syncing server statuses
+   - All hooks invalidate queries for automatic UI refresh
+
+**Next Steps**: Update ContainerList component to use new hooks and show all server states
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`

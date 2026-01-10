@@ -510,3 +510,165 @@ export async function cleanupFailedServers(
 
   return response.json();
 }
+
+/**
+ * Start a server (with container recreation if missing)
+ */
+export async function startServer(
+  agentId: string,
+  serverId: string,
+  password: string
+): Promise<{ success: boolean; message: string; serverId: string; containerId: string; recovered?: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/start`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to start server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Stop a server
+ */
+export async function stopServer(
+  agentId: string,
+  serverId: string,
+  password: string
+): Promise<{ success: boolean; message: string; serverId: string; containerId: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/stop`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to stop server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Purge a server (hard delete)
+ */
+export async function purgeServer(
+  agentId: string,
+  serverId: string,
+  removeData: boolean,
+  password: string
+): Promise<{ success: boolean; message: string; serverId: string; serverName: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/purge`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ removeData }),
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to purge server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Restore a soft-deleted server
+ */
+export async function restoreServer(
+  agentId: string,
+  serverId: string,
+  password: string
+): Promise<{ success: boolean; message: string; serverId: string; serverName: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/restore`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to restore server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Sync server statuses with agent
+ */
+export async function syncServers(
+  agentId: string,
+  password: string
+): Promise<{ success: boolean; servers: Server[]; synced: number }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/sync`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to sync servers');
+  }
+
+  return response.json();
+}
