@@ -356,3 +356,20 @@ CREATE TABLE servers (
 - Keep server configs in D1 for persistence across agent restarts
 - bin.* and data.* directories should persist on deletion (user data preservation)
 - Consider "soft delete" for servers (mark as deleted but keep data)
+
+---
+
+## Current Focus: Server Lifecycle Management (2026-01-10)
+
+**Context**: After completing port validation (Phases 1-4), discovered architectural issue with orphaned servers (servers exist in DB but containers manually deleted).
+
+**New Goal**: Make manager the source of truth for server state with robust recovery and delete operations.
+
+**See**: `task_plan_server_lifecycle.md` for detailed implementation plan
+
+**Key Improvements**:
+- Add `data_exists` and `deleted_at` fields to DB
+- Implement soft delete (24h retention)
+- Add container recreation from DB config (recovery)
+- Sync server status with actual container/data state
+- Show all servers in UI regardless of container state

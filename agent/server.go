@@ -362,3 +362,54 @@ type ServerOperationResponse struct {
 	Error       string `json:"error,omitempty"`
 	ErrorCode   string `json:"errorCode,omitempty"`
 }
+
+// ServerDataStatus represents the data existence status for a server
+type ServerDataStatus struct {
+	ServerName string `json:"serverName"`
+	DataExists bool   `json:"dataExists"`
+	BinPath    string `json:"binPath"`
+	DataPath   string `json:"dataPath"`
+	BinExists  bool   `json:"binExists"`
+	DataFolderExists bool `json:"dataFolderExists"`
+}
+
+// ServerCheckDataRequest represents a server.checkdata message payload
+type ServerCheckDataRequest struct {
+	Servers  []string `json:"servers"`  // Array of server names to check
+	DataPath string   `json:"dataPath"` // Base path for server data storage
+}
+
+// ServerCheckDataResponse represents the response to a server.checkdata message
+type ServerCheckDataResponse struct {
+	Success  bool               `json:"success"`
+	Statuses []ServerDataStatus `json:"statuses"`
+	Error    string             `json:"error,omitempty"`
+}
+
+// CheckServerData checks if server data directories exist on the host
+func (dc *DockerClient) CheckServerData(serverName, dataPath string) ServerDataStatus {
+	binPath := filepath.Join(dataPath, serverName, "bin")
+	dataFolderPath := filepath.Join(dataPath, serverName, "data")
+
+	// Check if directories exist
+	binExists := dirExists(binPath)
+	dataFolderExists := dirExists(dataFolderPath)
+
+	return ServerDataStatus{
+		ServerName:       serverName,
+		DataExists:       binExists || dataFolderExists,
+		BinPath:          binPath,
+		DataPath:         dataFolderPath,
+		BinExists:        binExists,
+		DataFolderExists: dataFolderExists,
+	}
+}
+
+// dirExists checks if a directory exists
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err == nil && info.IsDir()
+}

@@ -11,11 +11,13 @@ export interface Server {
   udp_port: number;
   rcon_port: number;
   status: ServerStatus;
+  data_exists: boolean; // Whether server data exists on host (bin/ or data/ directories)
+  deleted_at: number | null; // Timestamp of soft delete (NULL = not deleted)
   created_at: number;
   updated_at: number;
 }
 
-export type ServerStatus = 'creating' | 'running' | 'stopped' | 'failed' | 'deleting';
+export type ServerStatus = 'creating' | 'running' | 'stopped' | 'missing' | 'failed' | 'deleted' | 'deleting';
 
 export interface ServerConfig {
   [key: string]: string; // ENV variables as key-value pairs

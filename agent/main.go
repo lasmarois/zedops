@@ -278,6 +278,8 @@ func (a *Agent) receiveMessages() {
 			a.handleServerDelete(msg)
 		case "server.rebuild":
 			a.handleServerRebuild(msg)
+		case "server.checkdata":
+			a.handleServerCheckData(msg)
 		case "port.check":
 			a.handlePortCheck(msg)
 		case "error":
@@ -755,6 +757,52 @@ func (a *Agent) handleServerRebuild(msg Message) {
 				"oldContainerID": req.ContainerID,
 				"newContainerID": newContainerID,
 				"operation":      "rebuild",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handleServerCheckData handles server.checkdata messages
+func (a *Agent) handleServerCheckData(msg Message) {
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerCheckDataRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerCheckDataResponse{
+					Success: false,
+					Error:   "Invalid request format",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Checking data existence for %d server(s)", len(req.Servers))
+
+	// Check data existence for each server
+	statuses := make([]ServerDataStatus, 0, len(req.Servers))
+	for _, serverName := range req.Servers {
+		status := a.docker.CheckServerData(serverName, req.DataPath)
+		statuses = append(statuses, status)
+
+		log.Printf("Server %s: data_exists=%t (bin=%t, data=%t)",
+			serverName, status.DataExists, status.BinExists, status.DataFolderExists)
+	}
+
+	// Send response
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: ServerCheckDataResponse{
+				Success:  true,
+				Statuses: statuses,
 			},
 			Timestamp: time.Now().Unix(),
 		}
