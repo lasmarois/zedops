@@ -1285,10 +1285,13 @@ agents.delete('/:id/servers/failed', async (c) => {
 
 /**
  * DELETE /api/agents/:id/servers/:serverId
- * Delete a server from a specific agent
+ * Soft delete a server (removes container, preserves data and DB record)
  *
- * Body (optional): { removeVolumes?: boolean }
- * Returns: Success message
+ * Sets deleted_at timestamp and status='deleted'
+ * Container is removed but data is preserved for 24 hours
+ * Use RESTORE to recover or PURGE to permanently delete
+ *
+ * Returns: Success message with deletedAt timestamp
  */
 agents.delete('/:id/servers/:serverId', async (c) => {
   // Check admin password
@@ -1305,19 +1308,10 @@ agents.delete('/:id/servers/:serverId', async (c) => {
   const agentId = c.req.param('id');
   const serverId = c.req.param('serverId');
 
-  // Parse optional body
-  let removeVolumes = false;
-  try {
-    const body = await c.req.json() as DeleteServerRequest;
-    removeVolumes = body.removeVolumes ?? false;
-  } catch {
-    // No body is fine, use defaults
-  }
-
   try {
     // Verify server exists and belongs to agent
     const server = await c.env.DB.prepare(
-      `SELECT id, container_id FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT id, container_id, status FROM servers WHERE id = ? AND agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -1326,78 +1320,236 @@ agents.delete('/:id/servers/:serverId', async (c) => {
       return c.json({ error: 'Server not found' }, 404);
     }
 
-    if (!server.container_id) {
-      // Server never started, just delete from DB
-      await c.env.DB.prepare(
-        `DELETE FROM servers WHERE id = ?`
-      )
-        .bind(serverId)
-        .run();
-
-      return c.json({
-        success: true,
-        message: 'Server deleted (never started)',
-      });
+    // Check if already deleted
+    if (server.status === 'deleted') {
+      return c.json({ error: 'Server is already deleted. Use PURGE to permanently remove.' }, 400);
     }
 
-    // Update status to deleting
+    // Soft delete: set deleted_at and status='deleted'
+    const now = Date.now();
     await c.env.DB.prepare(
-      `UPDATE servers SET status = 'deleting', updated_at = ? WHERE id = ?`
+      `UPDATE servers SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE id = ?`
     )
-      .bind(Date.now(), serverId)
+      .bind(now, now, serverId)
       .run();
 
-    // Get agent name for Durable Object
-    const agent = await c.env.DB.prepare(
-      `SELECT name FROM agents WHERE id = ?`
+    // If server has a container, remove it (but preserve data)
+    if (server.container_id) {
+      // Get agent name for Durable Object
+      const agent = await c.env.DB.prepare(
+        `SELECT name FROM agents WHERE id = ?`
+      )
+        .bind(agentId)
+        .first();
+
+      if (agent) {
+        // Get Durable Object for this agent
+        const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+        const stub = c.env.AGENT_CONNECTION.get(id);
+
+        // Forward server.delete message to Durable Object (preserve volumes)
+        try {
+          await stub.fetch(`http://do/servers/${serverId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              containerId: server.container_id,
+              removeVolumes: false, // Always preserve data on soft delete
+            }),
+          });
+          console.log(`[Soft Delete] Container removed for server ${serverId}`);
+        } catch (error) {
+          console.error(`[Soft Delete] Failed to remove container for server ${serverId}:`, error);
+          // Don't fail the soft delete if container removal fails
+        }
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Server soft deleted. Data preserved for 24 hours. Use RESTORE to recover or PURGE to permanently delete.',
+      serverId,
+      deletedAt: now,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error soft deleting server:', error);
+    return c.json({ error: 'Failed to delete server' }, 500);
+  }
+});
+
+/**
+ * DELETE /api/agents/:id/servers/:serverId/purge
+ * Permanently delete a server (hard delete)
+ *
+ * Removes:
+ * - Container (if exists)
+ * - Data directories (optional, via removeData query param or body)
+ * - Database record
+ *
+ * Query params: removeData=true|false (default: false)
+ * Body (optional): { removeData?: boolean }
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId/rebuild
+ */
+agents.delete('/:id/servers/:serverId/purge', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  // Get removeData from query param or body
+  const queryRemoveData = c.req.query('removeData') === 'true';
+  let removeData = queryRemoveData;
+
+  try {
+    const body = await c.req.json() as { removeData?: boolean };
+    removeData = body.removeData ?? removeData;
+  } catch {
+    // No body is fine, use query param or default
+  }
+
+  try {
+    // Verify server exists and belongs to agent
+    const server = await c.env.DB.prepare(
+      `SELECT id, container_id, name FROM servers WHERE id = ? AND agent_id = ?`
     )
-      .bind(agentId)
+      .bind(serverId, agentId)
       .first();
 
-    if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404);
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
     }
 
-    // Get Durable Object for this agent
-    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
-    const stub = c.env.AGENT_CONNECTION.get(id);
-
-    // Forward server.delete message to Durable Object
-    const response = await stub.fetch(`http://do/servers/${serverId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        containerId: server.container_id,
-        removeVolumes,
-      }),
-    });
-
-    if (!response.ok) {
-      // Update status back to previous state (failed)
-      await c.env.DB.prepare(
-        `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+    // If server has a container, remove it
+    if (server.container_id) {
+      // Get agent name for Durable Object
+      const agent = await c.env.DB.prepare(
+        `SELECT name FROM agents WHERE id = ?`
       )
-        .bind(Date.now(), serverId)
-        .run();
+        .bind(agentId)
+        .first();
 
-      const errorData = await response.json();
-      return c.json({ error: errorData.error || 'Failed to delete server on agent' }, response.status);
+      if (agent) {
+        // Get Durable Object for this agent
+        const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+        const stub = c.env.AGENT_CONNECTION.get(id);
+
+        // Forward server.delete message to Durable Object
+        try {
+          const response = await stub.fetch(`http://do/servers/${serverId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              containerId: server.container_id,
+              removeVolumes: removeData, // Remove data if requested
+            }),
+          });
+
+          if (!response.ok) {
+            console.error(`[Purge] Failed to remove container for server ${serverId}`);
+            // Continue with DB deletion even if container removal fails
+          } else {
+            console.log(`[Purge] Container removed for server ${serverId} (data removed: ${removeData})`);
+          }
+        } catch (error) {
+          console.error(`[Purge] Error removing container for server ${serverId}:`, error);
+          // Continue with DB deletion
+        }
+      }
     }
 
-    // Delete from database
+    // Delete from database (hard delete)
     await c.env.DB.prepare(
       `DELETE FROM servers WHERE id = ?`
     )
       .bind(serverId)
       .run();
 
+    console.log(`[Purge] Server ${server.name} (${serverId}) permanently deleted`);
+
     return c.json({
       success: true,
-      message: removeVolumes ? 'Server and volumes deleted' : 'Server deleted (volumes preserved)',
+      message: removeData
+        ? 'Server permanently deleted (container and data removed)'
+        : 'Server permanently deleted (container removed, data preserved on host)',
+      serverId,
+      serverName: server.name,
     });
   } catch (error) {
-    console.error('[Agents API] Error deleting server:', error);
-    return c.json({ error: 'Failed to delete server' }, 500);
+    console.error('[Agents API] Error purging server:', error);
+    return c.json({ error: 'Failed to purge server' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/:serverId/restore
+ * Restore a soft-deleted server
+ *
+ * Sets deleted_at=NULL and status='missing'
+ * User can then start the server to recreate container
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId/rebuild
+ */
+agents.post('/:id/servers/:serverId/restore', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    // Verify server exists and belongs to agent
+    const server = await c.env.DB.prepare(
+      `SELECT id, status, deleted_at, name FROM servers WHERE id = ? AND agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Check if server is deleted
+    if (server.status !== 'deleted' || !server.deleted_at) {
+      return c.json({ error: 'Server is not deleted. Only deleted servers can be restored.' }, 400);
+    }
+
+    // Restore: clear deleted_at and set status to 'missing'
+    const now = Date.now();
+    await c.env.DB.prepare(
+      `UPDATE servers SET status = 'missing', deleted_at = NULL, updated_at = ? WHERE id = ?`
+    )
+      .bind(now, serverId)
+      .run();
+
+    console.log(`[Restore] Server ${server.name} (${serverId}) restored`);
+
+    return c.json({
+      success: true,
+      message: 'Server restored successfully. Use START to recreate container.',
+      serverId,
+      serverName: server.name,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error restoring server:', error);
+    return c.json({ error: 'Failed to restore server' }, 500);
   }
 });
 

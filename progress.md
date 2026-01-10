@@ -83,7 +83,29 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
    - Both endpoints use server ID instead of container ID
    - Status validation prevents invalid operations
 
-**Next Steps**: Implement Phase 5 (soft delete/purge), Phase 6 (UI)
+12. **Committed and Pushed Phase 4** ✅
+   - Commit: a4a1482 - "Add server lifecycle management Phase 4 (server start with container recreation)"
+   - Pushed to main branch
+   - All Phase 4 changes committed
+
+13. **Phase 5: Soft Delete and Purge** ✅
+   - Updated `DELETE /api/agents/:id/servers/:serverId` to soft delete:
+     - Sets `deleted_at=NOW()` and `status='deleted'`
+     - Removes container but preserves data
+     - Keeps DB record for 24h retention
+     - Returns deletedAt timestamp
+   - Added `DELETE /api/agents/:id/servers/:serverId/purge` for hard delete:
+     - Removes container (if exists)
+     - Optionally removes data via `removeData` param (default: false)
+     - Deletes DB record permanently
+     - Works on any server (deleted or not)
+   - Added `POST /api/agents/:id/servers/:serverId/restore`:
+     - Restores soft-deleted server
+     - Sets `deleted_at=NULL` and `status='missing'`
+     - User can then start server to recreate container
+     - Only works on deleted servers
+
+**Next Steps**: Implement Phase 6 (UI updates)
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`
