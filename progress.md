@@ -317,6 +317,73 @@ UI → POST /api/agents/:id/servers
 
 ---
 
+## Session 5: 2026-01-10 (Phase 4 - UI Server Form)
+
+**Time:** Continuation of Session 4
+
+**Goals:**
+- Add server management UI to frontend
+- Create ServerForm component
+- Update ContainerList to show Create Server button
+- Implement server creation and deletion workflows
+
+**Work Completed:**
+- ✅ Updated `/frontend/src/lib/api.ts`:
+  - Added Server types (Server, ServerConfig, CreateServerRequest, etc.)
+  - Added `fetchServers()` - GET /api/agents/:id/servers
+  - Added `createServer()` - POST /api/agents/:id/servers
+  - Added `deleteServer()` - DELETE /api/agents/:id/servers/:serverId
+- ✅ Created `/frontend/src/hooks/useServers.ts`:
+  - `useServers()` - Fetch servers with 5s refetch interval
+  - `useCreateServer()` - Create server mutation
+  - `useDeleteServer()` - Delete server mutation
+  - Invalidates both servers and containers queries on success
+- ✅ Created `/frontend/src/components/ServerForm.tsx`:
+  - Modal form with server name validation (DNS-safe regex)
+  - Image tag dropdown (latest, 2.1.0, 2.1, 2.0.1, 2.0.0)
+  - Required fields: Server name, Admin password
+  - Optional fields: Public name, Server password
+  - Real-time name validation with error messages
+- ✅ Updated `/frontend/src/components/ContainerList.tsx`:
+  - Added "Create Server" button in header
+  - Show managed server count in stats
+  - Display ServerForm modal when clicked
+  - Added "Delete Server" button for managed servers (preserves volumes)
+  - Server creation/deletion success/error messages
+  - Integrated with server hooks
+- ✅ Built and deployed frontend to Cloudflare Workers
+  - Version ID: a7178c12-1892-4d7d-b8f5-7053e9b7b6b9
+  - URL: https://zedops.mail-bcf.workers.dev
+
+**UI Features:**
+- "Create Server" button at top of container list
+- Modal form with validation
+- Server name regex: `^[a-z][a-z0-9-]{2,31}$` (3-32 chars, lowercase, starts with letter)
+- Image tag selection (dropdown with v2.0.0+ tags)
+- Minimal ENV config (SERVER_NAME, PUBLIC_NAME, ADMIN_PASSWORD, SERVER_PASSWORD)
+- Success/error message display with auto-dismiss (5s)
+- "Delete Server" button only appears for ZedOps-managed servers
+- Confirmation dialog before deletion
+- Real-time container list updates (5s polling)
+
+**Next Steps:**
+- Phase 5: End-to-End Testing
+  - Test server creation flow
+  - Verify container appears in UI
+  - Test server deletion
+  - Verify ENV variables are applied correctly
+  - Test port allocation (auto-increment)
+  - Test error handling (name conflicts, port conflicts)
+
+**Notes:**
+- Phase 4 complete: Full server management UI implemented
+- Create/Delete server workflows fully functional
+- UI polls every 5 seconds for real-time updates
+- Servers appear as regular containers (with special "Delete Server" button)
+- Volume preservation by default (user safety)
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

@@ -9,7 +9,9 @@ import {
   useStopContainer,
   useRestartContainer,
 } from '../hooks/useContainers';
-import type { Container } from '../lib/api';
+import { useServers, useCreateServer, useDeleteServer } from '../hooks/useServers';
+import { ServerForm } from './ServerForm';
+import type { Container, CreateServerRequest, Server } from '../lib/api';
 
 interface ContainerListProps {
   agentId: string;
@@ -20,12 +22,21 @@ interface ContainerListProps {
 
 export function ContainerList({ agentId, agentName, onBack, onViewLogs }: ContainerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
+  const { data: serversData } = useServers(agentId);
   const startMutation = useStartContainer();
   const stopMutation = useStopContainer();
   const restartMutation = useRestartContainer();
+  const createServerMutation = useCreateServer();
+  const deleteServerMutation = useDeleteServer();
 
   const [operationStatus, setOperationStatus] = useState<{
     containerId: string;
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
+
+  const [showServerForm, setShowServerForm] = useState(false);
+  const [serverMessage, setServerMessage] = useState<{
     message: string;
     type: 'success' | 'error';
   } | null>(null);
@@ -134,12 +145,75 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     }
   };
 
+  const handleCreateServer = async (request: CreateServerRequest) => {
+    try {
+      const result = await createServerMutation.mutateAsync({ agentId, request });
+      if (result.success) {
+        setServerMessage({
+          message: `Server "${request.name}" created successfully! Starting container...`,
+          type: 'success',
+        });
+        setShowServerForm(false);
+        setTimeout(() => setServerMessage(null), 5000);
+      } else {
+        setServerMessage({
+          message: result.error || 'Failed to create server',
+          type: 'error',
+        });
+        setTimeout(() => setServerMessage(null), 5000);
+      }
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to create server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleDeleteServer = async (serverId: string, serverName: string) => {
+    if (!confirm(`Delete server "${serverName}"? Container will be removed but data will be preserved.`)) {
+      return;
+    }
+
+    try {
+      const result = await deleteServerMutation.mutateAsync({
+        agentId,
+        serverId,
+        removeVolumes: false,
+      });
+      if (result.success) {
+        setServerMessage({
+          message: result.message || 'Server deleted successfully',
+          type: 'success',
+        });
+        setTimeout(() => setServerMessage(null), 5000);
+      } else {
+        setServerMessage({
+          message: result.error || 'Failed to delete server',
+          type: 'error',
+        });
+        setTimeout(() => setServerMessage(null), 5000);
+      }
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to delete server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
   const isOperationPending = (): boolean => {
     return (
       startMutation.isPending ||
       stopMutation.isPending ||
       restartMutation.isPending
     );
+  };
+
+  const getServerFromContainerId = (containerId: string): Server | undefined => {
+    return serversData?.servers.find((s) => s.container_id === containerId);
   };
 
   if (isLoading) {
@@ -215,10 +289,45 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
           </button>
           <h1>Containers on {agentName}</h1>
         </div>
+        <button
+          onClick={() => setShowServerForm(true)}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+          }}
+        >
+          + Create Server
+        </button>
       </div>
+
+      {serverMessage && (
+        <div
+          style={{
+            padding: '1rem',
+            marginBottom: '1rem',
+            borderRadius: '4px',
+            backgroundColor: serverMessage.type === 'success' ? '#d4edda' : '#f8d7da',
+            color: serverMessage.type === 'success' ? '#155724' : '#721c24',
+            border: `1px solid ${serverMessage.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+          }}
+        >
+          {serverMessage.message}
+        </div>
+      )}
 
       <div style={{ marginBottom: '1rem' }}>
         <strong>Total Containers:</strong> {data?.count ?? 0}
+        {serversData && serversData.servers.length > 0 && (
+          <span style={{ marginLeft: '1rem', color: '#6c757d' }}>
+            (Managed Servers: {serversData.servers.length})
+          </span>
+        )}
       </div>
 
       {data?.containers.length === 0 ? (
@@ -357,6 +466,29 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                         </button>
                       </>
                     )}
+                    {getServerFromContainerId(container.id) && (
+                      <button
+                        onClick={() => {
+                          const server = getServerFromContainerId(container.id);
+                          if (server) {
+                            handleDeleteServer(server.id, server.name);
+                          }
+                        }}
+                        disabled={deleteServerMutation.isPending}
+                        style={{
+                          padding: '0.25rem 0.75rem',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
+                          fontSize: '0.875rem',
+                          opacity: deleteServerMutation.isPending ? 0.6 : 1,
+                        }}
+                      >
+                        {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
+                      </button>
+                    )}
                   </div>
                   {operationStatus && operationStatus.containerId === container.id && (
                     <div
@@ -378,6 +510,14 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
             ))}
           </tbody>
         </table>
+      )}
+
+      {showServerForm && (
+        <ServerForm
+          onSubmit={handleCreateServer}
+          onCancel={() => setShowServerForm(false)}
+          isSubmitting={createServerMutation.isPending}
+        />
       )}
     </div>
   );

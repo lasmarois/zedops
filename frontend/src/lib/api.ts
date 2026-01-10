@@ -247,3 +247,144 @@ export async function restartContainer(
 
   return response.json();
 }
+
+/**
+ * Server types
+ */
+export interface Server {
+  id: string;
+  agent_id: string;
+  name: string;
+  container_id: string | null;
+  config: string; // JSON string of ENV variables
+  image_tag: string;
+  game_port: number;
+  udp_port: number;
+  rcon_port: number;
+  status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting';
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ServerConfig {
+  [key: string]: string; // ENV variables as key-value pairs
+}
+
+export interface CreateServerRequest {
+  name: string;
+  imageTag: string;
+  config: ServerConfig;
+  gamePort?: number;
+  udpPort?: number;
+  rconPort?: number;
+}
+
+export interface ServersResponse {
+  success: boolean;
+  servers: Server[];
+}
+
+export interface CreateServerResponse {
+  success: boolean;
+  server?: Server;
+  error?: string;
+}
+
+export interface DeleteServerResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Fetch servers for a specific agent
+ */
+export async function fetchServers(
+  agentId: string,
+  password: string
+): Promise<ServersResponse> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers`, {
+    headers: {
+      'Authorization': `Bearer ${password}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    throw new Error('Failed to fetch servers');
+  }
+
+  return response.json();
+}
+
+/**
+ * Create a new server
+ */
+export async function createServer(
+  agentId: string,
+  request: CreateServerRequest,
+  password: string
+): Promise<CreateServerResponse> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${password}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    if (response.status === 409) {
+      const data = await response.json();
+      throw new Error(data.error || 'Conflict');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to create server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a server
+ */
+export async function deleteServer(
+  agentId: string,
+  serverId: string,
+  removeVolumes: boolean,
+  password: string
+): Promise<DeleteServerResponse> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers/${serverId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${password}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ removeVolumes }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    const data = await response.json();
+    return data;
+  }
+
+  return response.json();
+}
