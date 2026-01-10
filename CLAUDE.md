@@ -7,7 +7,9 @@
 ## Overview
 
 ZedOps is a web platform for managing distributed Project Zomboid dedicated servers:
-- **Manager**: Cloudflare Workers (API) + Durable Objects (WebSocket) + D1 (database) + Pages (React UI)
+- **Manager**: Single Cloudflare Worker (full-stack deployment)
+  - Frontend: React UI (static assets served by Worker)
+  - Backend: API (Hono) + Durable Objects (WebSocket) + D1 (database)
 - **Agent**: Go binary running on friends' computers, controlling local Docker containers
 - **Communication**: NATS-inspired message protocol over WebSocket
 - **Goal**: Centralized management UI for servers running across multiple machines
@@ -24,8 +26,8 @@ ZedOps is a web platform for managing distributed Project Zomboid dedicated serv
 | `MILESTONES.md` | Project roadmap with milestone status (⏳ → 🚧 → ✅) |
 | `TECH_DECISIONS.md` | Log of major technical decisions with rationale |
 | `planning-history/` | Archived planning sessions (one folder per milestone) |
-| `frontend/` | React + Vite + Shadcn UI (Cloudflare Pages) |
-| `manager/` | Cloudflare Workers + Hono framework + Durable Objects |
+| `frontend/` | React + Vite + Shadcn UI (builds to static assets) |
+| `manager/` | Cloudflare Worker (full-stack: API + static assets + Durable Objects) |
 | `agent/` | Go binary for controlling Docker containers |
 
 ### Where to Find Information
@@ -51,14 +53,10 @@ wrangler dev
 cd agent
 go run main.go
 
-# Deploy manager
-cd manager
-wrangler deploy
-
-# Deploy frontend
-cd frontend
-npm run build
-wrangler pages deploy dist
+# Deploy (full-stack: frontend + manager)
+cd frontend && npm run build
+cd ../manager && wrangler deploy
+# Single deployment includes static assets + API + Durable Objects
 ```
 
 ---
@@ -73,11 +71,11 @@ wrangler pages deploy dist
 
 2. **NATS-Inspired Messaging**: Subject-based routing (`server.start`, `logs.servertest`, `docker.list`) with request/reply and pub/sub patterns over WebSocket. See [ARCHITECTURE.md](ARCHITECTURE.md#communication-protocol) for details.
 
-3. **Cloudflare Stack**:
-   - **Workers**: Stateless API handlers (Hono framework)
+3. **Cloudflare Stack (Single Worker Deployment)**:
+   - **Workers**: Full-stack deployment (static assets + API handlers via Hono)
    - **Durable Objects**: Stateful WebSocket hubs (one per agent)
    - **D1**: SQLite database (users, agents, servers, audit logs)
-   - **Pages**: Static frontend deployment (React)
+   - **Static Assets**: React build served directly from Worker (free)
 
 4. **Milestone-Based Development**: Project is broken into independent milestones. Each milestone is a complete, testable deliverable. See [MILESTONES.md](MILESTONES.md).
 

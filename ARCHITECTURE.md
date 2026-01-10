@@ -30,16 +30,16 @@ This is **perfect** because:
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Cloudflare Workers (Manager)                    │
+│  Cloudflare Workers (Manager - Full Stack)      │
 │  ┌────────────────────────────────────────────┐  │
-│  │ React UI (Cloudflare Pages)                │  │
+│  │ React UI (Static Assets in Worker)        │  │
 │  │ - Server list                              │  │
 │  │ - Real-time logs                           │  │
 │  │ - RCON console                             │  │
 │  │ - Config editor                            │  │
 │  └────────────────────────────────────────────┘  │
 │  ┌────────────────────────────────────────────┐  │
-│  │ API (Workers)                              │  │
+│  │ API (Workers + Hono)                       │  │
 │  │ - Auth (email/password or OAuth)           │  │
 │  │ - Agent registration                       │  │
 │  │ - Server management endpoints              │  │
@@ -116,11 +116,12 @@ UI shows "Server restarted ✓"
 
 ### 2. Cloudflare Stack
 
-**Frontend: Cloudflare Pages**
-- React + Vite + Shadcn UI
-- Deployed via `wrangler pages deploy`
+**Single Worker Deployment (Full Stack):**
+- React + Vite + Shadcn UI (static assets served by Worker)
+- Backend: Cloudflare Workers + Hono framework
+- Deployed via single `wrangler deploy` command
 - Served from edge globally
-- Free tier: Unlimited requests
+- Free tier: Unlimited static asset requests
 
 **Backend: Cloudflare Workers**
 - Hono framework (lightweight, fast)
@@ -142,10 +143,10 @@ UI shows "Server restarted ✓"
 - Or use D1 for everything (simpler)
 
 **Free Tier Limits:**
-- Workers: 100k requests/day
+- Workers: 100k requests/day (API calls only, static assets are free)
 - D1: 5 GB storage, 5 million reads/day
 - Durable Objects: 1 GB storage, 1 million requests/month
-- Pages: Unlimited
+- Static Assets: Unlimited (free)
 
 For your use case (you + ~5 friends), **everything is free**.
 
@@ -277,7 +278,7 @@ Agent executes via RCON → Response → Durable Object → UI
 - **TanStack Query** (server state, caching)
 - **Zustand** (client state)
 - **xterm.js** (RCON terminal)
-- **Deployed on**: Cloudflare Pages
+- **Deployed**: Static assets in Cloudflare Worker
 
 ### Backend (Manager)
 - **Cloudflare Workers** (API)
@@ -447,10 +448,10 @@ zomboid-manager/
 ## Costs
 
 ### Cloudflare Free Tier
-- Workers: 100k requests/day ✅
+- Workers: 100k requests/day (API only) ✅
+- Static Assets: Unlimited (free) ✅
 - D1: 5 GB, 5M reads/day ✅
 - Durable Objects: 1M requests/month ✅
-- Pages: Unlimited ✅
 
 ### For 5 friends, ~10 servers
 - API calls: ~1000/day (well under limit)

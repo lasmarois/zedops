@@ -25,9 +25,9 @@ ZedOps lets you and your friends manage Project Zomboid servers running on diffe
 
 ```
 ┌──────────────────────────────┐
-│  Cloudflare (Manager)        │
-│  - React UI (Pages)          │
-│  - API (Workers)             │
+│  Cloudflare Worker (Manager) │
+│  - React UI (Static Assets)  │
+│  - API (Hono)                │
 │  - WebSocket Hub (Durable)   │
 │  - Database (D1)             │
 └──────────────┬───────────────┘
@@ -45,7 +45,7 @@ ZedOps lets you and your friends manage Project Zomboid servers running on diffe
     └───────┘ └──────┘ └───────┘
 ```
 
-- **Manager**: TypeScript (Cloudflare Workers + Durable Objects + D1 + Pages)
+- **Manager**: TypeScript - Single Cloudflare Worker (full-stack)
 - **Agent**: Go binary (controls local Docker containers)
 - **Communication**: NATS-inspired message protocol over WebSocket
 
@@ -64,16 +64,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
 git clone https://github.com/yourusername/zedops.git
 cd zedops
 
-# Deploy manager
-cd manager
-npm install
-wrangler deploy
-
-# Deploy frontend
-cd ../frontend
+# Build frontend
+cd frontend
 npm install
 npm run build
-wrangler pages deploy dist
+
+# Deploy (full-stack: frontend + manager)
+cd ../manager
+npm install
+wrangler deploy
+# Deploys React UI + API + Durable Objects in one command
 ```
 
 ### 2. Install Agent (On Each Friend's Computer)
@@ -152,11 +152,11 @@ See [MILESTONES.md](MILESTONES.md) for roadmap.
 | Component | Technology |
 |-----------|------------|
 | **Frontend** | React, TypeScript, Vite, Shadcn UI, TanStack Query |
-| **Manager API** | Cloudflare Workers, Hono, TypeScript |
+| **Manager** | Cloudflare Workers (full-stack), Hono, TypeScript |
 | **WebSocket Hub** | Cloudflare Durable Objects |
 | **Database** | Cloudflare D1 (SQLite) |
 | **Agent** | Go, gorilla/websocket, Docker SDK |
-| **Deployment** | Cloudflare Pages (frontend), Workers (API) |
+| **Deployment** | Single Cloudflare Worker (static assets + API) |
 
 See [TECH_DECISIONS.md](TECH_DECISIONS.md) for rationale.
 

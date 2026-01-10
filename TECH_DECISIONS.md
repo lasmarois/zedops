@@ -121,7 +121,7 @@ GOOS=linux GOARCH=amd64 go build -o agent-linux
 **Important Clarification - Node.js vs Cloudflare Workers:**
 - **Development**: Node.js 18+ required for tooling (Wrangler CLI, Vite, npm)
 - **Production Manager Runtime**: Cloudflare Workers (V8 isolates, NOT Node.js)
-- **Production Frontend**: Static files (Cloudflare Pages, no runtime needed)
+- **Production Frontend**: Static files served by Worker (no separate runtime needed)
 
 Cloudflare Workers use the V8 JavaScript engine (same as Node.js) but in isolated environments, not full Node.js runtime. Some Node.js APIs are unavailable (fs, net, etc.), but this doesn't affect our use case.
 
@@ -176,13 +176,14 @@ zedops/
 - Global edge deployment (low latency worldwide)
 - No server infrastructure to maintain
 - Auto-scaling (serverless)
-- Workers, D1, Durable Objects, Pages all have generous free tiers
+- Workers, D1, Durable Objects all have generous free tiers
+- Static assets served for free (no charges)
 
 **Free Tier Limits:**
-- Workers: 100k requests/day
+- Workers: 100k requests/day (API only, static assets are free)
 - D1: 5 GB storage, 5M reads/day
 - Durable Objects: 1M requests/month
-- Pages: Unlimited requests
+- Static Assets: Unlimited (free)
 
 **Cost Estimate for 10 servers, 5 users:**
 - API requests: ~1,000/day (well under 100k limit)
@@ -259,13 +260,144 @@ zedops/
 
 ---
 
+## TD-009: CI/CD and Release Strategy (2026-01-10)
+
+**Decision:** Independent versioning with phased CI/CD adoption
+
+**Strategy:**
+
+**MVP Phase (Milestones 1-3):**
+- Agent: Manual builds and releases
+- Manager: Manual deployment via `wrangler deploy` (full-stack: frontend + backend)
+
+**Production Phase (Milestones 4-6):**
+- Agent: GitHub Actions for cross-compilation and releases
+  - Tag-based: `agent-v*.*.*` triggers build for 6 platforms
+  - Upload to GitHub Releases with checksums
+- Manager: Multi-environment deployment (Workers GitHub integration)
+  - PR → Preview environment (`pr-123.workers.dev`)
+  - Main → Staging environment (`staging.zedops.workers.dev`)
+  - Tag (`manager-v*.*.*`) → Production (`zedops.workers.dev`)
+  - Single deployment includes frontend static assets + backend API
+
+**Versioning:**
+- Independent versions: `agent-v1.2.0`, `manager-v1.1.0`, `frontend-v1.1.0`
+- Manager checks minimum agent version on connection
+- Allows independent hotfixes and releases
+
+**Rationale:**
+- **Start simple**: Manual deployments for fast iteration during MVP
+- **Add automation when stable**: CI/CD infrastructure takes time to build/maintain
+- **Independent versions**: Flexibility to release components separately
+- **Workers GitHub integration**: Auto-deploy for full-stack (frontend + backend together)
+
+**Phased Approach:**
+1. M1-2: Manual everything
+2. M3: Add agent CI (tests only)
+3. M4: Add agent automated releases
+4. M5-6: Add manager multi-environment
+
+**Alternatives Considered:**
+- Unified versioning (rejected: forces unnecessary redeployments)
+- Full CI/CD from day 1 (rejected: premature optimization, slows MVP)
+- Manual deployments forever (rejected: error-prone at scale)
+
+**Status:** ✅ Accepted
+
+**Implementation Files (Future):**
+- `.github/workflows/release-agent.yml`
+- `.github/workflows/deploy-manager.yml`
+- `wrangler.toml` (environment configs)
+- `Makefile` (agent build commands)
+
+---
+
+## TD-010: Workers-Only Deployment (Full-Stack) (2026-01-10)
+
+**Decision:** Use single Cloudflare Worker for both frontend (React SPA) and backend (API + Durable Objects)
+
+**Rationale:**
+- **Workers now supports static assets** (Sept 2024): Can serve React build output directly
+- **Unified deployment**: One service, one URL, one `wrangler deploy` command
+- **Simpler architecture**: Frontend and backend deployed together, no coordination needed
+- **Future-proof**: Cloudflare's official guidance (2026) recommends Workers for complex apps
+- **Better auth/middleware**: Worker can intercept all requests, add global middleware
+- **We already need Workers**: For API, Durable Objects (WebSocket hub), and D1
+- **Free static serving**: Static asset requests are free (same pricing as Pages)
+
+**Official Cloudflare Guidance (2026):**
+> "Now that Workers supports both serving static assets and server-side rendering, you should start with Workers. Cloudflare Pages will continue to be supported, but, going forward, all of our investment, optimizations, and feature work will be dedicated to improving Workers."
+
+**Architecture:**
+```
+Single Worker (zedops.workers.dev):
+├── /api/* → API routes (Hono handlers)
+├── /ws → WebSocket endpoint (Durable Objects)
+├── /* → Static assets (React SPA build)
+└── Fallback → index.html (React Router support)
+```
+
+**Configuration:**
+```toml
+# wrangler.toml
+name = "zedops"
+main = "src/index.ts"
+
+[assets]
+directory = "../frontend/dist"
+not_found_handling = "single-page-application"  # React Router fallback
+
+[[durable_objects.bindings]]
+name = "AGENT_CONNECTION"
+class_name = "AgentConnection"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zedops-db"
+```
+
+**Deployment Workflow:**
+```bash
+# 1. Build React frontend
+cd frontend
+npm run build  # Output: dist/
+
+# 2. Deploy Worker (includes static assets)
+cd ../manager
+wrangler deploy  # Uploads Worker code + frontend dist/
+```
+
+**Alternatives Considered:**
+- **Cloudflare Pages (separate)**: Rejected - two deployments, two URLs, deprecated in Cloudflare's roadmap
+- **Pages + Workers (split)**: Rejected - unnecessary complexity, Pages is being de-emphasized
+- **Traditional hosting (Vercel, Netlify)**: Rejected - requires separate services, costs money
+
+**Trade-offs:**
+- ✅ **Simpler**: One deployment instead of two
+- ✅ **Unified routing**: Backend can add auth headers, logging, etc. to all requests
+- ✅ **Better DX**: Single wrangler command, no coordination
+- ✅ **Future-proof**: Aligned with Cloudflare's direction
+- ⚠️ **Coupled deployment**: Can't deploy frontend independently (acceptable for MVP)
+- ⚠️ **Requires Cloudflare DNS**: Custom domains need nameservers on Cloudflare (not an issue)
+
+**Status:** ✅ Accepted
+
+**Supersedes:** Early mentions of Cloudflare Pages in architecture discussions (now unified under Workers)
+
+**References:**
+- [Cloudflare Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/)
+- [Full-Stack Development on Cloudflare Workers](https://blog.cloudflare.com/full-stack-development-on-cloudflare-workers/)
+- [SPA Routing on Workers](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/)
+
+---
+
 ## Future Decisions (To Be Documented)
 
-- **TD-009:** Agent installation mechanism (curl script vs downloadable installer)
-- **TD-010:** RCON protocol handling (direct TCP vs proxy through agent WebSocket)
-- **TD-011:** Backup storage strategy (local vs cloud storage)
-- **TD-012:** Agent auto-update mechanism
-- **TD-013:** Multi-tenancy architecture (if needed)
+- **TD-011:** Agent installation mechanism (curl script vs downloadable installer)
+- **TD-012:** RCON protocol handling (direct TCP vs proxy through agent WebSocket)
+- **TD-013:** Backup storage strategy (local vs cloud storage)
+- **TD-014:** Agent auto-update mechanism
+- **TD-015:** Multi-tenancy architecture (if needed)
 
 ---
 
