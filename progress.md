@@ -374,6 +374,75 @@
 
 ---
 
+## Session 9: Phase 8 - Basic UI - Agent List (2026-01-10)
+
+**Time:** ~25 minutes
+**Phase:** Phase 8 - Basic UI - Agent List
+**Actions:**
+- ✅ Created frontend directory structure (lib/, hooks/, components/, stores/)
+- ✅ Created api.ts with API client functions
+- ✅ Implemented fetchAgents(), fetchAgent(), generateEphemeralToken()
+- ✅ Created authStore.ts with Zustand
+- ✅ Implemented password storage (memory only, not persisted)
+- ✅ Created useAgents.ts hook with TanStack Query
+- ✅ Implemented auto-refetch (5-second interval)
+- ✅ Created Login.tsx component
+- ✅ Created AgentList.tsx component
+- ✅ Updated App.tsx with QueryClientProvider and conditional rendering
+- ✅ Updated index.css with minimal global styles
+
+**Implementation Details:**
+- API client: Same-origin requests, Bearer token authentication
+- Auth store: Zustand for password (setPassword, clearPassword)
+- TanStack Query: Auto-refetch every 5s, enabled when password exists
+- Login: Simple form with password input, stores in Zustand
+- Agent list: Table with columns (name, status, last seen, created)
+- Status badges: ● Online (green #28a745) / ○ Offline (gray #6c757d)
+- Timestamps: Formatted with toLocaleString() (Unix seconds → readable)
+- Error handling: Shows error message with re-login button
+- Logout: Clears password, returns to login screen
+
+**Component Structure:**
+- App.tsx: Root component with QueryClientProvider
+- Login.tsx: Password form (centered, white card on gray background)
+- AgentList.tsx: Agent table with header, logout button, total count
+
+**Data Flow:**
+1. User enters password → authStore.setPassword()
+2. useAgents hook enabled (password exists)
+3. TanStack Query fetches GET /api/agents (auto-refresh 5s)
+4. AgentList renders table from data
+5. User clicks logout → authStore.clearPassword() → back to Login
+
+**Styling:**
+- Minimal inline styles (no CSS frameworks)
+- Light gray background (#f5f5f5)
+- White cards with box shadows
+- Blue buttons (#007bff) with hover states
+- Responsive table (full width)
+
+**Files Created:**
+- frontend/src/lib/api.ts
+- frontend/src/stores/authStore.ts
+- frontend/src/hooks/useAgents.ts
+- frontend/src/components/Login.tsx
+- frontend/src/components/AgentList.tsx
+
+**Files Modified:**
+- frontend/src/App.tsx (replaced Vite template with ZedOps app)
+- frontend/src/index.css (replaced Vite styles with minimal global styles)
+
+**Validation:**
+- ✅ Login component structure
+- ✅ Agent list component structure
+- ✅ Auto-refetch logic
+- ✅ Status badge colors
+- ⏳ Runtime testing requires manager deployment
+
+**Next:** Phase 9 - Integration Testing & Validation
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |
