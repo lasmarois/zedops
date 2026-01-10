@@ -152,7 +152,20 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
        - Purge confirmation modal with options to keep or remove data
        - Hidden deleted servers count indicator
 
-**Next Steps**: Test UI in browser, deploy frontend
+17. **Committed and Pushed Phase 6b** ✅
+   - Commit: 85aa1c0 - "Add server lifecycle management Phase 6b (UI component updates)"
+   - Pushed to main branch
+   - All Phase 6b changes committed
+
+18. **TypeScript Fixes and Deployment** ✅
+   - Fixed Server interface to include new fields (data_exists, deleted_at, missing/deleted statuses)
+   - Fixed handleRebuildServer parameter count
+   - Commit: 27d86fe - "Fix TypeScript errors in server lifecycle UI"
+   - Built frontend successfully
+   - Deployed to Cloudflare: https://zedops.mail-bcf.workers.dev
+   - Version ID: 7c3bc62c-1eae-4831-bd74-3042afd6a654
+
+**Next Steps**: Test complete server lifecycle feature in browser
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`
