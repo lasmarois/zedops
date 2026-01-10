@@ -74,6 +74,41 @@
 
 ---
 
+## Session 3: Phase 2 - Manager - Durable Object WebSocket Handler (2026-01-10)
+
+**Time:** ~15 minutes
+**Phase:** Phase 2 - Manager - Durable Object WebSocket Handler
+**Actions:**
+- ✅ Created manager/src/durable-objects/ directory
+- ✅ Created AgentConnection.ts Durable Object
+- ✅ Implemented WebSocket upgrade handler
+- ✅ Implemented message, close, and error event handlers
+- ✅ Added basic echo functionality (temporary, will be replaced in Phase 3)
+- ✅ Updated manager/src/index.ts with Hono framework
+- ✅ Created /ws route that forwards to Durable Object
+- ✅ Added /health endpoint for monitoring
+- ✅ Exported AgentConnection Durable Object class
+
+**Implementation Details:**
+- WebSocket upgrade: Creates WebSocketPair, accepts server side, returns client side
+- Message handler: Logs received messages, echoes back with timestamp
+- Close handler: Cleans up connection state
+- Error handler: Logs errors and cleans up state
+- Durable Object routing: Uses crypto.randomUUID() for MVP (will use agent ID in Phase 4)
+
+**Files Created/Modified:**
+- manager/src/durable-objects/AgentConnection.ts (new)
+- manager/src/index.ts (updated - Hono + routing)
+
+**Validation:**
+- ✅ Code structure follows Durable Object patterns
+- ✅ WebSocket upgrade logic implemented correctly
+- ⏳ Runtime testing deferred (GLIBC limitation)
+
+**Next:** Phase 3 - NATS-Inspired Message Protocol
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |
