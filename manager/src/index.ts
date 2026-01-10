@@ -34,15 +34,20 @@ app.route('/api/agents', agents);
 /**
  * WebSocket endpoint - Routes to AgentConnection Durable Object
  *
- * Agent connects to: ws://manager-url/ws
- * Each agent gets its own Durable Object instance
+ * Agent connects to: ws://manager-url/ws?name=<agent-name>
+ * Each agent gets its own Durable Object instance based on agent name
  */
 app.get('/ws', async (c) => {
-  // For MVP, use random ID (will be replaced with agent ID from token in Phase 4)
-  const agentId = crypto.randomUUID();
+  // Get agent name from query parameter
+  const agentName = c.req.query('name');
 
-  // Get Durable Object instance for this agent
-  const id = c.env.AGENT_CONNECTION.idFromName(agentId);
+  if (!agentName) {
+    return c.json({ error: 'Missing agent name in query parameter' }, 400);
+  }
+
+  // Use agent name to get consistent Durable Object instance
+  // This ensures the same agent always connects to the same Durable Object
+  const id = c.env.AGENT_CONNECTION.idFromName(agentName);
   const stub = c.env.AGENT_CONNECTION.get(id);
 
   // Forward request to Durable Object

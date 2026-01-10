@@ -37,6 +37,11 @@ func (a *Agent) ConnectWithRetry(ctx context.Context) error {
 			return fmt.Errorf("invalid manager URL: %w", err)
 		}
 
+		// Add agent name as query parameter for consistent Durable Object routing
+		q := u.Query()
+		q.Set("name", a.agentName)
+		u.RawQuery = q.Encode()
+
 		// Attempt connection
 		conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {

@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 type Bindings = {
   DB: D1Database;
   ADMIN_PASSWORD: string;
-  AGENT_CONNECTIONS: DurableObjectNamespace;
+  AGENT_CONNECTION: DurableObjectNamespace;
 };
 
 const agents = new Hono<{ Bindings: Bindings }>();
@@ -139,9 +139,10 @@ agents.get('/:id/containers', async (c) => {
       return c.json({ error: 'Agent not found' }, 404);
     }
 
-    // Get Durable Object for this agent
-    const id = c.env.AGENT_CONNECTIONS.idFromName(agentId);
-    const stub = c.env.AGENT_CONNECTIONS.get(id);
+    // Get Durable Object for this agent using agent name (not ID)
+    // This matches the WebSocket connection which uses ?name=<agent-name>
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
 
     // Forward request to Durable Object
     const response = await stub.fetch(`http://do/containers`, {
@@ -177,10 +178,21 @@ agents.post('/:id/containers/:containerId/start', async (c) => {
   const agentId = c.req.param('id');
   const containerId = c.req.param('containerId');
 
-  // Get Durable Object for this agent
+  // Verify agent exists and get name
   try {
-    const id = c.env.AGENT_CONNECTIONS.idFromName(agentId);
-    const stub = c.env.AGENT_CONNECTIONS.get(id);
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent using agent name
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
 
     // Forward request to Durable Object
     const response = await stub.fetch(
@@ -219,10 +231,21 @@ agents.post('/:id/containers/:containerId/stop', async (c) => {
   const agentId = c.req.param('id');
   const containerId = c.req.param('containerId');
 
-  // Get Durable Object for this agent
+  // Verify agent exists and get name
   try {
-    const id = c.env.AGENT_CONNECTIONS.idFromName(agentId);
-    const stub = c.env.AGENT_CONNECTIONS.get(id);
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent using agent name
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
 
     // Forward request to Durable Object
     const response = await stub.fetch(
@@ -261,10 +284,21 @@ agents.post('/:id/containers/:containerId/restart', async (c) => {
   const agentId = c.req.param('id');
   const containerId = c.req.param('containerId');
 
-  // Get Durable Object for this agent
+  // Verify agent exists and get name
   try {
-    const id = c.env.AGENT_CONNECTIONS.idFromName(agentId);
-    const stub = c.env.AGENT_CONNECTIONS.get(id);
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent using agent name
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
 
     // Forward request to Durable Object
     const response = await stub.fetch(

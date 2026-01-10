@@ -264,6 +264,74 @@
 
 ---
 
+## Session 6: 2026-01-10 (Deployment & Bug Fixes)
+
+**Time:** 07:00 - 08:30
+
+**Goals:**
+- Deploy manager to Cloudflare Workers
+- Deploy agent with Docker socket access
+- Test full end-to-end flow
+- Fix any deployment issues
+
+**Work Completed:**
+- ✅ Deployed manager to https://zedops.mail-bcf.workers.dev
+- ✅ Generated ephemeral token for agent registration
+- ✅ Fixed agent Dockerfile.build to add CA certificates for TLS
+- ✅ Built and deployed agent with Docker SDK
+- ✅ Agent registered successfully (ID: 5cb7430f-7ca2-409e-bca4-972d0ba46060)
+- ✅ Fixed Durable Object routing bug (used agent name for consistency)
+- ✅ Fixed binding name mismatch (AGENT_CONNECTIONS → AGENT_CONNECTION)
+- ✅ Fixed inbox subject format mismatch (_INBOX. standardized)
+- ✅ Rebuilt and redeployed manager with all fixes
+- ✅ Successfully tested container list (68 containers detected)
+- ✅ Successfully tested container operations (start/stop/restart)
+
+**Critical Bugs Fixed:**
+
+1. **Durable Object Routing Mismatch**
+   - **Problem:** WebSocket connections used random UUID (`crypto.randomUUID()`) while HTTP requests used agent ID from database
+   - **Impact:** Agent WebSocket connected to one Durable Object, HTTP requests went to different Durable Object
+   - **Fix:** Changed all routing to use agent NAME as consistent identifier
+   - **Files:** manager/src/index.ts:50, agent/reconnect.go:42, manager/src/routes/agents.ts:144
+
+2. **Environment Binding Name Mismatch**
+   - **Problem:** Code used `AGENT_CONNECTIONS` (plural) but wrangler.toml defines `AGENT_CONNECTION` (singular)
+   - **Impact:** HTTP 500 errors "Failed to fetch containers"
+   - **Fix:** Changed all occurrences in routes/agents.ts from AGENT_CONNECTIONS to AGENT_CONNECTION
+   - **Files:** manager/src/routes/agents.ts (5 occurrences)
+
+3. **Inbox Subject Format Mismatch**
+   - **Problem:** Manager created inbox subjects as `_INBOX.xxx` but checked for `inbox.xxx` (no underscore, lowercase)
+   - **Impact:** Agent responses to inbox not recognized, manager returned "Unknown subject: _INBOX.*" error
+   - **Fix:** Standardized on `_INBOX.` (NATS standard format) in both generateInbox() and isInboxSubject()
+   - **Files:** manager/src/types/Message.ts:88, 95
+
+**Test Results:**
+- Agent successfully lists 68 containers on maestroserver
+- Container operations (start/stop/restart) working via UI
+- Real-time status updates functioning (5s refresh interval)
+- Request/reply pattern working correctly
+- Error handling working (timeouts, invalid operations)
+
+**Blockers Encountered:**
+- None - all bugs resolved successfully
+
+**Next Steps:**
+- Commit all bug fixes to git
+- Update TEST-RESULTS.md with live test results
+- Archive Milestone 2 planning files
+- Begin planning Milestone 3
+
+**Notes:**
+- All 3 bugs were critical but isolated to routing and message handling
+- Deployment revealed bugs that weren't caught in local testing
+- Agent running inside Docker container works perfectly with Docker socket mounted
+- System is fully operational and ready for production use
+- Milestone 2 COMPLETE! 🎉
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

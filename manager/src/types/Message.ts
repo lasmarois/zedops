@@ -82,17 +82,17 @@ export function createMessage(subject: string, data: any, reply?: string): Messa
 
 /**
  * Generate a unique inbox subject for request/reply pattern
- * Format: inbox.<random-uuid>
+ * Format: _INBOX.<random-uuid> (NATS standard)
  */
 export function generateInbox(): string {
-  return `inbox.${crypto.randomUUID()}`;
+  return `_INBOX.${crypto.randomUUID()}`;
 }
 
 /**
  * Check if subject is an inbox reply
  */
 export function isInboxSubject(subject: string): boolean {
-  return subject.startsWith('inbox.');
+  return subject.startsWith('_INBOX.');
 }
 
 /**

@@ -154,14 +154,14 @@
 
 ---
 
-## Phase 5: Testing
+## Phase 5: Testing ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
-- Validate all container operations
-- Test error scenarios
-- Verify real-time updates
+- ✅ Validate all container operations
+- ✅ Test error scenarios
+- ✅ Verify real-time updates
 
 **Test Scenarios:**
 1. **List Containers**
@@ -210,7 +210,9 @@
 
 | Error | Phase | Attempt | Resolution |
 |-------|-------|---------|------------|
-| _(none yet)_ | - | - | - |
+| Durable Object routing mismatch - WebSocket used random UUID, HTTP used agent ID | 5 | 1 | Changed all routing to use agent NAME as consistent identifier (manager/src/index.ts, agent/reconnect.go, manager/src/routes/agents.ts) |
+| Binding name mismatch - Code used AGENT_CONNECTIONS (plural) but wrangler.toml defines AGENT_CONNECTION (singular) | 5 | 1 | Changed all occurrences in routes/agents.ts from AGENT_CONNECTIONS to AGENT_CONNECTION |
+| Inbox subject format mismatch - Created `_INBOX.xxx` but checked for `inbox.xxx` | 5 | 1 | Standardized on `_INBOX.` format in generateInbox() and isInboxSubject() (manager/src/types/Message.ts) |
 
 ---
 

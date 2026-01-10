@@ -267,8 +267,124 @@ interface ContainerError {
 
 ---
 
+## Deployment Findings (Session 6)
+
+### Critical Bugs Discovered During Live Testing
+
+#### Bug 1: Durable Object Routing Inconsistency
+
+**Discovery:**
+- UI container list endpoint returned "Request timeout"
+- Agent logs showed it was receiving requests but responses were going nowhere
+- Investigated routing logic in manager
+
+**Root Cause:**
+- WebSocket endpoint (`manager/src/index.ts:42`) used `crypto.randomUUID()` to generate Durable Object ID
+- HTTP endpoints (`manager/src/routes/agents.ts`) looked up agent from database and used agent ID
+- Each agent connection was creating a NEW Durable Object instance instead of using the same one
+- Result: Agent's WebSocket connection went to one DO, HTTP requests went to different DO
+
+**Fix:**
+- Changed all routing to use agent NAME as consistent identifier
+- WebSocket: `idFromName(agentName)` using query parameter `?name=<agent-name>`
+- HTTP: Look up agent name from database, then use `idFromName(agent.name)`
+- Agent: Include name in WebSocket connection URL query string
+
+**Files Changed:**
+- manager/src/index.ts:50 - Use `idFromName(agentName)`
+- agent/reconnect.go:42 - Add `?name=<agent-name>` query parameter
+- manager/src/routes/agents.ts:144 - Look up name, use `idFromName()`
+
+**Lesson Learned:**
+- Durable Object routing MUST be consistent across all entry points
+- Using database IDs for routing is problematic (requires DB lookup)
+- Agent NAME is perfect identifier (known at connection time, stable, unique)
+
+---
+
+#### Bug 2: Environment Binding Name Typo
+
+**Discovery:**
+- After fixing routing bug, still getting HTTP 500 "Failed to fetch containers"
+- Checked Durable Object logs - no requests arriving
+- Examined routes/agents.ts code
+
+**Root Cause:**
+- Code used `c.env.AGENT_CONNECTIONS.idFromName()` (plural)
+- wrangler.toml defines binding as `AGENT_CONNECTION` (singular)
+- TypeScript didn't catch this because `c.env` is typed as `any`
+
+**Fix:**
+- Changed all 5 occurrences in routes/agents.ts:
+  - Line 14: Type definition `AGENT_CONNECTION: DurableObjectNamespace;`
+  - Lines 144, 194, 247, 300: `c.env.AGENT_CONNECTION.idFromName()`
+
+**Files Changed:**
+- manager/src/routes/agents.ts (type definition + 4 usage sites)
+
+**Lesson Learned:**
+- Cloudflare Workers bindings are case-sensitive and exact-match
+- Should create proper TypeScript types for env bindings (not `any`)
+- Consider adding lint rule to catch undefined env variable access
+
+---
+
+#### Bug 3: Inbox Subject Format Mismatch
+
+**Discovery:**
+- After fixing binding bug, got "Request timeout" error
+- Agent logs showed: "Received: error - map[message:Unknown subject: _INBOX.*]"
+- Agent WAS receiving requests and listing containers
+- Agent WAS sending responses to inbox subject
+- Manager was rejecting the inbox subject as "Unknown"
+
+**Root Cause:**
+- `handleContainersRequest()` creates inbox: `_INBOX.${crypto.randomUUID()}`
+- `isInboxSubject()` checks: `subject.startsWith('inbox.')` (no underscore!)
+- Manager's `routeMessage()` couldn't recognize inbox subjects
+- Fell through to default case: "Unknown subject"
+
+**Fix:**
+- Standardized on `_INBOX.` format (NATS standard):
+  - `generateInbox()`: `_INBOX.${crypto.randomUUID()}`
+  - `isInboxSubject()`: `subject.startsWith('_INBOX.')`
+
+**Files Changed:**
+- manager/src/types/Message.ts:88 - generateInbox() function
+- manager/src/types/Message.ts:95 - isInboxSubject() function
+
+**Lesson Learned:**
+- String matching MUST be consistent (case, underscores, etc.)
+- Follow standards (NATS uses `_INBOX.` format)
+- Add unit tests for message routing logic
+- Consider using constants for subject patterns
+
+---
+
+### Testing Insights
+
+**What Worked:**
+- Agent running inside Docker container with mounted Docker socket
+- TanStack Query's auto-refetch (5s interval) for real-time updates
+- Request/reply pattern over WebSocket for synchronous operations
+- Toast notifications for user feedback
+
+**Performance:**
+- Container list (68 containers): ~200ms response time
+- Container operations (start/stop/restart): ~1-3s depending on container
+- Real-time updates: UI updates within 5 seconds of external changes
+
+**User Experience:**
+- Clicking agent row → instant navigation to container list
+- Container operations feel responsive (loading states help)
+- Error messages are clear and actionable
+
+---
+
 ## References
 
 - Docker Go SDK: https://pkg.go.dev/github.com/docker/docker/client
 - Docker Engine API: https://docs.docker.com/engine/api/
 - Milestone 1 message protocol: `manager/src/types/Message.ts`
+- NATS inbox pattern: https://docs.nats.io/nats-concepts/core-nats/reqreply
+- Cloudflare Durable Objects: https://developers.cloudflare.com/durable-objects/
