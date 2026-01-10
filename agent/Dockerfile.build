@@ -1,0 +1,21 @@
+# Multi-stage build for Go agent
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /build
+
+# Copy go module files
+COPY go.mod go.sum* ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY *.go ./
+
+# Build the agent
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o zedops-agent .
+
+# Use scratch for minimal final image (optional - for deployment)
+FROM scratch
+COPY --from=builder /build/zedops-agent /zedops-agent
+ENTRYPOINT ["/zedops-agent"]

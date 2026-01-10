@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -80,8 +79,8 @@ func main() {
 	}()
 
 	// Run with automatic reconnection
-	log.Printf("Starting agent: %s", a.agentName)
-	log.Printf("Manager URL: %s", a.managerURL)
+	log.Printf("Starting agent: %s", agent.agentName)
+	log.Printf("Manager URL: %s", agent.managerURL)
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
 		log.Fatal("Agent error:", err)
@@ -91,11 +90,9 @@ func main() {
 }
 
 func (a *Agent) register() error {
-	// If we have a permanent token, we're already registered (skip registration)
+	// If we have a permanent token, authenticate instead of registering
 	if a.permanentToken != "" {
-		log.Println("Using existing permanent token (already registered)")
-		a.agentID = "existing" // Will be updated from token payload if needed
-		return nil
+		return a.authenticate()
 	}
 
 	log.Println("Registering with ephemeral token...")
@@ -160,6 +157,67 @@ func (a *Agent) register() error {
 
 	case <-timeout:
 		return fmt.Errorf("registration timeout")
+	}
+}
+
+func (a *Agent) authenticate() error {
+	log.Println("Authenticating with permanent token...")
+
+	// Send authentication message
+	authMsg := NewMessage("agent.auth", map[string]string{
+		"token": a.permanentToken,
+	})
+
+	if err := a.sendMessage(authMsg); err != nil {
+		return fmt.Errorf("failed to send authentication: %w", err)
+	}
+
+	// Wait for authentication response (with timeout)
+	timeout := time.After(10 * time.Second)
+	responseCh := make(chan Message, 1)
+
+	// Temporarily read messages to get authentication response
+	go func() {
+		for {
+			var msg Message
+			err := a.conn.ReadJSON(&msg)
+			if err != nil {
+				log.Println("Error reading authentication response:", err)
+				return
+			}
+			if msg.Subject == "agent.auth.success" || msg.Subject == "error" {
+				responseCh <- msg
+				return
+			}
+		}
+	}()
+
+	select {
+	case msg := <-responseCh:
+		if msg.Subject == "error" {
+			var errResp ErrorResponse
+			data, _ := json.Marshal(msg.Data)
+			json.Unmarshal(data, &errResp)
+			return fmt.Errorf("authentication failed: %s", errResp.Message)
+		}
+
+		// Parse authentication response
+		var resp struct {
+			AgentID   string `json:"agentId"`
+			AgentName string `json:"agentName"`
+			Message   string `json:"message"`
+		}
+		data, _ := json.Marshal(msg.Data)
+		if err := json.Unmarshal(data, &resp); err != nil {
+			return fmt.Errorf("failed to parse authentication response: %w", err)
+		}
+
+		a.agentID = resp.AgentID
+		log.Printf("Authentication successful! Agent ID: %s", a.agentID)
+		return nil
+
+	case <-timeout:
+		return fmt.Errorf("authentication timeout")
 	}
 }
 

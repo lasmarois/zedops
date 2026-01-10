@@ -136,9 +136,14 @@ export class AgentConnection extends DurableObject {
       return;
     }
 
-    // Allow agent.register without registration
+    // Allow agent.register and agent.auth without registration
     if (subject === "agent.register") {
       await this.handleAgentRegister(message);
+      return;
+    }
+
+    if (subject === "agent.auth") {
+      await this.handleAgentAuth(message);
       return;
     }
 
@@ -256,6 +261,89 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       console.error("[AgentConnection] Registration error:", error);
       this.sendError("Registration failed");
+    }
+  }
+
+  /**
+   * Handle agent.auth message
+   * Authenticate agent with permanent token
+   */
+  private async handleAgentAuth(message: Message): Promise<void> {
+    try {
+      const { token } = message.data;
+
+      if (!token || typeof token !== 'string') {
+        this.sendError("Authentication requires 'token' field");
+        return;
+      }
+
+      // Verify permanent token
+      let payload;
+      try {
+        payload = await verifyToken(token, this.env.TOKEN_SECRET);
+      } catch (error) {
+        console.error("[AgentConnection] Token verification failed:", error);
+        this.sendError("Invalid or expired token");
+        return;
+      }
+
+      // Check token type
+      if (payload.type !== 'permanent') {
+        this.sendError("Authentication requires permanent token");
+        return;
+      }
+
+      // Extract agent ID from token
+      const agentId = payload.agentId as string;
+      const agentName = payload.agentName as string;
+
+      if (!agentId || !agentName) {
+        this.sendError("Invalid token payload");
+        return;
+      }
+
+      // Verify token hash matches database
+      const tokenHash = await hashToken(token);
+      const result = await this.env.DB.prepare(
+        `SELECT id, name, token_hash FROM agents WHERE id = ?`
+      )
+        .bind(agentId)
+        .first();
+
+      if (!result) {
+        this.sendError("Agent not found");
+        return;
+      }
+
+      if (result.token_hash !== tokenHash) {
+        this.sendError("Invalid token");
+        return;
+      }
+
+      // Mark as registered
+      this.agentId = agentId;
+      this.agentName = agentName;
+      this.isRegistered = true;
+
+      // Update status to online and last_seen
+      const now = Math.floor(Date.now() / 1000);
+      await this.env.DB.prepare(
+        `UPDATE agents SET status = 'online', last_seen = ? WHERE id = ?`
+      )
+        .bind(now, agentId)
+        .run();
+
+      console.log(`[AgentConnection] Agent authenticated: ${agentName} (${agentId})`);
+
+      // Send success response
+      this.send(createMessage("agent.auth.success", {
+        agentId,
+        agentName,
+        message: "Authentication successful",
+      }));
+    } catch (error) {
+      console.error("[AgentConnection] Authentication error:", error);
+      this.sendError("Authentication failed");
     }
   }
 

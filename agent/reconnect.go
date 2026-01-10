@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"net/url"
 	"time"
 
@@ -85,14 +84,12 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			continue
 		}
 
-		// Register if needed
-		if a.permanentToken == "" {
-			if err := a.register(); err != nil {
-				log.Printf("Registration failed: %v", err)
-				a.conn.Close()
-				time.Sleep(initialBackoff)
-				continue
-			}
+		// Register or authenticate
+		if err := a.register(); err != nil {
+			log.Printf("Registration/authentication failed: %v", err)
+			a.conn.Close()
+			time.Sleep(initialBackoff)
+			continue
 		}
 
 		// Start heartbeat

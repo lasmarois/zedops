@@ -58,6 +58,139 @@ npx wrangler secret put ADMIN_PASSWORD
   - Format: Strong password
   - Note: Will be replaced with proper RBAC in future milestone
 
+## Agent Authentication
+
+The agent authentication system uses a two-token flow with JWT signatures and SHA-256 hashing.
+
+### Token Types
+
+**1. Ephemeral Tokens**
+- **Purpose**: One-time registration of new agents
+- **Lifetime**: 1 hour
+- **Generation**: Admin API (`POST /api/admin/tokens`)
+- **Usage**: First-time agent registration only
+- **Payload**:
+  ```json
+  {
+    "type": "ephemeral",
+    "agentName": "agent-name",
+    "iat": 1768028645,
+    "exp": 1768032245
+  }
+  ```
+
+**2. Permanent Tokens**
+- **Purpose**: Ongoing agent authentication (reconnection)
+- **Lifetime**: No expiry (valid until revoked)
+- **Generation**: Issued by manager during registration
+- **Storage**:
+  - Agent: `~/.zedops-agent/token` (plaintext file)
+  - Manager: SHA-256 hash in D1 database
+- **Payload**:
+  ```json
+  {
+    "type": "permanent",
+    "agentId": "uuid",
+    "agentName": "agent-name",
+    "iat": 1768028668
+  }
+  ```
+
+### Registration Flow (agent.register)
+
+**Step 1: Admin generates ephemeral token**
+```bash
+curl -X POST https://manager/api/admin/tokens \
+  -H "Authorization: Bearer admin" \
+  -d '{"agentName":"my-agent"}'
+```
+
+**Step 2: Agent connects with ephemeral token**
+- Agent connects to WebSocket: `wss://manager/ws`
+- Sends `agent.register` message with ephemeral token
+- Manager verifies:
+  - JWT signature (using `TOKEN_SECRET`)
+  - Token type is "ephemeral"
+  - Token not expired
+  - Agent name matches token payload
+
+**Step 3: Manager issues permanent token**
+- Generates new permanent token (no expiry)
+- Hashes token with SHA-256
+- Stores hash in D1 database (NOT the raw token)
+- Returns permanent token to agent
+- Agent saves to `~/.zedops-agent/token`
+
+### Authentication Flow (agent.auth)
+
+**Used when agent reconnects with permanent token**
+
+**Step 1: Agent loads permanent token**
+- Reads token from `~/.zedops-agent/token`
+- Connects to WebSocket: `wss://manager/ws`
+
+**Step 2: Agent sends authentication request**
+- Sends `agent.auth` message with permanent token
+- Manager verifies:
+  - JWT signature (using `TOKEN_SECRET`)
+  - Token type is "permanent"
+  - Agent ID exists in database
+  - Token hash matches stored hash
+
+**Step 3: Manager authenticates agent**
+- Calculates SHA-256 hash of received token
+- Compares with stored hash in database
+- If match: Sets agent status to "online", updates `last_seen`
+- Returns `agent.auth.success` message
+
+### Security Properties
+
+**Token Signing**
+- Algorithm: HS256 (HMAC-SHA256)
+- Secret: `TOKEN_SECRET` environment variable
+- Signature prevents token forgery
+
+**Token Hashing**
+- Algorithm: SHA-256
+- Purpose: Prevent token exposure if database is compromised
+- Only hash is stored, never the raw permanent token
+
+**Token Rotation**
+- Ephemeral tokens auto-expire (1 hour)
+- Permanent tokens never expire (stateless)
+- Revocation: Delete agent from database (hash no longer matches)
+
+**Defense in Depth**
+1. **TLS encryption**: All WebSocket traffic uses `wss://` (TLS)
+2. **Signature verification**: JWT prevents token tampering
+3. **Hash matching**: Database compromise doesn't leak tokens
+4. **Expiry enforcement**: Ephemeral tokens have strict time limits
+5. **Type checking**: Tokens can't be used for wrong purpose
+
+**Attack Scenarios**
+
+| Attack | Mitigation |
+|--------|------------|
+| Token forgery | JWT signature verification with `TOKEN_SECRET` |
+| Token reuse | Ephemeral tokens expire after 1 hour |
+| Database breach | Only SHA-256 hashes stored, not raw tokens |
+| Man-in-the-middle | TLS encryption (`wss://`) required |
+| Token theft from agent | File system security (agent responsibility) |
+| Brute force | Token secret is 256+ bits of entropy |
+
+**Known Limitations (MVP)**
+- No token refresh mechanism (permanent tokens never expire)
+- No rate limiting on authentication attempts
+- No audit log of authentication events
+- Agent token stored in plaintext on disk
+
+**Planned Improvements (Future Milestones)**
+- Token refresh with sliding expiry
+- Rate limiting and brute force protection
+- Audit logging to D1 database
+- Agent-side token encryption at rest
+- Multi-factor authentication for agents
+
 ## Reporting Security Issues
 
 If you discover a security vulnerability, please email the maintainer directly instead of using the issue tracker.

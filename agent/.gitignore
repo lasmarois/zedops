@@ -1,5 +1,6 @@
 # Binaries
 agent
+zedops-agent
 *.exe
 *.dll
 *.so
