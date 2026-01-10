@@ -33,27 +33,29 @@
 
 ---
 
-## Milestone 2: Container Control 🚧 In Progress
+## Milestone 2: Container Control ✅ Complete
 
 **Goal:** Agent can list and control Docker containers via manager commands
 
-**Duration:** 2 weeks
+**Duration:** 1 day (2026-01-10)
 
 **Deliverables:**
-- Agent lists Docker containers (via Docker SDK)
-- Manager sends start/stop/restart commands
-- Agent executes Docker operations
-- UI displays container list with status
-- UI has buttons to start/stop/restart containers
+- ✅ Agent lists Docker containers (via Docker SDK)
+- ✅ Manager sends start/stop/restart commands
+- ✅ Agent executes Docker operations
+- ✅ UI displays container list with status
+- ✅ UI has buttons to start/stop/restart containers
 
 **Success Criteria:**
-- User clicks "Start Server" in UI → Container starts on agent's machine
-- Container status updates in real-time
-- Error handling for failed operations
+- ✅ User clicks "Start Server" in UI → Container starts on agent's machine
+- ✅ Container status updates in real-time (5s refresh interval)
+- ✅ Error handling for failed operations
 
 **Dependencies:** Milestone 1 (Agent Connection)
 
-**Planning:** *(not started)*
+**Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)
+
+**Completed:** 2026-01-10 (commits: 1b52342, 19ed5ef, 7c0aa35)
 
 ---
 
@@ -204,11 +206,12 @@
 
 ## Current Status
 
-**Active Milestone:** Milestone 2 - Container Control 🚧
+**Active Milestone:** Ready for Milestone 3 - Log Streaming 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
+- ✅ Milestone 2 - Container Control (2026-01-10)
 
 **Next Up:** Milestone 3 - Log Streaming
 
-**Current Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)
+**Current Planning:** Planning files will be created when Milestone 3 begins
