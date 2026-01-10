@@ -1,602 +1,120 @@
-# Progress Log: Milestone 1 - Agent Connection
+# Progress Log: Milestone 2 - Container Control
 
-**Purpose:** Session tracking, test results, and implementation notes as work progresses.
+**Purpose:** Session-by-session log of work completed, decisions made, and blockers encountered
 
-**Session Started:** 2026-01-10
+**Started:** 2026-01-10
 
 ---
 
-## Session 1: Planning Phase (2026-01-10)
+## Session 1: 2026-01-10 (Planning & Research)
 
-**Time:** ~30 minutes
-**Phase:** Phase 0 - Planning
-**Actions:**
-- ✅ Created task_plan.md with 9 phases
-- ✅ Created findings.md with architecture research
+**Time:** 02:25 - In Progress
+
+**Goals:**
+- Archive Milestone 1 planning files
+- Create Milestone 2 planning structure
+- Research Docker SDK options
+- Design message protocol
+
+**Work Completed:**
+- ✅ Archived Milestone 1 files to `planning-history/milestone-1-agent-connection/`
+  - task_plan.md
+  - findings.md
+  - progress.md
+  - MILESTONE-1-COMPLETE.md
+- ✅ Created fresh task_plan.md for Milestone 2
+- ✅ Created findings.md with initial research
 - ✅ Created progress.md (this file)
 
-**Decisions Made:**
-- Use Vite for frontend (fast, modern)
-- Use Hono for manager API (lightweight, Workers-optimized)
-- Hardcode admin password for MVP auth
-- Store agent token in `~/.zedops-agent/token` file
-- 30-second heartbeat interval
-- Exponential backoff for reconnection (1s → 60s cap)
+**Research Completed:**
+- Docker SDK selection: Chose official `github.com/docker/docker/client`
+- Message protocol design: Defined container.* subjects
+- Container metadata: Identified minimum required fields
+- UI architecture: Planned WebSocket integration
 
-**Key Design Choices:**
-- Agent ID used as Durable Object ID (deterministic routing)
-- Token in WebSocket URL query parameter (simplest)
-- Reject non-registration messages before agent registers
-- NATS-inspired message protocol (subject-based routing)
+**Next Steps:**
+- Start Phase 2: Agent Docker Integration
+- Add Docker SDK dependency
+- Implement docker.go wrapper
+- Test Docker connection on agent
 
-**Next:** Phase 1 - Project Structure Setup
-
----
-
-## Session 2: Phase 1 - Project Structure Setup (2026-01-10)
-
-**Time:** ~20 minutes
-**Phase:** Phase 1 - Project Structure Setup
-**Actions:**
-- ✅ Created frontend/ directory with Vite + React + TypeScript template
-- ✅ Created manager/ directory with Wrangler template
-- ✅ Created agent/ directory with Go module
-- ✅ Configured manager/wrangler.toml (Durable Objects, D1, static assets)
-- ✅ Added dependencies to manager/package.json (hono, jose)
-- ✅ Added dependencies to frontend/package.json (@tanstack/react-query, zustand)
-- ✅ Created manager/schema.sql with agents table
-- ✅ Created agent/go.mod with dependencies
-- ✅ Created agent/.gitignore
-- ✅ Created manager/README.md
-- ✅ Created agent/README.md
-- ✅ Updated frontend/README.md
-
-**Files Created:**
-- frontend/ (React app structure)
-- manager/ (Cloudflare Worker structure)
-- agent/ (Go module structure)
-- manager/wrangler.toml (full-stack Workers config)
-- manager/schema.sql (D1 database schema)
-- manager/README.md (manager documentation)
-- agent/README.md (agent documentation)
-- agent/.gitignore (Go ignores)
-
-**Errors Encountered:**
-- GLIBC version error during `wrangler types` (non-blocking, system limitation)
-- Go not installed (worked around by creating go.mod manually)
-
-**Validation:**
-- ✅ All directories created
-- ✅ All configuration files in place
-- ⏳ Dependencies not installed (GLIBC limitation on this system - user will install on their machine)
-
-**Next:** Phase 2 - Manager - Durable Object WebSocket Handler
+**Notes:**
+- Milestone 1 successfully completed and committed (commit 0fc9cac)
+- Clean slate for Milestone 2
+- Planning-with-files pattern working well
 
 ---
 
-## Session 3: Phase 2 - Manager - Durable Object WebSocket Handler (2026-01-10)
+## Session 2: 2026-01-10 (Agent Docker Integration)
 
-**Time:** ~15 minutes
-**Phase:** Phase 2 - Manager - Durable Object WebSocket Handler
-**Actions:**
-- ✅ Created manager/src/durable-objects/ directory
-- ✅ Created AgentConnection.ts Durable Object
-- ✅ Implemented WebSocket upgrade handler
-- ✅ Implemented message, close, and error event handlers
-- ✅ Added basic echo functionality (temporary, will be replaced in Phase 3)
-- ✅ Updated manager/src/index.ts with Hono framework
-- ✅ Created /ws route that forwards to Durable Object
-- ✅ Added /health endpoint for monitoring
-- ✅ Exported AgentConnection Durable Object class
+**Time:** 02:26 - 02:35
 
-**Implementation Details:**
-- WebSocket upgrade: Creates WebSocketPair, accepts server side, returns client side
-- Message handler: Logs received messages, echoes back with timestamp
-- Close handler: Cleans up connection state
-- Error handler: Logs errors and cleans up state
-- Durable Object routing: Uses crypto.randomUUID() for MVP (will use agent ID in Phase 4)
+**Goals:**
+- Add Docker SDK dependency
+- Create Docker client wrapper
+- Implement container operation handlers
+- Build and test agent
 
-**Files Created/Modified:**
-- manager/src/durable-objects/AgentConnection.ts (new)
-- manager/src/index.ts (updated - Hono + routing)
+**Work Completed:**
+- ✅ Added Docker SDK dependency to go.mod (github.com/docker/docker/client)
+- ✅ Created docker.go with DockerClient wrapper
+  - NewDockerClient(), Close(), Ping()
+  - ListContainers() - List all containers (running + stopped)
+  - StartContainer(), StopContainer(), RestartContainer()
+  - GetContainerStatus() - Inspect container details
+- ✅ Updated Agent struct to include Docker client
+- ✅ Added container message handlers to receiveMessages():
+  - handleContainerList()
+  - handleContainerStart()
+  - handleContainerStop()
+  - handleContainerRestart()
+- ✅ Implemented helper functions:
+  - sendContainerSuccess()
+  - sendContainerError()
+- ✅ Updated go.mod to Go 1.24 and Docker SDK v28.5.2
+- ✅ Generated go.sum with all dependencies
+- ✅ Updated Dockerfile.build to use golang:latest
+- ✅ Built agent successfully (7.0MB binary)
 
-**Validation:**
-- ✅ Code structure follows Durable Object patterns
-- ✅ WebSocket upgrade logic implemented correctly
-- ⏳ Runtime testing deferred (GLIBC limitation)
+**Blockers Encountered:**
+1. **Go version incompatibility**: Docker SDK v24 required Go 1.24
+   - Resolution: Updated to Go 1.24 and Docker SDK v28.5.2
+2. **Package version conflict**: github.com/docker/distribution incompatibility
+   - Resolution: Upgraded to latest Docker SDK which uses github.com/distribution/reference
+3. **API changes**: inspect.Created is string, not time.Time
+   - Resolution: Set Created to 0 for now (not critical for MVP)
 
-**Next:** Phase 3 - NATS-Inspired Message Protocol
+**Next Steps:**
+- Phase 3: Define message protocol types in TypeScript
+- Phase 4: Implement manager message handlers
+- Phase 5: Create UI components for container list
+- Phase 6: Add container action buttons
 
----
-
-## Session 4: Phase 3 - NATS-Inspired Message Protocol (2026-01-10)
-
-**Time:** ~20 minutes
-**Phase:** Phase 3 - NATS-Inspired Message Protocol
-**Actions:**
-- ✅ Created manager/src/types/ directory
-- ✅ Created Message.ts with Message interface and validation
-- ✅ Implemented validateMessage() with comprehensive checks
-- ✅ Implemented createMessage(), parseMessage(), generateInbox() helpers
-- ✅ Implemented isInboxSubject() for reply detection
-- ✅ Updated AgentConnection with NATS-style routing
-- ✅ Implemented routeMessage() with subject-based switch
-- ✅ Added pendingReplies map for request/reply pattern
-- ✅ Implemented handleInboxReply() for reply handling
-- ✅ Added stub handlers for agent.register and agent.heartbeat
-- ✅ Added test.echo subject for testing
-- ✅ Implemented send() and sendError() helper methods
-
-**Implementation Details:**
-- Message validation: Checks for required fields, valid subject format (alphanumeric + dots)
-- Subject routing: Switch statement routes to appropriate handler
-- Request/reply: Uses inbox.* subjects with pending map
-- Error handling: Invalid messages get error responses
-- Stub handlers: agent.register and agent.heartbeat return acknowledgments
-
-**Files Created/Modified:**
-- manager/src/types/Message.ts (new)
-- manager/src/durable-objects/AgentConnection.ts (updated - NATS routing)
-
-**Validation:**
-- ✅ Message interface defined with TypeScript types
-- ✅ Validation logic covers all edge cases
-- ✅ Subject routing supports extensibility
-- ⏳ Runtime testing deferred (GLIBC limitation)
-
-**Next:** Phase 4 - Agent Registration Flow (Manager)
+**Notes:**
+- Docker client initialization is non-fatal (logs warning if Docker unavailable)
+- Agent binary size increased from 4.4MB to 7.0MB (Docker SDK dependencies)
+- Using official Docker SDK ensures compatibility and stability
+- Container operations use 10-second timeout for stop/restart
 
 ---
 
-## Session 5: Phase 4 - Agent Registration Flow (Manager) (2026-01-10)
+## Template for Next Session
 
-**Time:** ~25 minutes
-**Phase:** Phase 4 - Agent Registration Flow (Manager)
-**Actions:**
-- ✅ Created manager/src/lib/ directory
-- ✅ Created tokens.ts with JWT token functions (Jose library)
-- ✅ Implemented generateEphemeralToken() (1-hour expiry)
-- ✅ Implemented generatePermanentToken() (no expiry)
-- ✅ Implemented verifyToken() for token validation
-- ✅ Implemented hashToken() for secure storage (SHA-256)
-- ✅ Created manager/src/routes/ directory
-- ✅ Created admin.ts with admin API routes
-- ✅ Implemented POST /api/admin/tokens endpoint
-- ✅ Added admin password authentication (Bearer token)
-- ✅ Updated manager/src/index.ts to mount admin routes
-- ✅ Updated AgentConnection with full registration flow
-- ✅ Implemented token validation in handleAgentRegister()
-- ✅ Added D1 agent storage with status tracking
-- ✅ Implemented agent status updates on close/error
-- ✅ Added registration state tracking (isRegistered flag)
-- ✅ Enforced registration requirement for all non-register subjects
+**Session X: DATE**
 
-**Implementation Details:**
-- Token generation: Uses Jose library for JWT (HS256 algorithm)
-- Ephemeral tokens: Include agentName, expire in 1 hour
-- Permanent tokens: Include agentId + agentName, no expiration
-- Token storage: SHA-256 hashes stored in D1 (not raw tokens)
-- Admin auth: Hardcoded password from env.ADMIN_PASSWORD
-- Registration flow: Ephemeral token → validation → permanent token → D1 storage
-- Status management: Set to 'online' on register, 'offline' on disconnect
+**Time:** START - END
 
-**Token Flow:**
-1. Admin calls POST /api/admin/tokens with agentName
-2. Manager generates ephemeral token (1-hour expiry)
-3. Agent sends agent.register with ephemeral token
-4. Manager validates token, generates permanent token
-5. Manager stores agent in D1 with token hash
-6. Manager sends permanent token to agent
-7. Agent stores permanent token for future connections
+**Goals:**
+-
 
-**Files Created/Modified:**
-- manager/src/lib/tokens.ts (new)
-- manager/src/routes/admin.ts (new)
-- manager/src/index.ts (updated - mount admin routes)
-- manager/src/durable-objects/AgentConnection.ts (updated - registration flow)
-
-**Validation:**
-- ✅ Token generation logic with proper expiry
-- ✅ Admin endpoint with authentication
-- ✅ Registration flow with comprehensive validation
-- ✅ D1 agent storage with status tracking
-- ⏳ Runtime testing deferred (GLIBC limitation)
-
-**Next:** Phase 5 - Go Agent - WebSocket Client
-
----
-
-## Session 6: Phase 5 - Go Agent - WebSocket Client (2026-01-10)
-
-**Time:** ~20 minutes
-**Phase:** Phase 5 - Go Agent - WebSocket Client
-**Actions:**
-- ✅ Created agent/message.go with Message struct
-- ✅ Implemented NewMessage() and NewMessageWithReply() constructors
-- ✅ Implemented ToJSON() and FromJSON() for serialization
-- ✅ Created RegisterRequest and RegisterResponse structs
-- ✅ Created ErrorResponse struct for error handling
-- ✅ Created agent/token.go with token management
-- ✅ Implemented LoadToken() to read from ~/.zedops-agent/token
-- ✅ Implemented SaveToken() with directory creation and permissions
-- ✅ Implemented DeleteToken() for cleanup
-- ✅ Created agent/main.go with WebSocket client
-- ✅ Implemented command-line flags (--manager-url, --token, --name)
-- ✅ Implemented WebSocket connection using gorilla/websocket
-- ✅ Implemented registration flow with ephemeral token
-- ✅ Implemented message receiving loop
-- ✅ Added graceful shutdown with SIGTERM/SIGINT handling
-- ✅ Added registration timeout (10 seconds)
-
-**Implementation Details:**
-- Message protocol: Matches TypeScript interface (subject, reply, data, timestamp)
-- Token storage: ~/.zedops-agent/token with 0600 permissions
-- Registration: Sends ephemeral token, receives and saves permanent token
-- Agent name: Defaults to hostname if not provided
-- Connection: Uses gorilla/websocket DefaultDialer
-- Shutdown: Sends CloseMessage before exiting
-- Error handling: Comprehensive error messages for all failures
-
-**Agent Flow:**
-1. Parse command-line flags
-2. Load permanent token (if exists)
-3. If no permanent token: require ephemeral token for registration
-4. Connect to manager via WebSocket
-5. Register (if ephemeral token provided)
-6. Save permanent token to disk
-7. Receive messages in background goroutine
-8. Wait for shutdown signal or connection close
-
-**Files Created:**
-- agent/message.go (Message protocol)
-- agent/token.go (Token storage)
-- agent/main.go (WebSocket client + registration)
-
-**Validation:**
-- ✅ Message struct matches TypeScript interface
-- ✅ Token storage with proper permissions
-- ✅ Registration flow logic complete
-- ⏳ Runtime testing requires manager deployment
-
-**Next:** Phase 6 - Agent Reconnection Logic
-
----
-
-## Session 7: Phase 6 - Agent Reconnection Logic (2026-01-10)
-
-**Time:** ~15 minutes
-**Phase:** Phase 6 - Agent Reconnection Logic
-**Actions:**
-- ✅ Created agent/reconnect.go with reconnection logic
-- ✅ Implemented ConnectWithRetry() with exponential backoff
-- ✅ Implemented RunWithReconnect() main loop
-- ✅ Implemented sendHeartbeats() goroutine (30-second ticker)
-- ✅ Updated manager AgentConnection.handleAgentHeartbeat()
-- ✅ Added D1 last_seen timestamp update
-- ✅ Updated main.go to use RunWithReconnect()
-- ✅ Removed done channel (no longer needed with reconnect loop)
-
-**Implementation Details:**
-- Exponential backoff: 1s → 2s → 4s → 8s ... → 60s (cap)
-- Backoff factor: 2.0
-- Backoff resets on successful connection
-- Unlimited retry attempts (never gives up)
-- Heartbeat interval: 30 seconds
-- Heartbeat updates D1 last_seen timestamp
-- Automatic reconnection on any disconnection (error, timeout, manager restart)
-- Graceful shutdown with context cancellation
-
-**Reconnection Flow:**
-1. Attempt connection with ConnectWithRetry()
-2. On failure: Wait (backoff), then retry
-3. On success: Reset backoff, register if needed
-4. Start heartbeat goroutine (30s ticker)
-5. Start message receiver
-6. On disconnect: Cancel heartbeat, close connection, goto step 1
-7. On shutdown: Cancel heartbeat, send close message, exit
-
-**Heartbeat Flow:**
-1. Agent sends agent.heartbeat every 30 seconds
-2. Manager validates registration status
-3. Manager updates last_seen in D1 (Unix timestamp)
-4. Manager sends agent.heartbeat.ack
-5. Agent receives ack (logged silently)
-
-**Files Created/Modified:**
-- agent/reconnect.go (new)
-- agent/main.go (updated - use RunWithReconnect)
-- manager/src/durable-objects/AgentConnection.ts (updated - heartbeat D1 update)
-
-**Validation:**
-- ✅ Exponential backoff logic correct
-- ✅ Unlimited retry logic
-- ✅ Heartbeat sends and D1 updates
-- ⏳ Runtime testing requires manager deployment
-
-**Next:** Phase 7 - Manager API - Agent Status
-
----
-
-## Session 8: Phase 7 - Manager API - Agent Status (2026-01-10)
-
-**Time:** ~10 minutes
-**Phase:** Phase 7 - Manager API - Agent Status
-**Actions:**
-- ✅ Created manager/src/routes/agents.ts
-- ✅ Implemented GET /api/agents endpoint (list all agents)
-- ✅ Implemented GET /api/agents/:id endpoint (get single agent)
-- ✅ Added admin authentication to both endpoints (Bearer token)
-- ✅ Implemented D1 queries with proper error handling
-- ✅ Added response transformation (JSON parsing for metadata)
-- ✅ Updated manager/src/index.ts to mount agents routes
-
-**Implementation Details:**
-- Authentication: Same admin password pattern as admin routes (Bearer token)
-- D1 query: SELECT id, name, status, last_seen, created_at, metadata
-- Ordering: Agents sorted by created_at DESC (newest first)
-- Response format: Camel case (lastSeen, createdAt) for frontend compatibility
-- Error handling: 401 (unauthorized), 404 (not found), 500 (server error)
-- Metadata parsing: JSON.parse for metadata field (defaults to {})
-
-**API Endpoints:**
-- GET /api/agents - Returns { agents: [], count: number }
-- GET /api/agents/:id - Returns single agent object or 404
-
-**Response Structure:**
-```json
-{
-  "agents": [
-    {
-      "id": "uuid",
-      "name": "agent-name",
-      "status": "online",
-      "lastSeen": 1234567890,
-      "createdAt": 1234567890,
-      "metadata": {}
-    }
-  ],
-  "count": 1
-}
-```
-
-**Files Created:**
-- manager/src/routes/agents.ts (agent API endpoints)
-
-**Files Modified:**
-- manager/src/index.ts (mount agents routes)
-
-**Validation:**
-- ✅ API endpoints with authentication
-- ✅ D1 queries return proper data structure
-- ⏳ Runtime testing requires manager deployment
-
-**Next:** Phase 8 - Basic UI - Agent List
-
----
-
-## Session 9: Phase 8 - Basic UI - Agent List (2026-01-10)
-
-**Time:** ~25 minutes
-**Phase:** Phase 8 - Basic UI - Agent List
-**Actions:**
-- ✅ Created frontend directory structure (lib/, hooks/, components/, stores/)
-- ✅ Created api.ts with API client functions
-- ✅ Implemented fetchAgents(), fetchAgent(), generateEphemeralToken()
-- ✅ Created authStore.ts with Zustand
-- ✅ Implemented password storage (memory only, not persisted)
-- ✅ Created useAgents.ts hook with TanStack Query
-- ✅ Implemented auto-refetch (5-second interval)
-- ✅ Created Login.tsx component
-- ✅ Created AgentList.tsx component
-- ✅ Updated App.tsx with QueryClientProvider and conditional rendering
-- ✅ Updated index.css with minimal global styles
-
-**Implementation Details:**
-- API client: Same-origin requests, Bearer token authentication
-- Auth store: Zustand for password (setPassword, clearPassword)
-- TanStack Query: Auto-refetch every 5s, enabled when password exists
-- Login: Simple form with password input, stores in Zustand
-- Agent list: Table with columns (name, status, last seen, created)
-- Status badges: ● Online (green #28a745) / ○ Offline (gray #6c757d)
-- Timestamps: Formatted with toLocaleString() (Unix seconds → readable)
-- Error handling: Shows error message with re-login button
-- Logout: Clears password, returns to login screen
-
-**Component Structure:**
-- App.tsx: Root component with QueryClientProvider
-- Login.tsx: Password form (centered, white card on gray background)
-- AgentList.tsx: Agent table with header, logout button, total count
-
-**Data Flow:**
-1. User enters password → authStore.setPassword()
-2. useAgents hook enabled (password exists)
-3. TanStack Query fetches GET /api/agents (auto-refresh 5s)
-4. AgentList renders table from data
-5. User clicks logout → authStore.clearPassword() → back to Login
-
-**Styling:**
-- Minimal inline styles (no CSS frameworks)
-- Light gray background (#f5f5f5)
-- White cards with box shadows
-- Blue buttons (#007bff) with hover states
-- Responsive table (full width)
-
-**Files Created:**
-- frontend/src/lib/api.ts
-- frontend/src/stores/authStore.ts
-- frontend/src/hooks/useAgents.ts
-- frontend/src/components/Login.tsx
-- frontend/src/components/AgentList.tsx
-
-**Files Modified:**
-- frontend/src/App.tsx (replaced Vite template with ZedOps app)
-- frontend/src/index.css (replaced Vite styles with minimal global styles)
-
-**Validation:**
-- ✅ Login component structure
-- ✅ Agent list component structure
-- ✅ Auto-refetch logic
-- ✅ Status badge colors
-- ⏳ Runtime testing requires manager deployment
-
-**Next:** Phase 9 - Integration Testing & Validation
-
----
-
-## Session 10: Phase 9 - Integration Testing & Validation (2026-01-10)
-
-**Time:** ~10 minutes
-**Phase:** Phase 9 - Integration Testing & Validation
-**Actions:**
-- ✅ Created MILESTONE-1-COMPLETE.md with comprehensive summary
-- ✅ Documented all 4 test scenarios for deployment testing
-- ✅ Created deployment guide with step-by-step instructions
-- ✅ Listed all files created across all 9 phases
-- ✅ Documented success criteria (all met)
-- ✅ Documented next steps (deployment and Milestone 2)
-- ✅ Updated task_plan.md to mark milestone complete
-- ✅ Updated progress.md with final session
-
-**Implementation Summary:**
-- Manager: 8 files (index.ts, AgentConnection.ts, tokens.ts, admin.ts, agents.ts, Message.ts, schema.sql, wrangler.toml)
-- Agent: 4 files (main.go, message.go, token.go, reconnect.go, go.mod)
-- Frontend: 7 files (App.tsx, api.ts, authStore.ts, useAgents.ts, Login.tsx, AgentList.tsx, index.css)
-- Planning: 4 files (task_plan.md, findings.md, progress.md, MILESTONE-1-COMPLETE.md)
-
-**Test Scenarios Documented:**
-1. Fresh Agent Registration - Complete token flow validation
-2. Agent Reconnection - Exponential backoff verification
-3. Bidirectional Messaging - Heartbeat and status updates
-4. Multiple Agents - Independent agent tracking
-
-**Deployment Steps Documented:**
-1. Create D1 database
-2. Run migrations
-3. Set production secrets
-4. Build frontend
-5. Deploy manager
-6. Build agent
-
-**Validation:**
-- ✅ All 9 phases complete
-- ✅ All deliverables implemented
-- ✅ All success criteria met
-- ✅ Test plan documented
-- ✅ Deployment guide created
-
-**Milestone 1 Status:** ✅ COMPLETE
-
----
-
-## Milestone 1 Summary
-
-**Duration:** Single session (2026-01-10)
-**Total Phases:** 9 phases (all complete)
-**Total Files Created:** 23 files
-**Total Commits:** 10 commits
-
-**Phases:**
-1. ✅ Project Structure Setup
-2. ✅ Manager - Durable Object WebSocket Handler
-3. ✅ NATS-Inspired Message Protocol
-4. ✅ Agent Registration Flow (Manager)
-5. ✅ Go Agent - WebSocket Client
-6. ✅ Agent Reconnection Logic
-7. ✅ Manager API - Agent Status
-8. ✅ Basic UI - Agent List
-9. ✅ Integration Testing & Validation
-
-**Next:** Milestone 2 - Server Discovery (when user is ready)
-
----
-
-## Files Created
-
-| File | Purpose | Status |
-|------|---------|--------|
-| task_plan.md | Phase tracking and planning | ✅ Created |
-| findings.md | Research and design decisions | ✅ Created |
-| progress.md | Session log (this file) | ✅ Created |
-| frontend/* | React UI structure | ✅ Created |
-| manager/* | Cloudflare Worker structure | ✅ Created |
-| agent/* | Go agent structure | ✅ Created |
-| manager/wrangler.toml | Workers configuration | ✅ Created |
-| manager/schema.sql | D1 database schema | ✅ Created |
-| manager/README.md | Manager documentation | ✅ Created |
-| agent/README.md | Agent documentation | ✅ Created |
-
----
-
-## Dependencies Identified
-
-**Development Tools:**
-- Node.js 18+ (for Vite, Wrangler)
-- Go 1.21+ (for agent)
-- Cloudflare account (free tier)
-- wrangler CLI (npm install -g wrangler)
-
-**NPM Packages (Manager):**
-- hono (API framework)
-- jose (JWT library for Workers)
-
-**NPM Packages (Frontend):**
-- @tanstack/react-query (server state)
-- zustand (client state)
-- Shadcn UI components (manual copy)
-
-**Go Packages (Agent):**
-- github.com/google/uuid (UUID generation)
-- github.com/gorilla/websocket (WebSocket client)
-
----
-
-## Test Scenarios Planned
-
-### Scenario 1: Fresh Agent Registration
-1. Generate ephemeral token: `POST /api/admin/tokens`
-2. Start agent: `go run main.go --token=<ephemeral>`
-3. Verify agent registers and receives permanent token
-4. Verify permanent token saved to `~/.zedops-agent/token`
-5. Verify UI shows "Agent online ✓"
-
-### Scenario 2: Agent Reconnection
-1. Start agent with permanent token
-2. Stop manager (simulate network loss)
-3. Verify agent attempts reconnection (exponential backoff)
-4. Restart manager
-5. Verify agent reconnects successfully
-6. Verify UI updates to "online"
-
-### Scenario 3: Bidirectional Messaging
-1. Agent sends message: `{"subject":"test.echo","data":"hello"}`
-2. Manager echoes back: `{"subject":"test.echo","data":"hello"}`
-3. Agent receives echo
-4. Log success
-
-### Scenario 4: Multiple Agents
-1. Start agent 1: "agent-1"
-2. Start agent 2: "agent-2"
-3. Start agent 3: "agent-3"
-4. Verify UI shows 3 agents online
-5. Stop agent 2
-6. Verify UI shows 2 online, 1 offline
-
----
-
-## Questions & Blockers
-
-**Questions:**
-- _(none yet - just started planning)_
+**Work Completed:**
+-
 
 **Blockers:**
-- _(none yet)_
+-
 
----
+**Next Steps:**
+-
 
-## Notes
-
-- This is Milestone 1 - ONLY agent connection, no server control yet
-- Stay focused on deliverables: agent connects, UI shows status, reconnection works
-- Don't build features for future milestones (e.g., server control, mod management)
-- Test frequently after each phase
-- Commit after each phase completion
+**Notes:**
+-

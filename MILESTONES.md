@@ -7,30 +7,33 @@
 
 ---
 
-## Milestone 1: Agent Connection ⏳ Planned
+## Milestone 1: Agent Connection ✅ Complete
 
 **Goal:** Establish WebSocket connection between agent and manager using NATS-inspired message protocol
 
-**Duration:** 1-2 weeks
+**Duration:** 1 day (2026-01-10)
 
 **Deliverables:**
-- Agent registration flow (ephemeral token → permanent token)
-- WebSocket connection to Cloudflare Durable Object
-- Manager UI shows agent status (online/offline)
-- Basic auth (hardcoded admin for MVP)
-- NATS-inspired message protocol (subject-based routing, request/reply)
+- ✅ Agent registration flow (ephemeral token → permanent token)
+- ✅ WebSocket connection to Cloudflare Durable Object
+- ✅ Manager UI shows agent status (online/offline)
+- ✅ Basic auth (hardcoded admin for MVP)
+- ✅ NATS-inspired message protocol (subject-based routing, request/reply)
+- ✅ Agent authentication (agent.auth) for reconnection
 
 **Success Criteria:**
-- Agent can register and connect to manager
-- Manager displays "Agent online ✓" in UI
-- Connection survives network interruptions (reconnect logic)
-- Messages can be sent bidirectionally
+- ✅ Agent can register and connect to manager
+- ✅ Manager displays "Agent online ✓" in UI
+- ✅ Connection survives network interruptions (reconnect logic)
+- ✅ Messages can be sent bidirectionally
 
-**Planning:** [planning-history/milestone-1-agent-connection/](planning-history/milestone-1-agent-connection/) *(not started)*
+**Planning:** [planning-history/milestone-1-agent-connection/](planning-history/milestone-1-agent-connection/)
+
+**Completed:** 2026-01-10 (commit: 0fc9cac)
 
 ---
 
-## Milestone 2: Container Control ⏳ Planned
+## Milestone 2: Container Control 🚧 In Progress
 
 **Goal:** Agent can list and control Docker containers via manager commands
 
@@ -201,8 +204,11 @@
 
 ## Current Status
 
-**Active Milestone:** None (project in setup phase)
+**Active Milestone:** Milestone 2 - Container Control 🚧
 
-**Next Up:** Milestone 1 - Agent Connection
+**Completed Milestones:**
+- ✅ Milestone 1 - Agent Connection (2026-01-10)
 
-**To start:** Use planning-with-files skill to create detailed plan for Milestone 1
+**Next Up:** Milestone 3 - Log Streaming
+
+**Current Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)

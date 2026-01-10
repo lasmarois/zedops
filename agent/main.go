@@ -27,6 +27,7 @@ type Agent struct {
 	permanentToken string
 	agentID        string
 	conn           *websocket.Conn
+	docker         *DockerClient
 }
 
 func main() {
@@ -58,11 +59,22 @@ func main() {
 		log.Fatal("Error: No permanent token found. Provide --token for first-time registration.")
 	}
 
+	// Initialize Docker client
+	dockerClient, err := NewDockerClient()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize Docker client: %v", err)
+		log.Println("Container control features will be unavailable")
+	} else {
+		defer dockerClient.Close()
+		log.Println("Docker client initialized successfully")
+	}
+
 	agent := &Agent{
 		managerURL:     *managerURL,
 		agentName:      name,
 		ephemeralToken: *token,
 		permanentToken: permanentToken,
+		docker:         dockerClient,
 	}
 
 	// Set up graceful shutdown
@@ -246,6 +258,14 @@ func (a *Agent) receiveMessages() {
 		case "agent.heartbeat.ack":
 			// Heartbeat acknowledged (silent)
 			continue
+		case "container.list":
+			a.handleContainerList(msg)
+		case "container.start":
+			a.handleContainerStart(msg)
+		case "container.stop":
+			a.handleContainerStop(msg)
+		case "container.restart":
+			a.handleContainerRestart(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -255,4 +275,144 @@ func (a *Agent) receiveMessages() {
 			log.Printf("Unknown message subject: %s", msg.Subject)
 		}
 	}
+}
+
+// handleContainerList handles container.list messages
+func (a *Agent) handleContainerList(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendContainerError("", "list", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		return
+	}
+
+	// List containers
+	containers, err := a.docker.ListContainers(ctx)
+	if err != nil {
+		log.Printf("Failed to list containers: %v", err)
+		a.sendContainerError("", "list", err.Error(), "DOCKER_LIST_FAILED")
+		return
+	}
+
+	log.Printf("Listed %d containers", len(containers))
+
+	// Send response
+	response := NewMessage("container.list.response", map[string]interface{}{
+		"containers": containers,
+		"count":      len(containers),
+	})
+	a.sendMessage(response)
+}
+
+// handleContainerStart handles container.start messages
+func (a *Agent) handleContainerStart(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendContainerError("", "start", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		return
+	}
+
+	// Parse container ID from message
+	data, _ := json.Marshal(msg.Data)
+	var op ContainerOperation
+	if err := json.Unmarshal(data, &op); err != nil {
+		a.sendContainerError("", "start", "Invalid request format", "INVALID_REQUEST")
+		return
+	}
+
+	// Start container
+	err := a.docker.StartContainer(ctx, op.ContainerID)
+	if err != nil {
+		log.Printf("Failed to start container %s: %v", op.ContainerID, err)
+		a.sendContainerError(op.ContainerID, "start", err.Error(), "DOCKER_START_FAILED")
+		return
+	}
+
+	// Send success response
+	a.sendContainerSuccess(op.ContainerID, "start")
+}
+
+// handleContainerStop handles container.stop messages
+func (a *Agent) handleContainerStop(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendContainerError("", "stop", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		return
+	}
+
+	// Parse container ID from message
+	data, _ := json.Marshal(msg.Data)
+	var op ContainerOperation
+	if err := json.Unmarshal(data, &op); err != nil {
+		a.sendContainerError("", "stop", "Invalid request format", "INVALID_REQUEST")
+		return
+	}
+
+	// Stop container
+	err := a.docker.StopContainer(ctx, op.ContainerID)
+	if err != nil {
+		log.Printf("Failed to stop container %s: %v", op.ContainerID, err)
+		a.sendContainerError(op.ContainerID, "stop", err.Error(), "DOCKER_STOP_FAILED")
+		return
+	}
+
+	// Send success response
+	a.sendContainerSuccess(op.ContainerID, "stop")
+}
+
+// handleContainerRestart handles container.restart messages
+func (a *Agent) handleContainerRestart(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendContainerError("", "restart", "Docker client not initialized", "DOCKER_NOT_AVAILABLE")
+		return
+	}
+
+	// Parse container ID from message
+	data, _ := json.Marshal(msg.Data)
+	var op ContainerOperation
+	if err := json.Unmarshal(data, &op); err != nil {
+		a.sendContainerError("", "restart", "Invalid request format", "INVALID_REQUEST")
+		return
+	}
+
+	// Restart container
+	err := a.docker.RestartContainer(ctx, op.ContainerID)
+	if err != nil {
+		log.Printf("Failed to restart container %s: %v", op.ContainerID, err)
+		a.sendContainerError(op.ContainerID, "restart", err.Error(), "DOCKER_RESTART_FAILED")
+		return
+	}
+
+	// Send success response
+	a.sendContainerSuccess(op.ContainerID, "restart")
+}
+
+// sendContainerSuccess sends a success response for a container operation
+func (a *Agent) sendContainerSuccess(containerID, operation string) {
+	response := NewMessage("container.operation.success", ContainerOperationResponse{
+		Success:     true,
+		ContainerID: containerID,
+		Operation:   operation,
+	})
+	a.sendMessage(response)
+}
+
+// sendContainerError sends an error response for a container operation
+func (a *Agent) sendContainerError(containerID, operation, errorMsg, errorCode string) {
+	response := NewMessage("container.operation.error", ContainerOperationResponse{
+		Success:     false,
+		ContainerID: containerID,
+		Operation:   operation,
+		Error:       errorMsg,
+		ErrorCode:   errorCode,
+	})
+	a.sendMessage(response)
 }
