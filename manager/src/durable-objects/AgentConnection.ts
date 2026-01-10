@@ -15,10 +15,17 @@ import {
   createMessage,
   isInboxSubject,
 } from "../types/Message";
+import {
+  verifyToken,
+  generatePermanentToken,
+  hashToken,
+} from "../lib/tokens";
 
 export class AgentConnection extends DurableObject {
   private ws: WebSocket | null = null;
   private agentId: string | null = null;
+  private agentName: string | null = null;
+  private isRegistered: boolean = false;
   private pendingReplies: Map<string, (msg: Message) => void> = new Map();
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -93,7 +100,7 @@ export class AgentConnection extends DurableObject {
   /**
    * Handle incoming WebSocket messages
    */
-  private handleMessage(event: MessageEvent): void {
+  private async handleMessage(event: MessageEvent): Promise<void> {
     try {
       const data = event.data;
 
@@ -110,7 +117,7 @@ export class AgentConnection extends DurableObject {
       console.log(`[AgentConnection] Received: ${message.subject}`, message.data);
 
       // Route message based on subject
-      this.routeMessage(message);
+      await this.routeMessage(message);
     } catch (error) {
       console.error("[AgentConnection] Error handling message:", error);
       this.sendError("Failed to process message");
@@ -120,7 +127,7 @@ export class AgentConnection extends DurableObject {
   /**
    * Route message based on subject (NATS-style routing)
    */
-  private routeMessage(message: Message): void {
+  private async routeMessage(message: Message): Promise<void> {
     const { subject } = message;
 
     // Check if this is a reply to a pending request
@@ -129,12 +136,20 @@ export class AgentConnection extends DurableObject {
       return;
     }
 
+    // Allow agent.register without registration
+    if (subject === "agent.register") {
+      await this.handleAgentRegister(message);
+      return;
+    }
+
+    // All other subjects require registration
+    if (!this.isRegistered) {
+      this.sendError("Agent must register before sending messages");
+      return;
+    }
+
     // Route to appropriate handler based on subject
     switch (subject) {
-      case "agent.register":
-        this.handleAgentRegister(message);
-        break;
-
       case "agent.heartbeat":
         this.handleAgentHeartbeat(message);
         break;
@@ -165,15 +180,83 @@ export class AgentConnection extends DurableObject {
 
   /**
    * Handle agent.register message
-   * (Will be fully implemented in Phase 4 with token validation)
+   * Token-based registration flow
    */
-  private handleAgentRegister(message: Message): void {
-    console.log("[AgentConnection] Agent registration request:", message.data);
+  private async handleAgentRegister(message: Message): Promise<void> {
+    try {
+      const { token, agentName } = message.data;
 
-    // For now, just acknowledge (full implementation in Phase 4)
-    this.send(createMessage("agent.register.ack", {
-      message: "Registration acknowledged (stub - Phase 4 will implement token flow)",
-    }));
+      if (!token || typeof token !== 'string') {
+        this.sendError("Registration requires 'token' field");
+        return;
+      }
+
+      if (!agentName || typeof agentName !== 'string') {
+        this.sendError("Registration requires 'agentName' field");
+        return;
+      }
+
+      // Verify ephemeral token
+      let payload;
+      try {
+        payload = await verifyToken(token, this.env.TOKEN_SECRET);
+      } catch (error) {
+        console.error("[AgentConnection] Token verification failed:", error);
+        this.sendError("Invalid or expired token");
+        return;
+      }
+
+      // Check token type
+      if (payload.type !== 'ephemeral') {
+        this.sendError("Registration requires ephemeral token");
+        return;
+      }
+
+      // Check agent name matches token
+      if (payload.agentName !== agentName) {
+        this.sendError("Agent name does not match token");
+        return;
+      }
+
+      // Generate agent ID
+      const agentId = crypto.randomUUID();
+
+      // Generate permanent token
+      const permanentToken = await generatePermanentToken(
+        agentId,
+        agentName,
+        this.env.TOKEN_SECRET
+      );
+
+      // Hash permanent token for storage
+      const tokenHash = await hashToken(permanentToken);
+
+      // Store agent in D1
+      const now = Math.floor(Date.now() / 1000);
+      await this.env.DB.prepare(
+        `INSERT INTO agents (id, name, token_hash, status, last_seen, created_at, metadata)
+         VALUES (?, ?, ?, 'online', ?, ?, ?)`
+      )
+        .bind(agentId, agentName, tokenHash, now, now, JSON.stringify({}))
+        .run();
+
+      // Mark as registered
+      this.agentId = agentId;
+      this.agentName = agentName;
+      this.isRegistered = true;
+
+      console.log(`[AgentConnection] Agent registered: ${agentName} (${agentId})`);
+
+      // Send permanent token to agent
+      this.send(createMessage("agent.register.success", {
+        agentId,
+        token: permanentToken,
+        message: "Registration successful",
+      }));
+    } catch (error) {
+      console.error("[AgentConnection] Registration error:", error);
+      this.sendError("Registration failed");
+    }
   }
 
   /**
@@ -208,18 +291,50 @@ export class AgentConnection extends DurableObject {
   /**
    * Handle WebSocket close event
    */
-  private handleClose(event: CloseEvent): void {
+  private async handleClose(event: CloseEvent): Promise<void> {
     console.log(`[AgentConnection] WebSocket closed: code=${event.code}, reason=${event.reason}`);
+
+    // Update agent status to offline if registered
+    if (this.isRegistered && this.agentId) {
+      try {
+        await this.env.DB.prepare(
+          `UPDATE agents SET status = 'offline' WHERE id = ?`
+        )
+          .bind(this.agentId)
+          .run();
+      } catch (error) {
+        console.error("[AgentConnection] Failed to update agent status:", error);
+      }
+    }
+
     this.ws = null;
     this.agentId = null;
+    this.agentName = null;
+    this.isRegistered = false;
   }
 
   /**
    * Handle WebSocket error event
    */
-  private handleError(event: Event): void {
+  private async handleError(event: Event): Promise<void> {
     console.error("[AgentConnection] WebSocket error:", event);
+
+    // Update agent status to offline if registered
+    if (this.isRegistered && this.agentId) {
+      try {
+        await this.env.DB.prepare(
+          `UPDATE agents SET status = 'offline' WHERE id = ?`
+        )
+          .bind(this.agentId)
+          .run();
+      } catch (error) {
+        console.error("[AgentConnection] Failed to update agent status:", error);
+      }
+    }
+
     this.ws = null;
     this.agentId = null;
+    this.agentName = null;
+    this.isRegistered = false;
   }
 }

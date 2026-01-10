@@ -10,6 +10,7 @@
 
 import { Hono } from 'hono';
 import { AgentConnection } from './durable-objects/AgentConnection';
+import { admin } from './routes/admin';
 
 // Export Durable Object class
 export { AgentConnection };
@@ -24,6 +25,9 @@ type Bindings = {
 
 // Create Hono app with bindings
 const app = new Hono<{ Bindings: Bindings }>();
+
+// Mount admin routes
+app.route('/api/admin', admin);
 
 /**
  * WebSocket endpoint - Routes to AgentConnection Durable Object

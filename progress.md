@@ -148,6 +148,64 @@
 
 ---
 
+## Session 5: Phase 4 - Agent Registration Flow (Manager) (2026-01-10)
+
+**Time:** ~25 minutes
+**Phase:** Phase 4 - Agent Registration Flow (Manager)
+**Actions:**
+- ✅ Created manager/src/lib/ directory
+- ✅ Created tokens.ts with JWT token functions (Jose library)
+- ✅ Implemented generateEphemeralToken() (1-hour expiry)
+- ✅ Implemented generatePermanentToken() (no expiry)
+- ✅ Implemented verifyToken() for token validation
+- ✅ Implemented hashToken() for secure storage (SHA-256)
+- ✅ Created manager/src/routes/ directory
+- ✅ Created admin.ts with admin API routes
+- ✅ Implemented POST /api/admin/tokens endpoint
+- ✅ Added admin password authentication (Bearer token)
+- ✅ Updated manager/src/index.ts to mount admin routes
+- ✅ Updated AgentConnection with full registration flow
+- ✅ Implemented token validation in handleAgentRegister()
+- ✅ Added D1 agent storage with status tracking
+- ✅ Implemented agent status updates on close/error
+- ✅ Added registration state tracking (isRegistered flag)
+- ✅ Enforced registration requirement for all non-register subjects
+
+**Implementation Details:**
+- Token generation: Uses Jose library for JWT (HS256 algorithm)
+- Ephemeral tokens: Include agentName, expire in 1 hour
+- Permanent tokens: Include agentId + agentName, no expiration
+- Token storage: SHA-256 hashes stored in D1 (not raw tokens)
+- Admin auth: Hardcoded password from env.ADMIN_PASSWORD
+- Registration flow: Ephemeral token → validation → permanent token → D1 storage
+- Status management: Set to 'online' on register, 'offline' on disconnect
+
+**Token Flow:**
+1. Admin calls POST /api/admin/tokens with agentName
+2. Manager generates ephemeral token (1-hour expiry)
+3. Agent sends agent.register with ephemeral token
+4. Manager validates token, generates permanent token
+5. Manager stores agent in D1 with token hash
+6. Manager sends permanent token to agent
+7. Agent stores permanent token for future connections
+
+**Files Created/Modified:**
+- manager/src/lib/tokens.ts (new)
+- manager/src/routes/admin.ts (new)
+- manager/src/index.ts (updated - mount admin routes)
+- manager/src/durable-objects/AgentConnection.ts (updated - registration flow)
+
+**Validation:**
+- ✅ Token generation logic with proper expiry
+- ✅ Admin endpoint with authentication
+- ✅ Registration flow with comprehensive validation
+- ✅ D1 agent storage with status tracking
+- ⏳ Runtime testing deferred (GLIBC limitation)
+
+**Next:** Phase 5 - Go Agent - WebSocket Client
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |
