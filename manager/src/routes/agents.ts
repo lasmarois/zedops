@@ -405,9 +405,9 @@ agents.post('/:id/servers', async (c) => {
   }
 
   try {
-    // Verify agent exists and get registry
+    // Verify agent exists and get registry + data path
     const agent = await c.env.DB.prepare(
-      `SELECT id, name, steam_zomboid_registry FROM agents WHERE id = ?`
+      `SELECT id, name, steam_zomboid_registry, server_data_path FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -511,6 +511,7 @@ agents.post('/:id/servers', async (c) => {
         gamePort,
         udpPort,
         rconPort,
+        dataPath: agent.server_data_path,
       }),
     });
 

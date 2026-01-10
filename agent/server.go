@@ -23,6 +23,7 @@ type ServerConfig struct {
 	GamePort   int               `json:"gamePort"`
 	UDPPort    int               `json:"udpPort"`
 	RCONPort   int               `json:"rconPort"`
+	DataPath   string            `json:"dataPath"` // Base path for server data storage
 }
 
 // CreateServer creates a new Project Zomboid server container
@@ -38,8 +39,8 @@ func (dc *DockerClient) CreateServer(ctx context.Context, config ServerConfig) (
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Create volume directories
-	basePath := fmt.Sprintf("/var/lib/zedops/servers/%s", config.Name)
+	// Create volume directories using configured data path
+	basePath := filepath.Join(config.DataPath, config.Name)
 	binPath := filepath.Join(basePath, "bin")
 	dataPath := filepath.Join(basePath, "data")
 
@@ -189,6 +190,7 @@ type ServerCreateRequest struct {
 	GamePort int               `json:"gamePort"`
 	UDPPort  int               `json:"udpPort"`
 	RCONPort int               `json:"rconPort"`
+	DataPath string            `json:"dataPath"`
 }
 
 // ServerDeleteRequest represents a server.delete message payload

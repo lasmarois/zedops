@@ -661,6 +661,7 @@ func (a *Agent) handleServerCreate(msg Message) {
 		GamePort: req.GamePort,
 		UDPPort:  req.UDPPort,
 		RCONPort: req.RCONPort,
+		DataPath: req.DataPath,
 	}
 
 	// Create server

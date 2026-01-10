@@ -384,6 +384,110 @@ UI → POST /api/agents/:id/servers
 
 ---
 
+## Session 6: 2026-01-10 (Port Validation Discovery & Planning)
+
+**Time:** Continuation of Session 5
+
+**Goals:**
+- Test server creation end-to-end
+- Identify and fix issues discovered during testing
+
+**Issues Discovered:**
+- ❌ **Port conflict error** - Server creation failed with "port already allocated"
+  - Attempted to create server on ports 16261-16262
+  - Ports already in use by steam-zomboid-newyear
+- ❌ **No port customization** - UI doesn't allow users to specify ports
+- ❌ **No pre-flight validation** - Port availability not checked before creation
+- ❌ **Failed server cleanup** - Failed servers remain in DB with status='failed'
+- ❌ **No retry mechanism** - Users can't edit and retry failed server configs
+
+**Work Completed:**
+- ✅ Diagnosed root cause: DB query doesn't check host-level port availability
+- ✅ Analyzed current port usage:
+  - 16261-16262: steam-zomboid-newyear (UDP)
+  - 16263-16264: steam-zomboid-build42-jan26 (UDP)
+  - 26261-26262: steam-zomboid-servertest (UDP)
+- ✅ Created comprehensive task plan: `task_plan_port_validation.md`
+  - Phase 1: Agent port checking (backend)
+  - Phase 2: Manager port validation API (backend)
+  - Phase 3: Enhanced UI port selection (frontend)
+  - Phase 4: Failed server recovery (enhancement)
+- ✅ Created findings document: `findings_port_validation.md`
+  - Researched port checking approaches (`ss`, `/proc/net/*`, Docker SDK)
+  - Designed layered port validation architecture
+  - Proposed auto-suggest algorithm improvements
+  - Documented UI/UX improvements needed
+
+**Decisions Made:**
+1. **Layered Port Checking Approach:**
+   - Layer 1: Database check (Manager-side) - fast, known allocations
+   - Layer 2: Docker container check (Agent-side) - all containers
+   - Layer 3: Host network check (Agent-side) - `ss -tuln` or `/proc/net/*`
+
+2. **New Message Protocol:** `port.check`
+   - Request: Array of ports to check
+   - Response: Available/unavailable status with reasons
+
+3. **UI Enhancement:**
+   - Add collapsible "Port Configuration" section to ServerForm
+   - Show availability indicators (✓ available / ✗ in use)
+   - Add "Check Availability" button
+   - Allow manual port override
+   - Add "Edit & Retry" for failed servers
+
+**Architecture Design:**
+```
+UI (ServerForm)
+  ↓ Check Availability button
+Manager API (/api/agents/:id/ports/availability)
+  ↓ Query DB + Forward port.check to agent
+AgentConnection DO
+  ↓ Forward port.check via WebSocket
+Agent
+  ↓ Check Docker containers + Host network bindings
+  ↑ Return availability status
+Manager
+  ↑ Combine results + suggest next available ports
+UI
+  ↑ Display availability indicators
+```
+
+**Next Steps:**
+- **Phase 1:** Implement agent-side port checking
+  - Add `handlePortCheck()` message handler
+  - Create `network.go` with `CheckPortAvailability()`
+  - Parse `ss -tuln` output for host-level bindings
+  - Test port checking logic
+- **Phase 2:** Implement manager-side port validation API
+  - Add GET `/api/agents/:id/ports/availability` endpoint
+  - Update AgentConnection DO to forward `port.check`
+  - Implement auto-suggest algorithm
+- **Phase 3:** Implement enhanced UI
+  - Update ServerForm with port configuration section
+  - Add port availability checking
+  - Show real-time availability indicators
+  - Allow manual port override
+- **Phase 4:** Implement failed server recovery
+  - Add "Edit & Retry" functionality
+  - Implement automatic cleanup of failed containers
+  - Add bulk cleanup utility
+
+**Blockers:**
+- Cannot proceed with Milestone 4 Phase 5 testing until port validation is implemented
+- Current UI is not production-ready due to port conflict issues
+
+**Notes:**
+- Port validation is critical for user experience
+- Failed server entries currently remain in DB and need manual cleanup
+- Host-level port checking is essential (not just Docker)
+- Option A (comprehensive validation) chosen over quick fix
+
+**Files Created:**
+- `task_plan_port_validation.md` - Detailed 4-phase implementation plan
+- `findings_port_validation.md` - Research and architecture decisions
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

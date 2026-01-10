@@ -976,8 +976,8 @@ export class AgentConnection extends DurableObject {
     }
 
     // Validate required fields
-    const { serverId, name, registry, imageTag, config, gamePort, udpPort, rconPort } = body;
-    if (!serverId || !name || !registry || !imageTag || !config || !gamePort || !udpPort || !rconPort) {
+    const { serverId, name, registry, imageTag, config, gamePort, udpPort, rconPort, dataPath } = body;
+    if (!serverId || !name || !registry || !imageTag || !config || !gamePort || !udpPort || !rconPort || !dataPath) {
       return new Response(JSON.stringify({
         error: "Missing required fields",
       }), {
@@ -1016,6 +1016,7 @@ export class AgentConnection extends DurableObject {
         gamePort,
         udpPort,
         rconPort,
+        dataPath,
       },
       reply: inbox,
     });
