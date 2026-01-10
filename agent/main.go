@@ -28,6 +28,7 @@ type Agent struct {
 	agentID        string
 	conn           *websocket.Conn
 	docker         *DockerClient
+	logStreams     map[string]context.CancelFunc // containerID -> cancel function
 }
 
 func main() {
@@ -75,6 +76,7 @@ func main() {
 		ephemeralToken: *token,
 		permanentToken: permanentToken,
 		docker:         dockerClient,
+		logStreams:     make(map[string]context.CancelFunc),
 	}
 
 	// Set up graceful shutdown
@@ -266,6 +268,10 @@ func (a *Agent) receiveMessages() {
 			a.handleContainerStop(msg)
 		case "container.restart":
 			a.handleContainerRestart(msg)
+		case "log.stream.start":
+			a.handleLogStreamStart(msg)
+		case "log.stream.stop":
+			a.handleLogStreamStop(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -460,6 +466,161 @@ func (a *Agent) sendContainerErrorWithReply(containerID, operation, errorMsg, er
 			Operation:   operation,
 			Error:       errorMsg,
 			ErrorCode:   errorCode,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// handleLogStreamStart handles log.stream.start messages
+func (a *Agent) handleLogStreamStart(msg Message) {
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendLogStreamError("", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		ContainerID string `json:"containerId"`
+		Tail        int    `json:"tail"`
+		Follow      bool   `json:"follow"`
+		Timestamps  bool   `json:"timestamps"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendLogStreamError("", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Check if already streaming this container
+	if _, exists := a.logStreams[req.ContainerID]; exists {
+		a.sendLogStreamError(req.ContainerID, "Already streaming logs for this container", "ALREADY_STREAMING", msg.Reply)
+		return
+	}
+
+	// Default tail to 1000 if not specified
+	if req.Tail == 0 {
+		req.Tail = 1000
+	}
+
+	// Create context for this log stream
+	ctx, cancel := context.WithCancel(context.Background())
+	a.logStreams[req.ContainerID] = cancel
+
+	log.Printf("Starting log stream for container: %s (tail: %d)", req.ContainerID, req.Tail)
+
+	// Start streaming logs
+	logChan, errChan := a.docker.StreamContainerLogs(ctx, req.ContainerID, req.Tail)
+
+	// Send acknowledgment
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success":     true,
+				"containerId": req.ContainerID,
+				"message":     "Log streaming started",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+
+	// Forward logs to manager
+	go func() {
+		defer func() {
+			delete(a.logStreams, req.ContainerID)
+			log.Printf("Stopped log stream for container: %s", req.ContainerID)
+		}()
+
+		for {
+			select {
+			case logLine, ok := <-logChan:
+				if !ok {
+					// Channel closed, stream ended
+					return
+				}
+
+				// Send log line to manager
+				logMsg := Message{
+					Subject:   "log.line",
+					Data:      logLine,
+					Timestamp: time.Now().Unix(),
+				}
+				if err := a.sendMessage(logMsg); err != nil {
+					log.Printf("Failed to send log line: %v", err)
+					return
+				}
+
+			case err, ok := <-errChan:
+				if ok && err != nil {
+					log.Printf("Log streaming error for %s: %v", req.ContainerID, err)
+					a.sendLogStreamError(req.ContainerID, err.Error(), "DOCKER_LOG_FAILED", "")
+					return
+				}
+
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// handleLogStreamStop handles log.stream.stop messages
+func (a *Agent) handleLogStreamStop(msg Message) {
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		ContainerID string `json:"containerId"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendLogStreamError("", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Check if stream exists
+	cancel, exists := a.logStreams[req.ContainerID]
+	if !exists {
+		a.sendLogStreamError(req.ContainerID, "No active log stream for this container", "NOT_STREAMING", msg.Reply)
+		return
+	}
+
+	// Cancel the stream
+	cancel()
+	delete(a.logStreams, req.ContainerID)
+
+	log.Printf("Stopped log stream for container: %s", req.ContainerID)
+
+	// Send acknowledgment
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success":     true,
+				"containerId": req.ContainerID,
+				"message":     "Log streaming stopped",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// sendLogStreamError sends a log streaming error message
+func (a *Agent) sendLogStreamError(containerID, errorMsg, errorCode, replyTo string) {
+	subject := "log.stream.error"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"success":     false,
+			"containerId": containerID,
+			"error":       errorMsg,
+			"errorCode":   errorCode,
 		},
 		Timestamp: time.Now().Unix(),
 	}

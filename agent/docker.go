@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -168,4 +171,146 @@ type ContainerOperationResponse struct {
 	Operation   string `json:"operation"`
 	Error       string `json:"error,omitempty"`
 	ErrorCode   string `json:"errorCode,omitempty"`
+}
+
+// LogLine represents a single line from container logs
+type LogLine struct {
+	ContainerID string `json:"containerId"`
+	Timestamp   int64  `json:"timestamp"` // Unix timestamp in milliseconds
+	Stream      string `json:"stream"`    // stdout or stderr
+	Message     string `json:"message"`
+}
+
+// StreamContainerLogs streams logs from a container
+// Returns a channel that receives log lines and an error channel
+func (dc *DockerClient) StreamContainerLogs(ctx context.Context, containerID string, tail int) (<-chan LogLine, <-chan error) {
+	logChan := make(chan LogLine, 100) // Buffer for log lines
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer close(logChan)
+		defer close(errChan)
+
+		// Configure log options
+		options := container.LogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+			Timestamps: true,
+			Tail:       fmt.Sprintf("%d", tail),
+		}
+
+		// Get log stream
+		reader, err := dc.cli.ContainerLogs(ctx, containerID, options)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to get container logs: %w", err)
+			return
+		}
+		defer reader.Close()
+
+		log.Printf("Started streaming logs for container: %s", containerID)
+
+		// Docker uses multiplexed stream format
+		// Read 8-byte header + payload
+		header := make([]byte, 8)
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("Stopped streaming logs for container: %s", containerID)
+				return
+			default:
+			}
+
+			// Read header
+			_, err := io.ReadFull(reader, header)
+			if err != nil {
+				if err == io.EOF {
+					log.Printf("Log stream ended for container: %s", containerID)
+					return
+				}
+				errChan <- fmt.Errorf("failed to read log header: %w", err)
+				return
+			}
+
+			// Parse header
+			// Byte 0: Stream type (0=stdin, 1=stdout, 2=stderr)
+			// Bytes 4-7: Frame size (big-endian uint32)
+			streamType := header[0]
+			frameSize := binary.BigEndian.Uint32(header[4:8])
+
+			// Read payload
+			payload := make([]byte, frameSize)
+			_, err = io.ReadFull(reader, payload)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to read log payload: %w", err)
+				return
+			}
+
+			// Parse log line
+			// Docker format with timestamps: "2024-01-10T12:34:56.789Z message here"
+			line := string(payload)
+
+			// Determine stream name
+			var stream string
+			switch streamType {
+			case 1:
+				stream = "stdout"
+			case 2:
+				stream = "stderr"
+			default:
+				stream = "unknown"
+			}
+
+			// Parse timestamp and message
+			timestamp, message := parseLogLine(line)
+
+			// Send log line to channel
+			logLine := LogLine{
+				ContainerID: containerID,
+				Timestamp:   timestamp,
+				Stream:      stream,
+				Message:     message,
+			}
+
+			select {
+			case logChan <- logLine:
+				// Successfully sent
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return logChan, errChan
+}
+
+// parseLogLine parses a Docker log line with timestamp
+// Format: "2024-01-10T12:34:56.789123456Z message here"
+// Returns timestamp in milliseconds and the message
+func parseLogLine(line string) (int64, string) {
+	// Find the space after timestamp
+	spaceIndex := -1
+	for i := 0; i < len(line) && i < 40; i++ {
+		if line[i] == ' ' {
+			spaceIndex = i
+			break
+		}
+	}
+
+	if spaceIndex == -1 {
+		// No timestamp found, use current time
+		return time.Now().UnixMilli(), line
+	}
+
+	timestampStr := line[:spaceIndex]
+	message := line[spaceIndex+1:]
+
+	// Parse timestamp
+	t, err := time.Parse(time.RFC3339Nano, timestampStr)
+	if err != nil {
+		// Failed to parse, use current time
+		return time.Now().UnixMilli(), line
+	}
+
+	return t.UnixMilli(), message
 }

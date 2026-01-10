@@ -83,6 +83,80 @@
 
 ---
 
+---
+
+## Session 2: 2026-01-10 (Agent Log Streaming Implementation)
+
+**Time:** 08:45 - 09:00
+
+**Goals:**
+- Implement Docker log streaming in agent/docker.go
+- Add log.stream message handlers to agent/main.go
+- Handle multiplexed Docker log format
+- Test agent build
+
+**Work Completed:**
+- ✅ Added StreamContainerLogs() method to DockerClient
+  - Reads Docker multiplexed stream format (8-byte header + payload)
+  - Parses stream type (stdout/stderr)
+  - Parses timestamp from Docker log lines
+  - Returns channels for log lines and errors
+  - Handles context cancellation for stopping streams
+- ✅ Added LogLine struct for log data
+  - ContainerID, Timestamp, Stream, Message fields
+- ✅ Added parseLogLine() helper function
+  - Parses RFC3339Nano timestamp
+  - Extracts message from log line
+- ✅ Added logStreams map to Agent struct
+  - Tracks active log streams by container ID
+  - Stores cancel functions for stopping streams
+- ✅ Added handleLogStreamStart() message handler
+  - Validates Docker client availability
+  - Checks for duplicate streams
+  - Creates cancellable context for stream
+  - Forwards log lines to manager via log.line messages
+  - Sends acknowledgment via reply inbox
+- ✅ Added handleLogStreamStop() message handler
+  - Validates stream exists
+  - Cancels context to stop streaming
+  - Sends acknowledgment via reply inbox
+- ✅ Added sendLogStreamError() helper function
+  - Standardized error responses
+- ✅ Built agent successfully (9 seconds)
+  - Binary size: 7.0MB
+  - No compilation errors
+
+**Technical Details:**
+- Docker multiplexed stream format:
+  - Byte 0: Stream type (1=stdout, 2=stderr)
+  - Bytes 4-7: Frame size (big-endian uint32)
+  - Payload: Log message with timestamp
+- Log format: "2024-01-10T12:34:56.789123456Z message here"
+- Channel buffering: 100 log lines to prevent blocking
+- Graceful shutdown: Contexts cancel on stream stop or agent shutdown
+
+**Decisions Made:**
+- Use channels for async log streaming (Go idiomatic)
+- Parse timestamps from Docker (preserve original)
+- Buffer 100 lines in channel (balance memory vs latency)
+- Default to 1000 tail lines if not specified
+- Track streams in map for easy stop/cleanup
+
+**Next Steps:**
+- Phase 3: Implement Durable Object pub/sub
+- Add log buffer (circular buffer, 1000 lines)
+- Add subscriber management
+- Forward logs from agent to UI clients
+- Test with real container logs
+
+**Notes:**
+- Phase 2 complete in ~15 minutes
+- Docker log streaming API is straightforward
+- Multiplexed format requires careful parsing
+- Agent is ready for live testing with log streaming
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

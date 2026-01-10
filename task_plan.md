@@ -51,27 +51,34 @@
 
 ---
 
-## Phase 2: Agent Log Streaming
+## Phase 2: Agent Log Streaming ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
-- Stream container logs from Docker daemon
-- Parse log format (timestamp, stream, message)
-- Send logs to manager via WebSocket
-- Handle log streaming start/stop commands
+- ✅ Stream container logs from Docker daemon
+- ✅ Parse log format (timestamp, stream, message)
+- ✅ Send logs to manager via WebSocket
+- ✅ Handle log streaming start/stop commands
 
 **Tasks:**
-- [ ] Implement container log streaming in agent/docker.go
-- [ ] Add log.stream message handler
-- [ ] Parse Docker log format (JSON or raw)
-- [ ] Handle log.stream.start / log.stream.stop messages
-- [ ] Add error handling for disconnected streams
-- [ ] Test with high-volume log output
+- [x] Implement container log streaming in agent/docker.go
+- [x] Add log.stream message handler
+- [x] Parse Docker log format (multiplexed stream)
+- [x] Handle log.stream.start / log.stream.stop messages
+- [x] Add error handling for disconnected streams
+- [ ] Test with high-volume log output (pending live testing)
 
-**Files to Create/Modify:**
-- agent/docker.go - Add StreamContainerLogs() method
-- agent/main.go - Add log streaming message handlers
+**Files Created/Modified:**
+- agent/docker.go - Added StreamContainerLogs(), LogLine struct, parseLogLine()
+- agent/main.go - Added handleLogStreamStart(), handleLogStreamStop(), logStreams map
+
+**Implementation Details:**
+- Docker multiplexed stream format (8-byte header + payload)
+- Channels for async log streaming (100-line buffer)
+- Context-based cancellation for stopping streams
+- Timestamp parsing from Docker RFC3339Nano format
+- Default 1000-line tail
 
 ---
 
