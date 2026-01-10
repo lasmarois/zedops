@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 )
 
@@ -36,9 +37,17 @@ func (dc *DockerClient) Close() error {
 	return nil
 }
 
-// ListContainers returns a list of all containers (running and stopped)
+// ListContainers returns a list of all ZedOps-managed containers (running and stopped)
+// Only returns containers with the label: zedops.managed=true
 func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, error) {
-	containers, err := dc.cli.ContainerList(ctx, container.ListOptions{All: true})
+	// Create filter for ZedOps-managed containers
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", "zedops.managed=true")
+
+	containers, err := dc.cli.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}

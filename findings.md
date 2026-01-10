@@ -1,497 +1,238 @@
-# Findings: Milestone 3 - Log Streaming
+# Findings: Milestone 4 - Server Management
 
-**Purpose:** Track research discoveries, architectural findings, and implementation insights
+**Purpose:** Research findings, discoveries, and technical decisions for server management implementation
 
-**Last Updated:** 2026-01-10
+**Started:** 2026-01-10
 
 ---
 
-## Research Findings
+## Research Topics
 
-### Docker Log Streaming API
+### 1. Steam Zomboid .env.template Structure ✅
 
-**Docker SDK for Go:**
-- `client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions)`
-- Returns `io.ReadCloser` stream
-- Options:
-  - `ShowStdout: true` - Show stdout logs
-  - `ShowStderr: true` - Show stderr logs
-  - `Follow: true` - Stream continuously (like `docker logs -f`)
-  - `Tail: "1000"` - Get last N lines
-  - `Timestamps: true` - Include timestamps
-  - `Since: "2023-01-01T00:00:00Z"` - Logs since timestamp
+**Required Fields:**
+- `SERVER_NAME` - Unique identifier (must match INI file)
+- `ADMIN_PASSWORD` - Admin account password (first startup only)
+- `SERVER_DEFAULT_PORT` - Game port 1 (UDP)
+- `SERVER_UDP_PORT` - Game port 2 (UDP)
+- `RCON_PORT` - RCON management port (internal)
+- `RCON_PASSWORD` - RCON authentication
 
-**Log Format:**
-- Docker uses multiplexed stream format
-- Each frame has 8-byte header:
-  - Byte 0: Stream type (0=stdin, 1=stdout, 2=stderr)
-  - Bytes 1-3: Reserved (zeros)
-  - Bytes 4-7: Frame size (big-endian uint32)
-- Followed by frame data (log message)
+**Optional Fields:**
+- `SERVER_PASSWORD` - Player join password (empty = public)
+- `SERVER_PUBLIC_NAME` - Name shown in server browser
+- `BETABRANCH` - Game version (none, unstable, build41, etc.)
+- `IMAGE_TAG` - Docker image version (default: latest)
+- `PUID` - File permissions UID (default: 1430)
+- `TZ` - Timezone (default: America/New_York)
 
-**Example Usage:**
+**Bootstrap Settings (Optional):**
+- `SERVER_WELCOME_MESSAGE` - Welcome banner
+- `SERVER_PUBLIC_DESCRIPTION` - Server browser description
+- `SERVER_PUBLIC` - Show in public browser (true/false)
+- `SERVER_MAP` - World map selection
+- `SERVER_MAX_PLAYERS` - Player limit (1-100)
+- `SERVER_OPEN` - Allow non-whitelisted players
+- `SERVER_PVP` - Enable PvP combat
+- `SERVER_PAUSE_EMPTY` - Pause when empty
+- `SERVER_GLOBAL_CHAT` - Enable global chat
+
+**Mod Management:**
+- `SERVER_MODS` - Semicolon-separated mod IDs
+- `SERVER_WORKSHOP_ITEMS` - Semicolon-separated Workshop IDs
+
+### 2. Docker Compose vs Docker SDK ✅
+
+**Decision: Use Docker SDK directly**
+
+**Rationale:**
+- More programmatic control (create/modify containers in code)
+- No need to manage docker-compose.yml files on disk
+- Easier to track container metadata
+- Can attach labels for identification
+- Direct API access for all operations
+
+**Implementation:**
+- Use Go Docker SDK (already used in agent)
+- Create containers with proper network attachments
+- Use labels to mark "managed" servers: `zedops.managed=true`, `zedops.server.name={name}`
+- Volumes: Create named volumes or bind mounts (bin.{name}, data.{name})
+
+### 3. Port Allocation Strategy ✅
+
+**Port Requirements per Server:**
+- Game Port 1 (UDP): Base port (e.g., 16261)
+- Game Port 2 (UDP): Base port + 1 (e.g., 16262)
+- RCON Port (TCP, internal): 27015+
+
+**Allocation Strategy:**
+1. **Default starting port**: 16261
+2. **Increment by 2** for each server (16261, 16263, 16265, ...)
+3. **Store used ports** in D1 database (servers table)
+4. **Auto-suggest**: Query existing servers, find highest port, add 2
+5. **Validation**: Check for conflicts before creation
+
+**Port Ranges:**
+- Game ports: 16261-16299 (supports ~20 servers)
+- RCON ports: 27015-27035 (supports ~20 servers)
+
+### 4. Server State Management ✅
+
+**Database Schema (D1):**
+```sql
+CREATE TABLE servers (
+  id TEXT PRIMARY KEY,              -- UUID
+  agent_id TEXT NOT NULL,           -- Foreign key to agents
+  name TEXT NOT NULL,               -- Server identifier (DNS-safe)
+  container_id TEXT,                -- Docker container ID (null if not created)
+  config TEXT NOT NULL,             -- JSON of ENV variables
+  image_tag TEXT NOT NULL DEFAULT 'latest', -- Docker image tag (latest, 2.1.0, etc.)
+  game_port INTEGER NOT NULL,       -- SERVER_DEFAULT_PORT
+  udp_port INTEGER NOT NULL,        -- SERVER_UDP_PORT
+  rcon_port INTEGER NOT NULL,       -- RCON_PORT
+  status TEXT NOT NULL,             -- creating, running, stopped, failed, deleting
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+  UNIQUE(agent_id, name),
+  UNIQUE(agent_id, game_port)
+);
+```
+
+**State Transitions:**
+- creating → running (success)
+- creating → failed (error)
+- running → stopped (user action or container exit)
+- stopped → running (restart)
+- running/stopped → deleting (delete initiated)
+- deleting → (removed from DB)
+
+**Container Identification:**
+- Label: `zedops.managed=true`
+- Label: `zedops.server.id={server_id}`
+- Label: `zedops.server.name={name}`
+- Container name: `steam-zomboid-{name}`
+
+### 5. Registry & Image Tag Configuration ✅
+
+**Decision: Agent-level registry + Per-server tag selection**
+
+**Rationale:**
+- Registry is infrastructure-level (where to pull images)
+- Tag is user choice (which version to run)
+- Allows different servers to run different versions
+- Supports versioned rollouts and testing
+
+**Implementation:**
+
+**A) Manager-Side Registry Configuration**
+- Stored in D1 database: `agents.steam_zomboid_registry` column
+- Default: `registry.gitlab.nicomarois.com/nicolas/steam-zomboid`
+- Configured per-agent (allows different registries per agent)
+- UI-configurable (no agent restart required)
+- Manager sends registry to agent in server.create message
+
+**B) Per-Server Tag Selection**
+- Stored in database: `image_tag` column
+- UI dropdown: "latest", "2.1", "2.0", etc.
+- Default: "latest"
+- Validated format: semver or "latest"
+- Passed to Docker SDK: `{registry}:{tag}`
+
+**C) Container Label Requirements**
+- Steam-zomboid images must have labels (v2.0.0+):
+  - `zedops.managed=true` - Marks as ZedOps-compatible
+  - `zedops.type=project-zomboid` - Container type
+  - `pz.rcon.enabled=true` - RCON autodiscovery
+
+**D) Container Filtering**
+- Agent filters containers by `zedops.managed=true` label
+- Only shows ZedOps-managed servers in UI
+- Prevents accidental management of unrelated containers
+- Existing production servers can add label to be managed
+
+**Version Support:**
+- MVP: Only support steam-zomboid v2.0.0+
+- Labels added to CI/CD pipeline for v2.0.0, v2.0.1, v2.1.0+
+- Older versions unsupported (no labels)
+
+---
+
+## Technical Discoveries
+
+### Docker SDK Container Creation
+
+**Required Parameters:**
 ```go
-options := types.ContainerLogsOptions{
-    ShowStdout: true,
-    ShowStderr: true,
-    Follow:     true,
-    Timestamps: true,
-    Tail:       "1000",
+// Image constructed from registry (from manager) + tag (from user)
+// Registry comes from server.create message (looked up from agents table in D1)
+registry := "registry.gitlab.nicomarois.com/nicolas/steam-zomboid" // from msg.Data.Registry
+imageTag := "latest" // from msg.Data.ImageTag
+fullImage := fmt.Sprintf("%s:%s", registry, imageTag)
+
+container.Config{
+    Image: fullImage, // e.g., registry.gitlab.nicomarois.com/nicolas/steam-zomboid:latest
+    Env: []string{
+        "SERVER_NAME=myserver",
+        "ADMIN_PASSWORD=secret",
+        // ... all ENV vars
+    },
+    Labels: map[string]string{
+        "zedops.managed": "true",
+        "zedops.server.id": "uuid",
+        "zedops.server.name": "myserver",
+        "pz.rcon.enabled": "true", // For RCON autodiscovery
+    },
 }
 
-reader, err := cli.ContainerLogs(ctx, containerID, options)
-if err != nil {
-    return err
-}
-defer reader.Close()
-
-// Read stream
-scanner := bufio.NewScanner(reader)
-for scanner.Scan() {
-    logLine := scanner.Text()
-    // Send to manager
-}
-```
-
----
-
-## Pub/Sub Architecture
-
-### Durable Object Pub/Sub Pattern
-
-**Requirements:**
-- Agent sends logs to Durable Object
-- Durable Object forwards to N UI clients
-- New clients get cached logs
-- Old clients get only new logs
-
-**Design:**
-
-```typescript
-class AgentConnection {
-  // Existing agent WebSocket
-  private ws: WebSocket | null = null;
-
-  // Map of UI clients subscribed to container logs
-  // Key: subscriberId (UUID), Value: { ws: WebSocket, containerId: string }
-  private logSubscribers: Map<string, LogSubscriber> = new Map();
-
-  // Log cache per container
-  // Key: containerId, Value: CircularBuffer<LogLine>
-  private logBuffers: Map<string, CircularBuffer<LogLine>> = new Map();
+container.HostConfig{
+    Binds: []string{
+        "/path/to/bin.myserver:/home/steam/zomboid-dedicated",
+        "/path/to/data.myserver:/home/steam/Zomboid",
+    },
+    PortBindings: nat.PortMap{
+        "16261/udp": []nat.PortBinding{{HostPort: "16261"}},
+        "16262/udp": []nat.PortBinding{{HostPort: "16262"}},
+    },
+    RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 }
 
-interface LogSubscriber {
-  id: string;
-  ws: WebSocket;
-  containerId: string;
-}
-
-interface LogLine {
-  timestamp: number;
-  stream: 'stdout' | 'stderr';
-  message: string;
+network.NetworkingConfig{
+    EndpointsConfig: map[string]*network.EndpointSettings{
+        "zomboid-servers": {},
+        "zomboid-backend": {},
+    },
 }
 ```
 
-**Message Flow:**
+### Server Name Validation
 
-```
-[Container] outputs log
-    ↓
-[Agent] reads via Docker SDK
-    ↓
-[Agent] sends to Durable Object:
-    {
-      subject: "log.line",
-      data: {
-        containerId: "abc123",
-        timestamp: 1234567890,
-        stream: "stdout",
-        message: "Server started on port 8080"
-      }
-    }
-    ↓
-[Durable Object] receives log.line
-    ↓
-[Durable Object] adds to buffer for container
-    ↓
-[Durable Object] broadcasts to all subscribers:
-    logSubscribers.forEach((sub) => {
-      if (sub.containerId === msg.data.containerId) {
-        sub.ws.send(JSON.stringify(msg))
-      }
-    })
-    ↓
-[UI Client] receives log line
-    ↓
-[UI Client] displays in log viewer
-```
+**Rules:**
+- Lowercase alphanumeric + hyphens only
+- Must start with letter
+- 3-32 characters
+- No consecutive hyphens
+- Regex: `^[a-z][a-z0-9-]{2,31}$`
+
+### Volume Management
+
+**Strategy: Bind Mounts**
+- Base path: `/var/lib/zedops/servers/{server_name}/`
+- Bin directory: `/var/lib/zedops/servers/{server_name}/bin/`
+- Data directory: `/var/lib/zedops/servers/{server_name}/data/`
+- Create directories before container creation
+- Preserve on deletion (user data safety)
 
 ---
 
-## UI Library Research
+## Example Configurations
 
-### Option 1: xterm.js
-
-**Pros:**
-- Full terminal emulator (VT100, xterm, etc.)
-- Rich features (colors, cursor positioning, etc.)
-- Used by VS Code, Hyper, etc.
-- React wrapper available: `@xterm/xterm`, `@xterm/addon-fit`
-
-**Cons:**
-- Heavy (full terminal emulator)
-- Overkill for log viewing
-- Complex API
-
-**Use Case:** Best for interactive terminals (RCON console in Milestone 5)
-
----
-
-### Option 2: react-lazylog
-
-**Pros:**
-- Specifically designed for log viewing
-- Lazy loading (virtualizes long logs)
-- Auto-scroll support
-- Search/filter built-in
-- Lightweight
-
-**Cons:**
-- Less maintained (last update 2021)
-- May need customization
-
-**Use Case:** Good for log viewing, but outdated
-
----
-
-### Option 3: Custom Component with Virtualization
-
-**Pros:**
-- Full control over features
-- Can use react-window or react-virtuoso for virtualization
-- Tailored to exact requirements
-- Modern and maintainable
-
-**Cons:**
-- More implementation work
-- Need to handle edge cases
-
-**Recommendation:** Build custom component using react-virtuoso
-
----
-
-## Circular Buffer for Log Caching
-
-### Implementation Strategy
-
-**Requirements:**
-- Fixed size (1000 lines)
-- FIFO (oldest logs dropped when full)
-- Fast append and read
-- Thread-safe (TypeScript single-threaded, but good practice)
-
-**Implementation:**
-
-```typescript
-class CircularBuffer<T> {
-  private buffer: T[];
-  private capacity: number;
-  private head: number = 0;
-  private tail: number = 0;
-  private size: number = 0;
-
-  constructor(capacity: number) {
-    this.capacity = capacity;
-    this.buffer = new Array(capacity);
-  }
-
-  append(item: T): void {
-    this.buffer[this.tail] = item;
-    this.tail = (this.tail + 1) % this.capacity;
-
-    if (this.size < this.capacity) {
-      this.size++;
-    } else {
-      // Buffer full, move head forward
-      this.head = (this.head + 1) % this.capacity;
-    }
-  }
-
-  getAll(): T[] {
-    if (this.size === 0) return [];
-
-    const result: T[] = [];
-    for (let i = 0; i < this.size; i++) {
-      const index = (this.head + i) % this.capacity;
-      result.push(this.buffer[index]);
-    }
-    return result;
-  }
-
-  clear(): void {
-    this.head = 0;
-    this.tail = 0;
-    this.size = 0;
-  }
-}
-```
-
----
-
-## Message Protocol Design
-
-### New Subjects for Log Streaming
-
-**Manager → Agent:**
-- `log.stream.start` - Start streaming logs for container
-  ```json
-  {
-    "subject": "log.stream.start",
-    "data": {
-      "containerId": "abc123",
-      "tail": 1000,
-      "follow": true,
-      "timestamps": true
-    }
-  }
-  ```
-
-- `log.stream.stop` - Stop streaming logs for container
-  ```json
-  {
-    "subject": "log.stream.stop",
-    "data": {
-      "containerId": "abc123"
-    }
-  }
-  ```
-
-**Agent → Manager:**
-- `log.line` - Single log line
-  ```json
-  {
-    "subject": "log.line",
-    "data": {
-      "containerId": "abc123",
-      "timestamp": 1234567890123,
-      "stream": "stdout",
-      "message": "Server started"
-    }
-  }
-  ```
-
-- `log.stream.started` - Acknowledge stream started
-- `log.stream.stopped` - Acknowledge stream stopped
-- `log.stream.error` - Error starting/streaming logs
-
-**UI → Manager:**
-- `log.subscribe` - Subscribe to container logs (via WebSocket)
-  ```json
-  {
-    "subject": "log.subscribe",
-    "data": {
-      "containerId": "abc123"
-    }
-  }
-  ```
-
-- `log.unsubscribe` - Unsubscribe from container logs
-  ```json
-  {
-    "subject": "log.unsubscribe",
-    "data": {
-      "containerId": "abc123"
-    }
-  }
-  ```
-
-**Manager → UI:**
-- `log.line` - Forwarded from agent
-- `log.history` - Cached logs sent to new subscriber
-  ```json
-  {
-    "subject": "log.history",
-    "data": {
-      "containerId": "abc123",
-      "lines": [
-        { "timestamp": 123, "stream": "stdout", "message": "..." },
-        { "timestamp": 124, "stream": "stdout", "message": "..." }
-      ]
-    }
-  }
-  ```
-
----
-
-## WebSocket Architecture for UI
-
-### Current Architecture (HTTP Only)
-
-UI currently uses HTTP for all operations:
-- Login via HTTP
-- Fetch agents via HTTP
-- Container operations via HTTP
-
-No WebSocket connection from UI to Manager.
-
-### Proposed Architecture (WebSocket for Logs)
-
-**Option 1: Dual Connection**
-- Keep existing HTTP for operations
-- Add WebSocket for log streaming only
-- Pros: Simple, minimal changes
-- Cons: Two connections per client
-
-**Option 2: Full WebSocket**
-- Replace HTTP with WebSocket for everything
-- Pros: Single connection, real-time everything
-- Cons: Major refactor, overkill for MVP
-
-**Recommendation:** Option 1 (dual connection)
-
-**Implementation:**
-```typescript
-// frontend/src/lib/websocket.ts
-class LogStreamClient {
-  private ws: WebSocket | null = null;
-  private subscribers: Map<string, (log: LogLine) => void> = new Map();
-
-  connect(managerUrl: string, token: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(managerUrl);
-
-      this.ws.onopen = () => {
-        // Authenticate with token
-        this.send({ subject: 'ui.auth', data: { token } });
-        resolve();
-      };
-
-      this.ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        this.handleMessage(msg);
-      };
-
-      this.ws.onerror = (error) => reject(error);
-    });
-  }
-
-  subscribe(containerId: string, callback: (log: LogLine) => void): void {
-    this.subscribers.set(containerId, callback);
-    this.send({ subject: 'log.subscribe', data: { containerId } });
-  }
-
-  unsubscribe(containerId: string): void {
-    this.subscribers.delete(containerId);
-    this.send({ subject: 'log.unsubscribe', data: { containerId } });
-  }
-
-  private handleMessage(msg: Message): void {
-    if (msg.subject === 'log.line' || msg.subject === 'log.history') {
-      const containerId = msg.data.containerId;
-      const callback = this.subscribers.get(containerId);
-      if (callback) callback(msg.data);
-    }
-  }
-}
-```
-
----
-
-## Performance Considerations
-
-### Log Volume
-
-**Typical Project Zomboid server:**
-- Low activity: 1-10 lines/second
-- High activity: 50-100 lines/second
-- Startup: 1000+ lines in 10 seconds
-
-**Network bandwidth:**
-- Average log line: ~100 bytes
-- 100 lines/second = 10 KB/s per client
-- 10 clients = 100 KB/s = ~0.8 Mbps
-
-**Acceptable for WebSocket streaming.**
-
-### Memory Usage
-
-**Log buffer per container:**
-- 1000 lines × 200 bytes/line = 200 KB per container
-- 100 containers = 20 MB total (acceptable)
-
-**Durable Object limits:**
-- Cloudflare Durable Objects: 128 MB memory limit
-- 20 MB for logs + code = well within limits
-
----
-
-## Filtering Strategy
-
-### Option 1: Agent-Side Filtering
-
-Agent filters logs before sending to manager.
-
-**Pros:**
-- Reduces network traffic
-- Reduces manager processing
-
-**Cons:**
-- Agent needs to know what to filter
-- UI can't change filters without reconnecting
-
----
-
-### Option 2: Manager-Side Filtering
-
-Manager receives all logs, filters before forwarding to clients.
-
-**Pros:**
-- UI can change filters in real-time
-- No agent changes needed
-
-**Cons:**
-- More network traffic (agent → manager)
-- More manager processing
-
----
-
-### Option 3: Client-Side Filtering
-
-UI receives all logs, filters in browser.
-
-**Pros:**
-- No backend changes
-- Instant filter changes
-- Can search historical logs
-
-**Cons:**
-- Highest network usage
-- Client memory usage
-
-**Recommendation:** Option 3 for MVP (simplest, most flexible)
-
-Later optimization: Add manager-side filtering for high-volume scenarios.
-
----
-
-## Questions to Resolve
-
-- [x] How does Docker log streaming work? → Answered above
-- [x] What UI library to use? → Custom component with react-virtuoso
-- [x] How to implement pub/sub? → Map of subscribers + circular buffer
-- [ ] How to handle agent reconnection mid-stream?
-- [ ] Should logs persist in D1? (for historical viewing)
-- [ ] Rate limiting for log streaming?
-- [ ] Max concurrent log streams per agent?
+*(Example server configs will be added here)*
 
 ---
 
 ## References
 
-- Docker Engine API - Logs: https://docs.docker.com/engine/api/v1.41/#tag/Container/operation/ContainerLogs
-- Docker Go SDK - ContainerLogs: https://pkg.go.dev/github.com/docker/docker/client#Client.ContainerLogs
-- xterm.js: https://xtermjs.org/
-- react-lazylog: https://github.com/mozilla-frontend-infra/react-lazylog
-- react-virtuoso: https://virtuoso.dev/
+- steam-zomboid project: `/Volumes/Data/docker_composes/steam-zomboid-dev/`
+- Existing production servers: `/Volumes/Data/docker_composes/steam-zomboid-servers/`
+- Docker SDK Go docs: https://docs.docker.com/engine/api/sdk/

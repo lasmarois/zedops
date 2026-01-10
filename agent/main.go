@@ -272,6 +272,10 @@ func (a *Agent) receiveMessages() {
 			a.handleLogStreamStart(msg)
 		case "log.stream.stop":
 			a.handleLogStreamStop(msg)
+		case "server.create":
+			a.handleServerCreate(msg)
+		case "server.delete":
+			a.handleServerDelete(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -621,6 +625,128 @@ func (a *Agent) sendLogStreamError(containerID, errorMsg, errorCode, replyTo str
 			"containerId": containerID,
 			"error":       errorMsg,
 			"errorCode":   errorCode,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// handleServerCreate handles server.create messages
+func (a *Agent) handleServerCreate(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendServerErrorWithReply("", "", "create", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerCreateRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendServerErrorWithReply("", "", "create", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	log.Printf("Creating server: %s (registry: %s, tag: %s)", req.Name, req.Registry, req.ImageTag)
+
+	// Create server config
+	config := ServerConfig{
+		ServerID: req.ServerID,
+		Name:     req.Name,
+		Registry: req.Registry,
+		ImageTag: req.ImageTag,
+		Config:   req.Config,
+		GamePort: req.GamePort,
+		UDPPort:  req.UDPPort,
+		RCONPort: req.RCONPort,
+	}
+
+	// Create server
+	containerID, err := a.docker.CreateServer(ctx, config)
+	if err != nil {
+		log.Printf("Failed to create server %s: %v", req.Name, err)
+		a.sendServerErrorWithReply(req.ServerID, "", "create", err.Error(), "SERVER_CREATE_FAILED", msg.Reply)
+		return
+	}
+
+	log.Printf("Server created successfully: %s (container: %s)", req.Name, containerID)
+
+	// Send success response
+	a.sendServerSuccessWithReply(req.ServerID, containerID, "create", msg.Reply)
+}
+
+// handleServerDelete handles server.delete messages
+func (a *Agent) handleServerDelete(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendServerErrorWithReply("", "", "delete", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerDeleteRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendServerErrorWithReply("", "", "delete", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	log.Printf("Deleting server container: %s", req.ContainerID)
+
+	// Delete server
+	err := a.docker.DeleteServer(ctx, req.ContainerID, req.RemoveVolumes)
+	if err != nil {
+		log.Printf("Failed to delete server %s: %v", req.ContainerID, err)
+		a.sendServerErrorWithReply("", req.ContainerID, "delete", err.Error(), "SERVER_DELETE_FAILED", msg.Reply)
+		return
+	}
+
+	log.Printf("Server deleted successfully: %s", req.ContainerID)
+
+	// Send success response
+	a.sendServerSuccessWithReply("", req.ContainerID, "delete", msg.Reply)
+}
+
+// sendServerSuccessWithReply sends a success response for a server operation
+func (a *Agent) sendServerSuccessWithReply(serverID, containerID, operation, replyTo string) {
+	subject := "server.operation.success"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: ServerOperationResponse{
+			Success:     true,
+			ServerID:    serverID,
+			ContainerID: containerID,
+			Operation:   operation,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// sendServerErrorWithReply sends an error response for a server operation
+func (a *Agent) sendServerErrorWithReply(serverID, containerID, operation, errorMsg, errorCode, replyTo string) {
+	subject := "server.operation.error"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: ServerOperationResponse{
+			Success:     false,
+			ServerID:    serverID,
+			ContainerID: containerID,
+			Operation:   operation,
+			Error:       errorMsg,
+			ErrorCode:   errorCode,
 		},
 		Timestamp: time.Now().Unix(),
 	}
