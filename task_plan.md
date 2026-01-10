@@ -1,15 +1,14 @@
-# Task Plan: Milestone 2 - Container Control
+# Task Plan: Milestone 3 - Log Streaming
 
-**Goal:** Agent can list and control Docker containers via manager commands
+**Goal:** Real-time container log streaming from agent to UI via WebSocket
 
 **Success Criteria:**
-- User clicks "Start Server" in UI → Container starts on agent's machine
-- Container status updates in real-time
-- Error handling for failed operations
+- User opens log viewer → sees live logs streaming
+- Logs appear in UI <100ms after container outputs
+- Multiple users can watch same logs simultaneously
 
-**Status:** ✅ Complete
+**Status:** 🚧 In Progress
 **Started:** 2026-01-10
-**Completed:** 2026-01-10
 
 ---
 
@@ -17,193 +16,191 @@
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1. Research | complete | Docker SDK options, message protocol design, UI architecture |
-| 2. Agent Docker Integration | complete | Implement Docker client in Go agent |
-| 3. Manager Message Handlers | complete | HTTP endpoints + request/reply pattern for container control |
-| 4. UI Container List & Actions | complete | React components, hooks, and manager API endpoints |
-| 5. Testing | pending | End-to-end validation of all operations |
+| 1. Research | pending | Docker log streaming APIs, pub/sub patterns, UI libraries |
+| 2. Agent Log Streaming | pending | Implement Docker log streaming in Go agent |
+| 3. Durable Object Pub/Sub | pending | Multi-client log forwarding with caching |
+| 4. UI Log Viewer | pending | Real-time log display with auto-scroll and filtering |
+| 5. Testing | pending | End-to-end validation with multiple clients |
 
 ---
 
-## Phase 1: Research ✅ complete
+## Phase 1: Research
 
-**Status:** in_progress
+**Status:** pending
 
 **Goals:**
-- Choose Docker SDK for Go
-- Define message protocol
-- Understand container metadata requirements
-- Review UI architecture
+- Research Docker log streaming APIs
+- Design pub/sub architecture for multi-client support
+- Choose UI library for log display
+- Design log caching strategy
 
 **Tasks:**
-- [ ] Research Go Docker SDK options (official vs alternatives)
-- [ ] Review existing agent code structure
-- [ ] Design message subjects (container.list, container.start, etc.)
-- [ ] Identify container metadata to track (name, image, status, ports, etc.)
-- [ ] Review UI structure and state management (Zustand)
+- [ ] Research Docker SDK log streaming (Go)
+- [ ] Review NATS pub/sub patterns
+- [ ] Research terminal emulator libraries (xterm.js, react-lazylog, etc.)
+- [ ] Design message protocol for log streaming
+- [ ] Design log buffer/cache strategy (ring buffer?)
 - [ ] Document findings in findings.md
 
+**Questions to Answer:**
+- How does Docker log streaming work? (API, streaming format)
+- How to handle log backpressure? (client slower than log output)
+- How to implement pub/sub in Durable Objects? (WebSocket fanout)
+- What's the best UI library for displaying logs?
+- How to filter logs by level? (need structured logging or regex?)
+
 ---
 
-## Phase 2: Agent Docker Integration ✅ complete
+## Phase 2: Agent Log Streaming
 
-**Status:** complete
+**Status:** pending
 
 **Goals:**
-- ✅ Connect agent to local Docker daemon
-- ✅ List all containers
-- ✅ Execute start/stop/restart operations
+- Stream container logs from Docker daemon
+- Parse log format (timestamp, stream, message)
+- Send logs to manager via WebSocket
+- Handle log streaming start/stop commands
 
 **Tasks:**
-- [x] Add Docker SDK dependency to go.mod
-- [x] Create docker.go with Docker client wrapper
-- [x] Implement container.list handler
-- [x] Implement container.start/stop/restart handlers
-- [x] Add error handling for Docker operations
+- [ ] Implement container log streaming in agent/docker.go
+- [ ] Add log.stream message handler
+- [ ] Parse Docker log format (JSON or raw)
+- [ ] Handle log.stream.start / log.stream.stop messages
+- [ ] Add error handling for disconnected streams
+- [ ] Test with high-volume log output
 
-**Files Created/Modified:**
-- ✅ agent/go.mod (added github.com/docker/docker/client v28.5.2)
-- ✅ agent/go.sum (generated with all dependencies)
-- ✅ agent/docker.go (new file - 157 lines)
-- ✅ agent/main.go (added Docker client init + handlers)
-- ✅ agent/Dockerfile.build (updated to golang:latest)
+**Files to Create/Modify:**
+- agent/docker.go - Add StreamContainerLogs() method
+- agent/main.go - Add log streaming message handlers
 
 ---
 
-## Phase 3: Manager Message Handlers ✅ complete
+## Phase 3: Durable Object Pub/Sub
 
-**Status:** complete
+**Status:** pending
 
 **Goals:**
-- Add container control handlers to AgentConnection
-- Route messages to connected agents
-- Implement HTTP endpoints for UI requests
-- Implement request/reply pattern for synchronous operations
+- Forward logs from agent to multiple UI clients
+- Implement pub/sub pattern in Durable Objects
+- Cache last 1000 lines for new clients
+- Handle client subscribe/unsubscribe
 
-**Tasks Completed:**
-- [x] Add container.* message routing to routeMessage()
-- [x] Implement handleContainerList() and handleContainerOperation()
-- [x] Add HTTP endpoints to Durable Object (GET /containers, POST /containers/:id/:operation)
-- [x] Implement request/reply pattern handlers with inbox subjects
-- [x] Add handleContainersRequest() - HTTP → WebSocket with 10s timeout
-- [x] Add handleContainerOperationRequest() - HTTP → WebSocket with 30s timeout
-- [x] Update agent to support msg.Reply field
-- [x] Add sendContainerSuccessWithReply() and sendContainerErrorWithReply()
-- [x] Update all container handlers to use reply inbox when specified
-- [x] Build and test agent with new request/reply pattern
+**Tasks:**
+- [ ] Add log subscription management to AgentConnection
+- [ ] Implement log buffer (ring buffer, 1000 lines)
+- [ ] Forward logs to all subscribed clients
+- [ ] Add log.subscribe / log.unsubscribe message handlers
+- [ ] Send cached logs to new subscribers
+- [ ] Handle client disconnections gracefully
 
-**Files Modified:**
-- manager/src/durable-objects/AgentConnection.ts (added 6 new methods, ~160 lines)
-- agent/main.go (updated 4 handlers + added 2 helper functions, ~50 lines)
+**Files to Create/Modify:**
+- manager/src/durable-objects/AgentConnection.ts - Add pub/sub logic
+- manager/src/types/LogMessage.ts - Log message types
 
-**Implementation Details:**
-- Request/reply pattern: Manager generates unique inbox subjects (_INBOX.{uuid})
-- Agent checks msg.Reply and responds to inbox if specified
-- HTTP endpoints provide synchronous API for UI
-- Timeouts: 10s for list operations, 30s for container operations
-- Proper HTTP status codes (200, 400, 500, 503, 504)
-- pendingReplies Map manages async request/reply promises
+**Implementation Considerations:**
+- Use Map<string, WebSocket> for subscriber tracking
+- Use circular buffer for 1000-line cache
+- Each container has its own log buffer
+- Broadcast logs to all subscribers efficiently
 
 ---
 
-## Phase 4: UI Container List & Actions ✅ complete
+## Phase 4: UI Log Viewer
 
-**Status:** complete
+**Status:** pending
 
 **Goals:**
-- Add container types and API functions to frontend
-- Create useContainers hooks with TanStack Query
-- Create ContainerList React component with actions
-- Add routing to view containers for agents
-- Add manager API endpoints for container operations
+- Create log viewer component
+- Display logs with auto-scroll
+- Add log filtering (by level, by search term)
+- Handle WebSocket connection to manager
+- Subscribe to container logs
 
-**Tasks Completed:**
-- [x] Add container types to lib/api.ts (Container, PortMapping, etc.)
-- [x] Add API functions: fetchContainers(), startContainer(), stopContainer(), restartContainer()
-- [x] Create hooks/useContainers.ts with TanStack Query
-- [x] Create useContainers() hook - fetch with 5s refetch interval
-- [x] Create useStartContainer(), useStopContainer(), useRestartContainer() mutations
-- [x] Create components/ContainerList.tsx component
-- [x] Display containers in table (name, image, state, status)
-- [x] Add Start/Stop/Restart buttons based on state
-- [x] Show loading states during operations
-- [x] Display success/error toast notifications
-- [x] Modify AgentList to be clickable (only online agents)
-- [x] Add routing in App.tsx (selectedAgent state)
-- [x] Add manager API endpoints in routes/agents.ts
-- [x] Forward container requests to Durable Objects
+**Tasks:**
+- [ ] Create LogViewer.tsx component
+- [ ] Integrate terminal/log library (xterm.js or react-lazylog)
+- [ ] Add auto-scroll functionality (toggle on/off)
+- [ ] Add log filtering UI (dropdown + search)
+- [ ] Implement WebSocket connection logic
+- [ ] Handle log.stream messages from manager
+- [ ] Add loading state and error handling
+- [ ] Test with high-volume logs
 
-**Files Created:**
-- frontend/src/hooks/useContainers.ts (~100 lines)
-- frontend/src/components/ContainerList.tsx (~350 lines)
+**Files to Create:**
+- frontend/src/components/LogViewer.tsx
+- frontend/src/hooks/useLogStream.ts
+- frontend/src/lib/websocket.ts (if not exists)
 
-**Files Modified:**
-- frontend/src/lib/api.ts (added ~160 lines)
-- frontend/src/components/AgentList.tsx (made clickable)
-- frontend/src/App.tsx (added routing logic)
-- manager/src/routes/agents.ts (added ~180 lines)
-
-**Implementation Details:**
-- Used TanStack Query for data fetching and state management
-- 5-second refetch interval for real-time status updates
-- Mutations auto-invalidate queries for immediate UI updates
-- Color-coded state indicators (green=running, red=exited, yellow=paused, etc.)
-- Only online agents are clickable in agent list
-- Container actions disabled during operations (prevents double-clicks)
-- Toast notifications auto-dismiss after 3 seconds
-- Manager API endpoints forward to Durable Objects
+**UI Design:**
+- Terminal-like display (black background, monospace font)
+- Auto-scroll toggle button
+- Filter controls (level dropdown, search input)
+- Container selector (dropdown)
+- Clear logs button
+- Pause/Resume streaming button
 
 ---
 
-## Phase 5: Testing ✅ complete
+## Phase 5: Testing
 
-**Status:** complete
+**Status:** pending
 
 **Goals:**
-- ✅ Validate all container operations
-- ✅ Test error scenarios
-- ✅ Verify real-time updates
+- Validate log streaming with single client
+- Test multi-client scenario
+- Test high-volume log output
+- Verify <100ms latency
+- Test filtering and search
 
 **Test Scenarios:**
-1. **List Containers**
-   - Agent with running containers → UI shows all containers
-   - Agent with no containers → UI shows empty state
+1. **Single Client Streaming**
+   - User opens log viewer for container
+   - Logs stream in real-time
+   - Auto-scroll works correctly
 
-2. **Start Container**
-   - Click "Start" on stopped container → Container starts
-   - Status updates from "stopped" to "running"
-   - Success message displayed
+2. **Multiple Clients**
+   - 2-3 users watch same container logs
+   - All clients see same logs simultaneously
+   - No conflicts or dropped messages
 
-3. **Stop Container**
-   - Click "Stop" on running container → Container stops
-   - Status updates from "running" to "stopped"
-   - Success message displayed
+3. **High Volume Logs**
+   - Container outputs 100+ lines/second
+   - UI remains responsive
+   - No memory leaks
 
-4. **Restart Container**
-   - Click "Restart" on running container → Container restarts
-   - Brief "restarting" status, then back to "running"
+4. **Latency Test**
+   - Container outputs log line
+   - Measure time until UI displays it
+   - Should be <100ms
 
-5. **Error Handling**
-   - Stop already stopped container → Error message
-   - Invalid container ID → Error message
-   - Docker daemon unreachable → Error message
+5. **Filtering**
+   - Filter by log level (INFO, WARN, ERROR)
+   - Search by keyword
+   - Filters work in real-time
 
-6. **Real-time Updates**
-   - Container status changes externally (docker CLI) → UI updates
-   - Multiple UI clients see same updates
+6. **New Client Cache**
+   - New client connects to streaming container
+   - Receives last 1000 lines immediately
+   - Then continues streaming new logs
+
+7. **Connection Recovery**
+   - WebSocket disconnects
+   - Reconnects automatically
+   - Resumes log streaming
 
 ---
 
 ## Dependencies
 
 **External:**
-- Docker daemon running on agent machine
-- Docker Go SDK (github.com/docker/docker)
+- Docker log streaming API
+- WebSocket support in Durable Objects (already implemented)
+- Terminal/log UI library (to be chosen)
 
 **Internal:**
-- ✅ Milestone 1 complete (agent authentication working)
+- ✅ Milestone 2 complete (container control working)
 - ✅ WebSocket connection established
-- ✅ Message protocol established
+- ✅ Message protocol working
 
 ---
 
@@ -211,9 +208,7 @@
 
 | Error | Phase | Attempt | Resolution |
 |-------|-------|---------|------------|
-| Durable Object routing mismatch - WebSocket used random UUID, HTTP used agent ID | 5 | 1 | Changed all routing to use agent NAME as consistent identifier (manager/src/index.ts, agent/reconnect.go, manager/src/routes/agents.ts) |
-| Binding name mismatch - Code used AGENT_CONNECTIONS (plural) but wrangler.toml defines AGENT_CONNECTION (singular) | 5 | 1 | Changed all occurrences in routes/agents.ts from AGENT_CONNECTIONS to AGENT_CONNECTION |
-| Inbox subject format mismatch - Created `_INBOX.xxx` but checked for `inbox.xxx` | 5 | 1 | Standardized on `_INBOX.` format in generateInbox() and isInboxSubject() (manager/src/types/Message.ts) |
+| _(none yet)_ | - | - | - |
 
 ---
 
@@ -227,8 +222,8 @@
 
 ## Notes
 
-- Consider filtering containers by label (e.g., only show Zomboid servers)
-- May need to handle Docker socket permissions on agent
-- UI should distinguish between Docker errors vs network errors
-- Consider pagination if agent has many containers
-- Real-time updates: Should agent push container status changes, or should UI poll?
+- Log streaming is read-only (no commands sent to container)
+- Consider log rotation/cleanup to prevent memory issues
+- May need to limit number of concurrent log streams per agent
+- Consider rate limiting to prevent DoS via log flooding
+- Log timestamps should be preserved from container
