@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
@@ -32,6 +35,36 @@ func (dc *DockerClient) CreateServer(ctx context.Context, config ServerConfig) (
 
 	// Construct full image path
 	fullImage := fmt.Sprintf("%s:%s", config.Registry, config.ImageTag)
+
+	// Pull latest image (always check registry for updates)
+	log.Printf("Pulling image: %s (checking registry for updates...)", fullImage)
+	reader, err := dc.cli.ImagePull(ctx, fullImage, image.PullOptions{
+		// Note: Docker will check registry and pull if digest differs from local cache
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to pull image: %w", err)
+	}
+	defer reader.Close()
+
+	// Read pull output to ensure it completes (shows download progress in logs)
+	// Format: JSON lines with status updates
+	pullOutput, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read pull output: %w", err)
+	}
+
+	// Log summary (check if image was updated)
+	if len(pullOutput) > 0 {
+		// Check if we actually downloaded new layers
+		outputStr := string(pullOutput)
+		if strings.Contains(outputStr, "Already exists") || strings.Contains(outputStr, "Layer already exists") {
+			log.Printf("Image up to date (using cached): %s", fullImage)
+		} else if strings.Contains(outputStr, "Pull complete") || strings.Contains(outputStr, "Download complete") {
+			log.Printf("Image updated from registry: %s", fullImage)
+		} else {
+			log.Printf("Image pulled: %s", fullImage)
+		}
+	}
 
 	// Convert config map to ENV array
 	env := make([]string, 0, len(config.Config))
@@ -180,6 +213,122 @@ func (dc *DockerClient) DeleteServer(ctx context.Context, containerID string, re
 	return nil
 }
 
+// RebuildServer rebuilds a server container with the latest image while preserving volumes
+func (dc *DockerClient) RebuildServer(ctx context.Context, containerID string) (string, error) {
+	log.Printf("Rebuilding server container: %s", containerID)
+
+	// 1. Inspect existing container to extract config
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Extract necessary config from existing container
+	oldImage := inspect.Config.Image
+	containerName := strings.TrimPrefix(inspect.Name, "/")
+	env := inspect.Config.Env
+	labels := inspect.Config.Labels
+
+	// Get port bindings
+	portBindings := inspect.HostConfig.PortBindings
+
+	// Get mounts
+	mounts := inspect.HostConfig.Mounts
+
+	// Get networks
+	networks := inspect.NetworkSettings.Networks
+	networkNames := make([]string, 0, len(networks))
+	for networkName := range networks {
+		networkNames = append(networkNames, networkName)
+	}
+
+	log.Printf("Container config extracted: image=%s, name=%s, networks=%v", oldImage, containerName, networkNames)
+
+	// 2. Pull latest image
+	log.Printf("Pulling latest image: %s (checking registry for updates...)", oldImage)
+	reader, err := dc.cli.ImagePull(ctx, oldImage, image.PullOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to pull image: %w", err)
+	}
+	defer reader.Close()
+
+	pullOutput, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read pull output: %w", err)
+	}
+
+	// Log pull result
+	if len(pullOutput) > 0 {
+		outputStr := string(pullOutput)
+		if strings.Contains(outputStr, "Already exists") || strings.Contains(outputStr, "Layer already exists") {
+			log.Printf("Image up to date (using cached): %s", oldImage)
+		} else if strings.Contains(outputStr, "Pull complete") || strings.Contains(outputStr, "Download complete") {
+			log.Printf("Image updated from registry: %s", oldImage)
+		} else {
+			log.Printf("Image pulled: %s", oldImage)
+		}
+	}
+
+	// 3. Stop and remove old container
+	log.Printf("Stopping old container: %s", containerID)
+	timeout := 10
+	if err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+		log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
+	}
+
+	log.Printf("Removing old container: %s", containerID)
+	if err := dc.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		Force:         true,
+		RemoveVolumes: false, // Preserve volumes
+	}); err != nil {
+		return "", fmt.Errorf("failed to remove old container: %w", err)
+	}
+
+	// 4. Create new container with same config
+	containerConfig := &container.Config{
+		Image:  oldImage,
+		Env:    env,
+		Labels: labels,
+	}
+
+	hostConfig := &container.HostConfig{
+		Mounts:       mounts,
+		PortBindings: portBindings,
+		RestartPolicy: container.RestartPolicy{
+			Name: "unless-stopped",
+		},
+	}
+
+	// Rebuild network config
+	networkConfig := &network.NetworkingConfig{
+		EndpointsConfig: make(map[string]*network.EndpointSettings),
+	}
+	for _, networkName := range networkNames {
+		networkConfig.EndpointsConfig[networkName] = &network.EndpointSettings{}
+	}
+
+	log.Printf("Creating new container: %s", containerName)
+	resp, err := dc.cli.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, containerName)
+	if err != nil {
+		return "", fmt.Errorf("failed to create new container: %w", err)
+	}
+
+	newContainerID := resp.ID
+	log.Printf("New container created: %s (ID: %s)", containerName, newContainerID)
+
+	// 5. Start new container
+	if err := dc.cli.ContainerStart(ctx, newContainerID, container.StartOptions{}); err != nil {
+		// Clean up on failure
+		dc.cli.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
+		return "", fmt.Errorf("failed to start new container: %w", err)
+	}
+
+	log.Printf("New container started successfully: %s", newContainerID)
+	log.Printf("Server rebuild complete: %s -> %s", containerID, newContainerID)
+
+	return newContainerID, nil
+}
+
 // ServerCreateRequest represents a server.create message payload
 type ServerCreateRequest struct {
 	ServerID string            `json:"serverId"`
@@ -197,6 +346,11 @@ type ServerCreateRequest struct {
 type ServerDeleteRequest struct {
 	ContainerID   string `json:"containerId"`
 	RemoveVolumes bool   `json:"removeVolumes"`
+}
+
+// ServerRebuildRequest represents a server.rebuild message payload
+type ServerRebuildRequest struct {
+	ContainerID string `json:"containerId"`
 }
 
 // ServerOperationResponse represents the result of a server operation

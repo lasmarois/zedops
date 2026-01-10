@@ -9,7 +9,7 @@ import {
   useStopContainer,
   useRestartContainer,
 } from '../hooks/useContainers';
-import { useServers, useCreateServer, useDeleteServer } from '../hooks/useServers';
+import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
 
@@ -28,6 +28,8 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   const restartMutation = useRestartContainer();
   const createServerMutation = useCreateServer();
   const deleteServerMutation = useDeleteServer();
+  const rebuildServerMutation = useRebuildServer();
+  const cleanupFailedServersMutation = useCleanupFailedServers();
 
   const [operationStatus, setOperationStatus] = useState<{
     containerId: string;
@@ -36,6 +38,7 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   } | null>(null);
 
   const [showServerForm, setShowServerForm] = useState(false);
+  const [editServer, setEditServer] = useState<Server | undefined>(undefined);
   const [serverMessage, setServerMessage] = useState<{
     message: string;
     type: 'success' | 'error';
@@ -145,15 +148,27 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     }
   };
 
-  const handleCreateServer = async (request: CreateServerRequest) => {
+  const handleCreateServer = async (request: CreateServerRequest, serverIdToDelete?: string) => {
     try {
+      // If editing (retrying a failed server), delete the old failed entry first
+      if (serverIdToDelete) {
+        await deleteServerMutation.mutateAsync({
+          agentId,
+          serverId: serverIdToDelete,
+          removeVolumes: false, // Keep volumes for retry
+        });
+      }
+
       const result = await createServerMutation.mutateAsync({ agentId, request });
       if (result.success) {
         setServerMessage({
-          message: `Server "${request.name}" created successfully! Starting container...`,
+          message: serverIdToDelete
+            ? `Server "${request.name}" retried successfully! Starting container...`
+            : `Server "${request.name}" created successfully! Starting container...`,
           type: 'success',
         });
         setShowServerForm(false);
+        setEditServer(undefined);
         setTimeout(() => setServerMessage(null), 5000);
       } else {
         setServerMessage({
@@ -165,6 +180,95 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     } catch (error) {
       setServerMessage({
         message: error instanceof Error ? error.message : 'Failed to create server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleEditServer = (server: Server) => {
+    setEditServer(server);
+    setShowServerForm(true);
+  };
+
+  const handleCleanupFailedServers = async () => {
+    const failedCount = serversData?.servers.filter(s => s.status === 'failed').length || 0;
+    if (failedCount === 0) {
+      alert('No failed servers to clean up');
+      return;
+    }
+
+    if (!confirm(`Clean up ${failedCount} failed server(s)? Containers will be removed but data will be preserved.`)) {
+      return;
+    }
+
+    try {
+      const result = await cleanupFailedServersMutation.mutateAsync({
+        agentId,
+        removeVolumes: false,
+      });
+
+      setServerMessage({
+        message: result.message,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to cleanup failed servers',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleCleanupOrphanedServers = async () => {
+    const orphanedServers = getOrphanedServers();
+    if (orphanedServers.length === 0) {
+      alert('No orphaned servers to clean up');
+      return;
+    }
+
+    if (!confirm(
+      `Clean up ${orphanedServers.length} orphaned server(s)?\n\n` +
+      `These servers exist in the database but their containers are missing.\n` +
+      `Server data will be preserved.`
+    )) {
+      return;
+    }
+
+    try {
+      let deletedCount = 0;
+      const errors: string[] = [];
+
+      for (const server of orphanedServers) {
+        try {
+          await deleteServerMutation.mutateAsync({
+            agentId,
+            serverId: server.id,
+            removeVolumes: false, // Preserve data
+          });
+          deletedCount++;
+        } catch (error) {
+          errors.push(`Failed to delete ${server.name}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        setServerMessage({
+          message: `Cleaned up ${deletedCount} of ${orphanedServers.length} orphaned servers. Errors: ${errors.join(', ')}`,
+          type: 'error',
+        });
+      } else {
+        setServerMessage({
+          message: `Successfully cleaned up ${deletedCount} orphaned server(s)`,
+          type: 'success',
+        });
+      }
+      setTimeout(() => setServerMessage(null), 5000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to cleanup orphaned servers',
         type: 'error',
       });
       setTimeout(() => setServerMessage(null), 5000);
@@ -204,6 +308,38 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     }
   };
 
+  const handleRebuildServer = async (serverId: string, serverName: string) => {
+    if (!confirm(`Rebuild server "${serverName}"? This will pull the latest image and recreate the container. Game data will be preserved.`)) {
+      return;
+    }
+
+    try {
+      const result = await rebuildServerMutation.mutateAsync({
+        agentId,
+        serverId,
+      });
+      if (result.success) {
+        setServerMessage({
+          message: result.message || 'Server rebuilt successfully',
+          type: 'success',
+        });
+        setTimeout(() => setServerMessage(null), 5000);
+      } else {
+        setServerMessage({
+          message: 'Failed to rebuild server',
+          type: 'error',
+        });
+        setTimeout(() => setServerMessage(null), 5000);
+      }
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to rebuild server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
   const isOperationPending = (): boolean => {
     return (
       startMutation.isPending ||
@@ -214,6 +350,18 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
 
   const getServerFromContainerId = (containerId: string): Server | undefined => {
     return serversData?.servers.find((s) => s.container_id === containerId);
+  };
+
+  const getOrphanedServers = (): Server[] => {
+    if (!serversData || !data) return [];
+
+    const containerIds = new Set(data.containers.map(c => c.id));
+
+    // Find servers whose container_id doesn't exist in the actual container list
+    return serversData.servers.filter(server => {
+      if (!server.container_id) return true; // No container ID at all
+      return !containerIds.has(server.container_id); // Container ID doesn't exist
+    });
   };
 
   if (isLoading) {
@@ -289,21 +437,65 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
           </button>
           <h1>Containers on {agentName}</h1>
         </div>
-        <button
-          onClick={() => setShowServerForm(true)}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '1rem',
-            fontWeight: 'bold',
-          }}
-        >
-          + Create Server
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={() => setShowServerForm(true)}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+            }}
+          >
+            + Create Server
+          </button>
+          {serversData && serversData.servers.some(s => s.status === 'failed') && (
+            <button
+              onClick={handleCleanupFailedServers}
+              disabled={cleanupFailedServersMutation.isPending}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#ffc107',
+                color: '#000',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: cleanupFailedServersMutation.isPending ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                opacity: cleanupFailedServersMutation.isPending ? 0.6 : 1,
+              }}
+            >
+              {cleanupFailedServersMutation.isPending
+                ? 'Cleaning...'
+                : `🧹 Clean Up Failed Servers (${serversData.servers.filter(s => s.status === 'failed').length})`}
+            </button>
+          )}
+          {getOrphanedServers().length > 0 && (
+            <button
+              onClick={handleCleanupOrphanedServers}
+              disabled={deleteServerMutation.isPending}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#dc3545',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                opacity: deleteServerMutation.isPending ? 0.6 : 1,
+              }}
+            >
+              {deleteServerMutation.isPending
+                ? 'Cleaning...'
+                : `⚠️ Clean Up Orphaned Servers (${getOrphanedServers().length})`}
+            </button>
+          )}
+        </div>
       </div>
 
       {serverMessage && (
@@ -318,6 +510,34 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
           }}
         >
           {serverMessage.message}
+        </div>
+      )}
+
+      {getOrphanedServers().length > 0 && (
+        <div
+          style={{
+            padding: '1rem',
+            marginBottom: '1rem',
+            borderRadius: '4px',
+            backgroundColor: '#fff3cd',
+            color: '#856404',
+            border: '1px solid #ffeeba',
+          }}
+        >
+          <strong>⚠️ Orphaned Servers Detected ({getOrphanedServers().length})</strong>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
+            The following servers exist in the database but their containers are missing:
+          </p>
+          <ul style={{ margin: '0.5rem 0 0 1.5rem', fontSize: '0.875rem' }}>
+            {getOrphanedServers().map(server => (
+              <li key={server.id}>
+                <strong>{server.name}</strong> - Status: {server.status}, Ports: {server.game_port}-{server.udp_port}, RCON: {server.rcon_port}
+              </li>
+            ))}
+          </ul>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
+            Use the "Clean Up Orphaned Servers" button above to remove these database entries.
+          </p>
         </div>
       )}
 
@@ -467,27 +687,74 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                       </>
                     )}
                     {getServerFromContainerId(container.id) && (
-                      <button
-                        onClick={() => {
-                          const server = getServerFromContainerId(container.id);
-                          if (server) {
-                            handleDeleteServer(server.id, server.name);
-                          }
-                        }}
-                        disabled={deleteServerMutation.isPending}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: '#dc3545',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
-                          fontSize: '0.875rem',
-                          opacity: deleteServerMutation.isPending ? 0.6 : 1,
-                        }}
-                      >
-                        {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
-                      </button>
+                      <>
+                        {getServerFromContainerId(container.id)?.status === 'failed' && (
+                          <button
+                            onClick={() => {
+                              const server = getServerFromContainerId(container.id);
+                              if (server) {
+                                handleEditServer(server);
+                              }
+                            }}
+                            style={{
+                              padding: '0.25rem 0.75rem',
+                              backgroundColor: '#ffc107',
+                              color: '#000',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.875rem',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            Edit & Retry
+                          </button>
+                        )}
+                        {getServerFromContainerId(container.id)?.status === 'running' && (
+                          <button
+                            onClick={() => {
+                              const server = getServerFromContainerId(container.id);
+                              if (server) {
+                                handleRebuildServer(server.id, server.name);
+                              }
+                            }}
+                            disabled={rebuildServerMutation.isPending}
+                            style={{
+                              padding: '0.25rem 0.75rem',
+                              backgroundColor: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: rebuildServerMutation.isPending ? 'not-allowed' : 'pointer',
+                              fontSize: '0.875rem',
+                              opacity: rebuildServerMutation.isPending ? 0.6 : 1,
+                            }}
+                          >
+                            {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const server = getServerFromContainerId(container.id);
+                            if (server) {
+                              handleDeleteServer(server.id, server.name);
+                            }
+                          }}
+                          disabled={deleteServerMutation.isPending}
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            backgroundColor: '#dc3545',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
+                            fontSize: '0.875rem',
+                            opacity: deleteServerMutation.isPending ? 0.6 : 1,
+                          }}
+                        >
+                          {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
+                        </button>
+                      </>
                     )}
                   </div>
                   {operationStatus && operationStatus.containerId === container.id && (
@@ -514,9 +781,14 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
 
       {showServerForm && (
         <ServerForm
+          agentId={agentId}
           onSubmit={handleCreateServer}
-          onCancel={() => setShowServerForm(false)}
+          onCancel={() => {
+            setShowServerForm(false);
+            setEditServer(undefined);
+          }}
           isSubmitting={createServerMutation.isPending}
+          editServer={editServer}
         />
       )}
     </div>

@@ -160,7 +160,94 @@
 
 ---
 
-## Milestone 6: RBAC & Audit Logs ⏳ Planned
+## Milestone 5: Agent Installation & System Service ⏳ Planned
+
+**Goal:** Agent runs as native system service on host (not containerized), with proper installation script
+
+**Duration:** 3-5 days
+
+**Why This Matters:**
+- ✅ Fixes port checking (no network namespace isolation)
+- ✅ Enables host metrics collection (CPU, RAM, disk)
+- ✅ Matches architecture specification (single binary deployment)
+- ✅ Production-ready deployment model
+- ✅ Cross-platform support (Linux, Windows, macOS)
+
+**Deliverables:**
+- Single compiled Go binary (cross-platform)
+- Build script using Docker (builds binary, extracts to host)
+- Installation script (`curl | bash` style for Linux)
+- Systemd service file (Linux)
+- Agent runs on host with full network access
+- Host metrics collection (CPU, RAM, disk, network)
+- Agent metrics endpoint (`/metrics` for Prometheus-style monitoring)
+
+**Success Criteria:**
+- User runs: `curl -sSL https://zedops.example.com/install.sh | sudo bash`
+- Script downloads agent binary for correct OS/arch
+- Prompts for registration token (from UI)
+- Installs as systemd service (auto-start on boot)
+- Agent connects to manager successfully
+- Port checking detects actual host-level bindings
+- Agent reports host metrics to manager
+- Service survives reboot (auto-restart)
+
+**Current State:**
+- ❌ Agent runs in Docker container (dev mode)
+- ❌ Network namespace isolation breaks port checking
+- ❌ No host metrics collection
+- ✅ Docker used to BUILD binary (good pattern)
+
+**Implementation Plan:**
+1. Create build script (`scripts/build-agent.sh`)
+   - Uses Docker to compile Go binary
+   - Extracts binary from container to host
+   - Cross-compile for Linux/Windows/macOS
+2. Create systemd service file (`agent/zedops-agent.service`)
+3. Create installation script (`install.sh`)
+   - Detects OS and architecture
+   - Downloads appropriate binary
+   - Prompts for token and agent name
+   - Installs systemd service
+   - Starts agent
+4. Add host metrics collection to agent
+   - CPU usage, memory, disk space
+   - Network stats
+   - Running processes count
+5. Update manager to display agent metrics
+
+**Dependencies:** None (can run in parallel with Milestone 4)
+
+**Planning:** [task_plan_agent_installation.md](task_plan_agent_installation.md) *(to be created)*
+
+---
+
+## Milestone 6: RCON Integration ⏳ Planned
+
+**Goal:** Direct RCON connection and command execution
+
+**Duration:** 1-2 weeks
+
+**Deliverables:**
+- Agent connects to server RCON port
+- Manager sends RCON commands via WebSocket
+- UI terminal (xterm.js) for RCON console
+- Command history and autocomplete
+- Quick actions (player list, kick, ban, broadcast)
+
+**Success Criteria:**
+- User types RCON command in UI terminal → executes on server
+- Player list displayed in UI
+- Quick action buttons work (kick player, etc.)
+- Command history navigable with arrow keys
+
+**Dependencies:** Milestone 4 (Server Management)
+
+**Planning:** *(not started)*
+
+---
+
+## Milestone 7: RBAC & Audit Logs ⏳ Planned
 
 **Goal:** Role-based access control and audit logging
 
@@ -187,22 +274,23 @@
 
 ## Future Milestones (Ideas)
 
-### Milestone 7: Mod Management UI
+### Milestone 8: Mod Management UI
 - UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)
 - Mod browser (popular mods with descriptions)
 - One-click mod installation
 
-### Milestone 8: Server Metrics & Monitoring
-- Agent reports CPU, memory, disk usage
+### Milestone 9: Server Metrics & Monitoring
+- Agent reports CPU, memory, disk usage (partially covered in M5)
 - UI dashboards with charts
 - Alerts for resource thresholds
+- Historical metrics storage
 
-### Milestone 9: Backup & Restore
+### Milestone 10: Backup & Restore
 - Automated server backups
 - Backup schedule configuration
 - One-click restore from backup
 
-### Milestone 10: Agent Auto-Update
+### Milestone 11: Agent Auto-Update
 - Manager notifies agents of new version
 - Agent downloads and replaces binary
 - Graceful restart without losing connections
@@ -216,11 +304,12 @@
 | M1: Agent Connection | 1-2 weeks | 1 day | ✅ Complete |
 | M2: Container Control | 2 weeks | 1 day | ✅ Complete |
 | M3: Log Streaming | 1 week | 1 day | ✅ Complete |
-| M4: Server Management | 2-3 weeks | TBD | ⏳ Planned |
-| M5: RCON Integration | 2 weeks | TBD | ⏳ Planned |
-| M6: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
+| M4: Server Management | 2-3 weeks | TBD | 🚧 In Progress |
+| M5: Agent Installation & System Service | 3-5 days | TBD | ⏳ Planned |
+| M6: RCON Integration | 2 weeks | TBD | ⏳ Planned |
+| M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 3/6 milestones complete (50%) in 1 day 🎉
+**Progress:** 3/7 core milestones complete (43%) in 1 day 🎉
 
 **Total to MVP:** ~12 weeks estimated → TBD actual
 

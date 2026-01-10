@@ -7,6 +7,8 @@ import {
   fetchServers,
   createServer,
   deleteServer,
+  rebuildServer,
+  cleanupFailedServers,
   type CreateServerRequest,
 } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -69,6 +71,60 @@ export function useDeleteServer() {
       serverId: string;
       removeVolumes: boolean;
     }) => deleteServer(agentId, serverId, removeVolumes, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to rebuild a server (pull latest image, recreate container)
+ */
+export function useRebuildServer() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+    }: {
+      agentId: string;
+      serverId: string;
+    }) => rebuildServer(agentId, serverId, password!),
+    onSuccess: (_, variables) => {
+      // Invalidate both servers and containers queries to refetch
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to cleanup all failed servers for an agent
+ */
+export function useCleanupFailedServers() {
+  const password = useAuthStore((state) => state.password);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      removeVolumes,
+    }: {
+      agentId: string;
+      removeVolumes: boolean;
+    }) => cleanupFailedServers(agentId, removeVolumes, password!),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({

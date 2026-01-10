@@ -276,6 +276,10 @@ func (a *Agent) receiveMessages() {
 			a.handleServerCreate(msg)
 		case "server.delete":
 			a.handleServerDelete(msg)
+		case "server.rebuild":
+			a.handleServerRebuild(msg)
+		case "port.check":
+			a.handlePortCheck(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -710,6 +714,124 @@ func (a *Agent) handleServerDelete(msg Message) {
 
 	// Send success response
 	a.sendServerSuccessWithReply("", req.ContainerID, "delete", msg.Reply)
+}
+
+// handleServerRebuild handles server.rebuild messages
+func (a *Agent) handleServerRebuild(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendServerErrorWithReply("", "", "rebuild", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerRebuildRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendServerErrorWithReply("", "", "rebuild", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	log.Printf("Rebuilding server container: %s", req.ContainerID)
+
+	// Rebuild server
+	newContainerID, err := a.docker.RebuildServer(ctx, req.ContainerID)
+	if err != nil {
+		log.Printf("Failed to rebuild server %s: %v", req.ContainerID, err)
+		a.sendServerErrorWithReply("", req.ContainerID, "rebuild", err.Error(), "SERVER_REBUILD_FAILED", msg.Reply)
+		return
+	}
+
+	log.Printf("Server rebuilt successfully: %s -> %s", req.ContainerID, newContainerID)
+
+	// Send success response with new container ID
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success":        true,
+				"oldContainerID": req.ContainerID,
+				"newContainerID": newContainerID,
+				"operation":      "rebuild",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handlePortCheck handles port.check messages
+func (a *Agent) handlePortCheck(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   "Docker client not initialized",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req PortCheckRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   "Invalid port check request format",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Checking port availability for ports: %v", req.Ports)
+
+	// Check port availability
+	availability, err := a.docker.CheckPortAvailability(ctx, req.Ports)
+	if err != nil {
+		log.Printf("Failed to check port availability: %v", err)
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   fmt.Sprintf("Port check failed: %v", err),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Port check complete: %d available, %d unavailable",
+		len(availability.Available), len(availability.Unavailable))
+
+	// Send response
+	if msg.Reply != "" {
+		response := Message{
+			Subject:   msg.Reply,
+			Data:      availability,
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
 }
 
 // sendServerSuccessWithReply sends a success response for a server operation

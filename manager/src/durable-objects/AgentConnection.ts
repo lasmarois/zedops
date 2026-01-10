@@ -87,6 +87,11 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Port availability check endpoint
+    if (url.pathname === "/ports/check" && request.method === "POST") {
+      return this.handlePortCheckRequest(request);
+    }
+
     // Server create endpoint
     if (url.pathname === "/servers" && request.method === "POST") {
       return this.handleServerCreateRequest(request);
@@ -98,6 +103,15 @@ export class AgentConnection extends DurableObject {
       const serverId = parts[2];
       if (serverId) {
         return this.handleServerDeleteRequest(request, serverId);
+      }
+    }
+
+    // Server rebuild endpoint
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/rebuild") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleServerRebuildRequest(request, serverId);
       }
     }
 
@@ -581,6 +595,87 @@ export class AgentConnection extends DurableObject {
     this.send({
       subject: "container.list",
       data: {},
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Request failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for port availability check request
+   * Implements request/reply pattern with agent
+   */
+  private async handlePortCheckRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body: { ports: number[] };
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!body.ports || !Array.isArray(body.ports)) {
+      return new Response(JSON.stringify({
+        error: "Missing or invalid ports array",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (10 seconds)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Request timeout"));
+      }, 10000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send request to agent with reply inbox
+    this.send({
+      subject: "port.check",
+      data: {
+        ports: body.ports,
+      },
       reply: inbox,
     });
 
@@ -1121,6 +1216,91 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Server deletion failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for server rebuild request
+   * Implements request/reply pattern with agent
+   */
+  private async handleServerRebuildRequest(request: Request, serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { containerId } = body;
+    if (!containerId) {
+      return new Response(JSON.stringify({
+        error: "Missing containerId",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (60 seconds for server rebuild - includes image pull)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server rebuild timeout"));
+      }, 60000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send server.rebuild request to agent with reply inbox
+    this.send({
+      subject: "server.rebuild",
+      data: {
+        containerId,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server rebuild failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },

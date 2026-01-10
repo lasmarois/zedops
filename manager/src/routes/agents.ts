@@ -161,6 +161,200 @@ agents.get('/:id/containers', async (c) => {
 });
 
 /**
+ * POST /api/agents/:id/ports/check
+ * Check port availability on a specific agent
+ *
+ * Body: { ports: [16261, 16262, 27015] }
+ * Returns: { available: [...], unavailable: [{port, reason, source}] }
+ */
+agents.post('/:id/ports/check', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+
+  // Parse request body
+  const body = await c.req.json();
+  if (!body.ports || !Array.isArray(body.ports)) {
+    return c.json({ error: 'Missing or invalid ports array' }, 400);
+  }
+
+  // Verify agent exists
+  try {
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, status FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent using agent name
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+
+    // Forward request to Durable Object
+    const response = await stub.fetch(`http://do/ports/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ports: body.ports }),
+    });
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('[Agents API] Error checking ports:', error);
+    return c.json({ error: 'Failed to check ports' }, 500);
+  }
+});
+
+/**
+ * GET /api/agents/:id/ports/availability
+ * Check port availability and suggest next available ports for server creation
+ *
+ * Query params:
+ *   - count (optional): Number of servers to suggest ports for (default: 1)
+ *
+ * Returns:
+ *   - suggestedPorts: { gamePort, udpPort, rconPort }[]
+ *   - allocatedPorts: { gamePort, udpPort, rconPort }[] (from DB)
+ *   - hostBoundPorts: number[] (from agent)
+ */
+agents.get('/:id/ports/availability', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const count = parseInt(c.req.query('count') || '1', 10);
+
+  if (count < 1 || count > 10) {
+    return c.json({ error: 'Count must be between 1 and 10' }, 400);
+  }
+
+  try {
+    // 1. Get agent info
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, status FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // 2. Get all allocated ports from DB
+    const allocatedServers = await c.env.DB.prepare(
+      `SELECT game_port, udp_port, rcon_port, name, status FROM servers WHERE agent_id = ? ORDER BY game_port`
+    ).bind(agentId).all();
+
+    const allocatedPorts = (allocatedServers.results || []).map((s: any) => ({
+      gamePort: s.game_port,
+      udpPort: s.udp_port,
+      rconPort: s.rcon_port,
+      serverName: s.name,
+      status: s.status,
+    }));
+
+    // Collect all allocated port numbers
+    const dbPorts = new Set<number>();
+    for (const server of allocatedPorts) {
+      dbPorts.add(server.gamePort);
+      dbPorts.add(server.udpPort);
+      dbPorts.add(server.rconPort);
+    }
+
+    // 3. Query agent for host-level port bindings
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+
+    // Build port range to check (16261-16400, 27015-27100)
+    const portsToCheck: number[] = [];
+    for (let p = 16261; p <= 16400; p++) {
+      portsToCheck.push(p);
+    }
+    for (let p = 27015; p <= 27100; p++) {
+      portsToCheck.push(p);
+    }
+
+    const hostCheckResponse = await stub.fetch(`http://do/ports/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ports: portsToCheck }),
+    });
+
+    if (!hostCheckResponse.ok) {
+      return c.json({ error: 'Failed to check host ports' }, 503);
+    }
+
+    const hostCheck: { available: number[]; unavailable: { port: number }[] } =
+      await hostCheckResponse.json();
+
+    const hostBoundPorts = new Set(hostCheck.unavailable.map(u => u.port));
+
+    // 4. Find next available port ranges
+    const suggestedPorts: { gamePort: number; udpPort: number; rconPort: number }[] = [];
+    let currentGamePort = 16261;
+    let currentRconPort = 27015;
+
+    while (suggestedPorts.length < count && currentGamePort <= 16400) {
+      const gamePort = currentGamePort;
+      const udpPort = currentGamePort + 1;
+      const rconPort = currentRconPort;
+
+      // Check if all three ports are available
+      const allAvailable =
+        !dbPorts.has(gamePort) && !hostBoundPorts.has(gamePort) &&
+        !dbPorts.has(udpPort) && !hostBoundPorts.has(udpPort) &&
+        !dbPorts.has(rconPort) && !hostBoundPorts.has(rconPort);
+
+      if (allAvailable) {
+        suggestedPorts.push({ gamePort, udpPort, rconPort });
+        // Reserve these ports for next iteration
+        dbPorts.add(gamePort);
+        dbPorts.add(udpPort);
+        dbPorts.add(rconPort);
+      }
+
+      currentGamePort += 2;  // Increment by 2 (game + udp are sequential)
+      currentRconPort += 1;  // RCON increments by 1
+    }
+
+    if (suggestedPorts.length === 0) {
+      return c.json({ error: 'No available ports found in range 16261-16400' }, 503);
+    }
+
+    return c.json({
+      suggestedPorts,
+      allocatedPorts,
+      hostBoundPorts: Array.from(hostBoundPorts),
+      agentStatus: agent.status,
+    });
+
+  } catch (error) {
+    console.error('[Agents API] Error getting port availability:', error);
+    return c.json({ error: 'Failed to get port availability' }, 500);
+  }
+});
+
+/**
  * POST /api/agents/:id/containers/:containerId/start
  * Start a container on a specific agent
  */
@@ -460,15 +654,43 @@ agents.post('/:id/servers', async (c) => {
       rconPort = maxRcon ? maxRcon + 1 : 27015;
     }
 
-    // Check for port conflicts
-    const portConflict = await c.env.DB.prepare(
-      `SELECT id FROM servers WHERE agent_id = ? AND (game_port = ? OR rcon_port = ?)`
+    // Check for port conflicts (DB + host-level)
+    // 1. Database check
+    const dbConflict = await c.env.DB.prepare(
+      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ? OR rcon_port = ?)`
     )
-      .bind(agentId, gamePort, rconPort)
+      .bind(agentId, gamePort, udpPort, rconPort)
       .first();
 
-    if (portConflict) {
-      return c.json({ error: `Port conflict: game_port ${gamePort} or rcon_port ${rconPort} already in use` }, 409);
+    if (dbConflict) {
+      return c.json({
+        error: `Port conflict in database: One or more ports (${gamePort}, ${udpPort}, ${rconPort}) already allocated to server '${dbConflict.name}'`,
+      }, 409);
+    }
+
+    // 2. Host-level check (query agent)
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    const hostCheckResponse = await agentStub.fetch(`http://do/ports/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ports: [gamePort, udpPort, rconPort] }),
+    });
+
+    if (!hostCheckResponse.ok) {
+      return c.json({ error: 'Failed to verify port availability with agent' }, 503);
+    }
+
+    const hostCheck: { available: number[]; unavailable: { port: number; reason: string; source: string }[] } =
+      await hostCheckResponse.json();
+
+    if (hostCheck.unavailable.length > 0) {
+      const conflicts = hostCheck.unavailable.map(u => `${u.port} (${u.reason})`).join(', ');
+      return c.json({
+        error: `Port conflict detected on host: ${conflicts}`,
+        suggestion: 'Use GET /api/agents/:id/ports/availability to find available ports',
+      }, 409);
     }
 
     // Generate server ID
@@ -631,6 +853,113 @@ agents.get('/:id/servers', async (c) => {
 });
 
 /**
+ * DELETE /api/agents/:id/servers/failed
+ * Bulk cleanup of all failed servers for a specific agent
+ *
+ * Query params: removeVolumes=true|false (default: false)
+ * Returns: Count of deleted servers
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "failed" as a serverId
+ */
+agents.delete('/:id/servers/failed', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const removeVolumes = c.req.query('removeVolumes') === 'true';
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get all failed servers for this agent
+    const failedServers = await c.env.DB.prepare(
+      `SELECT id, name, container_id FROM servers WHERE agent_id = ? AND status = 'failed'`
+    )
+      .bind(agentId)
+      .all();
+
+    if (!failedServers.results || failedServers.results.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No failed servers to clean up',
+        deletedCount: 0,
+      });
+    }
+
+    // Get Durable Object for this agent (for container cleanup)
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+
+    let deletedCount = 0;
+    const errors: string[] = [];
+
+    // Delete each failed server
+    for (const server of failedServers.results) {
+      try {
+        // Try to delete container if it exists
+        if (server.container_id) {
+          await stub.fetch(`http://do/servers/${server.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              containerId: server.container_id,
+              removeVolumes,
+            }),
+          });
+        }
+
+        // Delete from database
+        await c.env.DB.prepare(
+          `DELETE FROM servers WHERE id = ?`
+        )
+          .bind(server.id)
+          .run();
+
+        deletedCount++;
+      } catch (error) {
+        console.error(`[Agents API] Error deleting failed server ${server.name}:`, error);
+        errors.push(`Failed to delete ${server.name}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return c.json({
+        success: true,
+        message: `Cleaned up ${deletedCount} of ${failedServers.results.length} failed servers`,
+        deletedCount,
+        errors,
+      });
+    }
+
+    return c.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} failed server(s)`,
+      deletedCount,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error bulk cleaning failed servers:', error);
+    return c.json({ error: 'Failed to cleanup failed servers' }, 500);
+  }
+});
+
+/**
  * DELETE /api/agents/:id/servers/:serverId
  * Delete a server from a specific agent
  *
@@ -745,6 +1074,219 @@ agents.delete('/:id/servers/:serverId', async (c) => {
   } catch (error) {
     console.error('[Agents API] Error deleting server:', error);
     return c.json({ error: 'Failed to delete server' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/:serverId/rebuild
+ * Rebuild a server with latest image (pulls fresh image, recreates container, preserves volumes)
+ *
+ * Returns: Updated server object with new container_id
+ */
+agents.post('/:id/servers/:serverId/rebuild', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    // Verify server exists and belongs to agent
+    const server = await c.env.DB.prepare(
+      `SELECT id, container_id, name FROM servers WHERE id = ? AND agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    if (!server.container_id) {
+      return c.json({ error: 'Server has no container to rebuild (never started)' }, 400);
+    }
+
+    // Update status to rebuilding
+    await c.env.DB.prepare(
+      `UPDATE servers SET status = 'rebuilding', updated_at = ? WHERE id = ?`
+    )
+      .bind(Date.now(), serverId)
+      .run();
+
+    // Get agent name for Durable Object
+    const agent = await c.env.DB.prepare(
+      `SELECT name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Forward server.rebuild message to Durable Object
+    const response = await agentStub.fetch(`http://do/servers/${serverId}/rebuild`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        containerId: server.container_id,
+      }),
+    });
+
+    if (!response.ok) {
+      // Update status back to failed
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+
+      const errorData = await response.json();
+      return c.json({ error: errorData.error || 'Failed to rebuild server on agent' }, response.status);
+    }
+
+    const result = await response.json() as { success: boolean; newContainerID: string };
+
+    // Update database with new container_id
+    const now = Date.now();
+    await c.env.DB.prepare(
+      `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
+    )
+      .bind(result.newContainerID, now, serverId)
+      .run();
+
+    // Fetch updated server
+    const updatedServer = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ?`
+    )
+      .bind(serverId)
+      .first();
+
+    return c.json({
+      success: true,
+      message: `Server '${server.name}' rebuilt successfully`,
+      server: updatedServer,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error rebuilding server:', error);
+    return c.json({ error: 'Failed to rebuild server' }, 500);
+  }
+});
+
+/**
+ * DELETE /api/agents/:id/servers/failed
+ * Bulk cleanup of all failed servers for a specific agent
+ *
+ * Query params: removeVolumes=true|false (default: false)
+ * Returns: Count of deleted servers
+ */
+agents.delete(':id/servers/failed', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const removeVolumes = c.req.query('removeVolumes') === 'true';
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get all failed servers for this agent
+    const failedServers = await c.env.DB.prepare(
+      `SELECT id, name, container_id FROM servers WHERE agent_id = ? AND status = 'failed'`
+    )
+      .bind(agentId)
+      .all();
+
+    if (!failedServers.results || failedServers.results.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No failed servers to clean up',
+        deletedCount: 0,
+      });
+    }
+
+    // Get Durable Object for this agent (for container cleanup)
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+
+    let deletedCount = 0;
+    const errors: string[] = [];
+
+    // Delete each failed server
+    for (const server of failedServers.results) {
+      try {
+        // Try to delete container if it exists
+        if (server.container_id) {
+          await stub.fetch(`http://do/servers/${server.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              containerId: server.container_id,
+              removeVolumes,
+            }),
+          });
+        }
+
+        // Delete from database
+        await c.env.DB.prepare(
+          `DELETE FROM servers WHERE id = ?`
+        )
+          .bind(server.id)
+          .run();
+
+        deletedCount++;
+      } catch (error) {
+        console.error(`[Agents API] Error deleting failed server ${server.name}:`, error);
+        errors.push(`Failed to delete ${server.name}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return c.json({
+        success: true,
+        message: `Cleaned up ${deletedCount} of ${failedServers.results.length} failed servers`,
+        deletedCount,
+        errors,
+      });
+    }
+
+    return c.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} failed server(s)`,
+      deletedCount,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error bulk cleaning failed servers:', error);
+    return c.json({ error: 'Failed to cleanup failed servers' }, 500);
   }
 });
 

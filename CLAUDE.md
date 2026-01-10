@@ -49,9 +49,17 @@ npm run dev
 cd manager
 wrangler dev
 
-# Agent development
+# Agent development (local - runs on HOST, not container)
 cd agent
-go run main.go
+go run main.go --manager-url ws://localhost:8787/ws --name maestroserver
+
+# Agent build (uses Docker to compile, runs on host)
+cd agent
+./scripts/build.sh  # Builds binary using Docker, extracts to ./bin/
+sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver
+
+# For production: Install as systemd service
+sudo ./scripts/install.sh  # Installs systemd service, starts agent
 
 # Deploy (full-stack: frontend + manager)
 cd frontend && npm run build
@@ -225,6 +233,114 @@ go run main.go
 | Frontend | `npm run dev` (Vite hot reload) |
 | Agent | `go run main.go` (connect to local manager) |
 | End-to-end | All running, test full flow |
+
+**Agent Development & Build Workflow:**
+
+⚠️ **CRITICAL DESIGN DECISION**: The agent runs **directly on the host**, not in a Docker container. This is essential for:
+1. ✅ Accurate port checking (no network namespace isolation)
+2. ✅ Host metrics collection (CPU, RAM, disk usage)
+3. ✅ Matches production deployment model
+4. ✅ Full access to host network and Docker socket
+
+**Architecture:**
+- **Build**: Use Docker to compile the Go binary (cross-platform support)
+- **Run**: Extract binary and run natively on host
+- **Deploy**: Install as systemd service (Linux), Windows Service (Windows), or launchd (macOS)
+
+**Development Workflow:**
+
+```bash
+# 1. Local development (no build needed)
+cd agent
+go run main.go --manager-url ws://localhost:8787/ws --name maestroserver
+
+# 2. Build binary using Docker (for testing production build)
+cd agent
+./scripts/build.sh
+# Output: ./bin/zedops-agent (Linux binary)
+
+# 3. Run binary on host
+sudo ./bin/zedops-agent \
+  --manager-url wss://zedops.mail-bcf.workers.dev/ws \
+  --name maestroserver
+
+# 4. Verify connection
+# Agent should print: "Authentication successful! Agent ID: ..."
+```
+
+**Production Deployment (Linux with systemd):**
+
+```bash
+# 1. Build binary
+cd agent
+./scripts/build.sh
+
+# 2. Install as systemd service
+sudo ./scripts/install.sh
+# Prompts for:
+# - Agent name (must match database: "maestroserver")
+# - Manager URL (wss://zedops.mail-bcf.workers.dev/ws)
+# - Copies binary to /usr/local/bin/zedops-agent
+# - Creates systemd service: /etc/systemd/system/zedops-agent.service
+# - Enables and starts service
+
+# 3. Manage service
+sudo systemctl status zedops-agent
+sudo systemctl restart zedops-agent
+sudo journalctl -u zedops-agent -f  # View logs
+
+# 4. Verify connection
+curl -H "Authorization: Bearer admin" \
+  "https://zedops.mail-bcf.workers.dev/api/agents/<agent-id>/containers"
+```
+
+**Why NOT containerized:**
+
+❌ **Old approach (dev only)**: Agent in Docker container
+- Network namespace isolation breaks port checking
+- Can't access host metrics (CPU, RAM)
+- Doesn't match production architecture
+
+✅ **Current approach**: Agent runs on host
+- Full network visibility (accurate port detection)
+- Access to host metrics via `/proc`, `/sys`
+- Simple deployment (single binary + systemd)
+- Matches architecture specification
+
+**Build Script Details:**
+
+The `scripts/build.sh` script:
+1. Uses Docker to compile Go binary (ensures consistent builds)
+2. Extracts binary from container to `./bin/` directory
+3. Supports cross-compilation (Linux, Windows, macOS)
+4. No runtime dependencies (static binary)
+
+```bash
+# Build script internals (for reference)
+docker build -f Dockerfile.build -t zedops-agent-builder .
+docker run --rm zedops-agent-builder cat /zedops-agent > ./bin/zedops-agent
+chmod +x ./bin/zedops-agent
+```
+
+**How to check agent name in database:**
+```bash
+cd manager
+npx wrangler d1 execute zedops-db --remote \
+  --command "SELECT id, name FROM agents"
+```
+
+**Testing the connection:**
+```bash
+# Get agent ID from database
+AGENT_ID=$(npx wrangler d1 execute zedops-db --remote \
+  --command "SELECT id FROM agents LIMIT 1" --json | jq -r '.[0].results[0].id')
+
+# Test containers endpoint
+curl -H "Authorization: Bearer admin" \
+  "https://zedops.mail-bcf.workers.dev/api/agents/$AGENT_ID/containers"
+
+# Should return container list with actual containers
+```
 
 ---
 

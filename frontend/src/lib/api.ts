@@ -388,3 +388,125 @@ export async function deleteServer(
 
   return response.json();
 }
+
+/**
+ * Rebuild a server (pull latest image, recreate container, preserve volumes)
+ */
+export async function rebuildServer(
+  agentId: string,
+  serverId: string,
+  password: string
+): Promise<{ success: boolean; message: string; server: Server }> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers/${serverId}/rebuild`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${password}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 400) {
+      const data = await response.json();
+      throw new Error(data.error || 'Bad request');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to rebuild server');
+  }
+
+  return response.json();
+}
+
+/**
+ * Port availability types
+ */
+export interface PortSet {
+  gamePort: number;
+  udpPort: number;
+  rconPort: number;
+}
+
+export interface AllocatedPort {
+  gamePort: number;
+  udpPort: number;
+  rconPort: number;
+  serverName: string;
+  status: string;
+}
+
+export interface PortAvailabilityResponse {
+  suggestedPorts: PortSet[];
+  allocatedPorts: AllocatedPort[];
+  hostBoundPorts: number[];
+  agentStatus: string;
+}
+
+/**
+ * Check port availability for an agent
+ */
+export async function checkPortAvailability(
+  agentId: string,
+  count: number,
+  password: string
+): Promise<PortAvailabilityResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/ports/availability?count=${count}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    if (response.status === 503) {
+      throw new Error('Agent not connected');
+    }
+    throw new Error('Failed to check port availability');
+  }
+
+  return response.json();
+}
+
+/**
+ * Cleanup all failed servers for an agent
+ */
+export async function cleanupFailedServers(
+  agentId: string,
+  removeVolumes: boolean,
+  password: string
+): Promise<{ success: boolean; message: string; deletedCount: number; errors?: string[] }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/failed?removeVolumes=${removeVolumes}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${password}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Invalid admin password');
+    }
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    throw new Error('Failed to cleanup failed servers');
+  }
+
+  return response.json();
+}

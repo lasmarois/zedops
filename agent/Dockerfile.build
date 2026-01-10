@@ -15,10 +15,7 @@ COPY *.go ./
 # Build the agent
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o zedops-agent .
 
-# Use alpine for minimal final image with DNS support
-FROM alpine:latest
-# Install CA certificates
-RUN apk --no-cache add ca-certificates
-# Copy binary from builder
+# Use scratch for minimal extraction container (binary runs on host, not in container)
+FROM scratch
 COPY --from=builder /build/zedops-agent /zedops-agent
 ENTRYPOINT ["/zedops-agent"]
