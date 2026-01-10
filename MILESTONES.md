@@ -137,7 +137,7 @@
 
 **Deliverables:**
 - User management (email/password, replace hardcoded admin)
-- Roles: Admin (global), Operator (per-server), Reader (per-server)
+- Roles: Admin (global), Operator (per-server), Viewer (per-server)
 - Audit log (all actions logged: who, what, when, target)
 - Audit log viewer in UI
 - User invitation flow
@@ -145,7 +145,7 @@
 **Success Criteria:**
 - Admin can invite users with specific roles
 - Operator can control server but not delete
-- Reader can view logs but not control server
+- Viewer can view logs but not control server
 - All actions logged in D1 with timestamps
 
 **Dependencies:** Milestone 5 (RCON Integration)

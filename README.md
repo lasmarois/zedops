@@ -16,7 +16,7 @@ ZedOps lets you and your friends manage Project Zomboid servers running on diffe
 - 💰 **Free Hosting** - Runs on Cloudflare free tier ($0/month)
 - 📊 **Real-Time Monitoring** - Live logs, server status, player counts
 - 🎮 **RCON Console** - Built-in terminal for server administration
-- 👥 **Multi-User RBAC** - Role-based access (admin, operator, reader)
+- 👥 **Multi-User RBAC** - Role-based access (admin, operator, viewer)
 - 📝 **Audit Logs** - Track who did what, when
 
 ---

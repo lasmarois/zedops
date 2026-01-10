@@ -200,7 +200,7 @@ Operator (per-server)
   - Use RCON console
   - View logs
 
-Reader (per-server)
+Viewer (per-server)
   - View server status
   - View logs (read-only)
   - No control
@@ -212,7 +212,7 @@ CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE,
   password_hash TEXT,
-  role TEXT DEFAULT 'reader', -- admin, operator, reader
+  role TEXT DEFAULT 'viewer', -- admin, operator, viewer
   created_at INTEGER
 );
 
@@ -236,7 +236,7 @@ CREATE TABLE servers (
 CREATE TABLE user_server_roles (
   user_id TEXT REFERENCES users(id),
   server_id TEXT REFERENCES servers(id),
-  role TEXT, -- operator, reader
+  role TEXT, -- operator, viewer
   PRIMARY KEY (user_id, server_id)
 );
 
@@ -310,7 +310,7 @@ Agent executes via RCON → Response → Durable Object → UI
 - ✅ Add new server to agent
 - ✅ Remove server
 - ✅ RCON console (terminal UI)
-- ✅ Basic RBAC (admin/operator/reader)
+- ✅ Basic RBAC (admin/operator/viewer)
 
 ### Phase 3 (Polish - 2 weeks)
 - ✅ Audit logs (who did what, when)
