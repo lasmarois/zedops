@@ -97,6 +97,11 @@ export class AgentConnection extends DurableObject {
       return this.handleServerCreateRequest(request);
     }
 
+    // Server sync endpoint
+    if (url.pathname === "/servers/sync" && request.method === "POST") {
+      return this.handleServerSyncRequest();
+    }
+
     // Server delete endpoint
     if (url.pathname.startsWith("/servers/") && request.method === "DELETE") {
       const parts = url.pathname.split("/");
@@ -343,6 +348,9 @@ export class AgentConnection extends DurableObject {
         token: permanentToken,
         message: "Registration successful",
       }));
+
+      // Trigger initial server status sync in background
+      this.ctx.waitUntil(this.triggerServerSync());
     } catch (error) {
       console.error("[AgentConnection] Registration error:", error);
       this.sendError("Registration failed");
@@ -426,6 +434,9 @@ export class AgentConnection extends DurableObject {
         agentName,
         message: "Authentication successful",
       }));
+
+      // Trigger initial server status sync in background
+      this.ctx.waitUntil(this.triggerServerSync());
     } catch (error) {
       console.error("[AgentConnection] Authentication error:", error);
       this.sendError("Authentication failed");
@@ -1305,6 +1316,181 @@ export class AgentConnection extends DurableObject {
         status: 504,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }
+
+  /**
+   * Handle server sync request from API
+   */
+  private async handleServerSyncRequest(): Promise<Response> {
+    try {
+      const result = await this.syncServers();
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("[AgentConnection] Server sync error:", error);
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server sync failed",
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Sync server statuses with actual container and data existence
+   * Returns: { success: boolean, servers: Server[], synced: number }
+   */
+  private async syncServers(): Promise<any> {
+    if (!this.agentId) {
+      throw new Error("Cannot sync: no agent ID");
+    }
+
+    // Query all servers for this agent
+    const serversResult = await this.env.DB.prepare(
+      `SELECT * FROM servers WHERE agent_id = ?`
+    )
+      .bind(this.agentId)
+      .all();
+
+    const servers = serversResult.results;
+    if (servers.length === 0) {
+      return { success: true, servers: [], synced: 0 };
+    }
+
+    console.log(`[Sync] Syncing ${servers.length} servers for agent ${this.agentId}`);
+
+    // Query agent for container list
+    const containersResponse = await this.sendMessageWithReply({
+      subject: 'containers.list',
+      data: {},
+    }, 10000);
+
+    const containers = containersResponse.data.containers || [];
+    console.log(`[Sync] Found ${containers.length} containers on agent`);
+
+    // Query agent for data existence (batch check all server names)
+    const serverNames = servers.map((s: any) => s.name);
+    const dataCheckResponse = await this.sendMessageWithReply({
+      subject: 'server.checkdata',
+      data: {
+        servers: serverNames,
+        dataPath: '/var/lib/zedops/servers',
+      },
+    }, 10000);
+
+    const dataStatuses = dataCheckResponse.data.statuses || [];
+    console.log(`[Sync] Checked data existence for ${dataStatuses.length} servers`);
+
+    // Build lookup maps
+    const containerByName = new Map();
+    for (const container of containers) {
+      const labels = container.labels || {};
+      const serverName = labels['zedops.server.name'];
+      if (serverName) {
+        containerByName.set(serverName, container);
+      }
+    }
+
+    const dataByName = new Map();
+    for (const dataStatus of dataStatuses) {
+      dataByName.set(dataStatus.serverName, dataStatus);
+    }
+
+    // Update each server's status
+    let syncedCount = 0;
+    for (const server of servers) {
+      const serverName = server.name;
+      const container = containerByName.get(serverName);
+      const dataStatus = dataByName.get(serverName);
+
+      let newStatus = server.status;
+      let newDataExists = server.data_exists === 1;
+
+      // Update data_exists from actual check
+      if (dataStatus) {
+        newDataExists = dataStatus.dataExists;
+      }
+
+      // Determine status based on container and data existence
+      if (container) {
+        // Container exists
+        if (container.state === 'running') {
+          newStatus = 'running';
+        } else if (container.state === 'exited' || container.state === 'stopped') {
+          newStatus = 'stopped';
+        }
+      } else {
+        // Container missing
+        if (server.status !== 'creating' && server.status !== 'deleting' && server.status !== 'deleted') {
+          newStatus = 'missing';
+        }
+      }
+
+      // Only update if something changed
+      if (newStatus !== server.status || newDataExists !== (server.data_exists === 1)) {
+        await this.env.DB.prepare(
+          `UPDATE servers SET status = ?, data_exists = ?, updated_at = ? WHERE id = ?`
+        )
+          .bind(newStatus, newDataExists ? 1 : 0, Date.now(), server.id)
+          .run();
+
+        console.log(`[Sync] Updated server ${serverName}: status=${newStatus}, data_exists=${newDataExists}`);
+        syncedCount++;
+      }
+    }
+
+    // Query updated servers
+    const updatedServersResult = await this.env.DB.prepare(
+      `SELECT * FROM servers WHERE agent_id = ? ORDER BY created_at DESC`
+    )
+      .bind(this.agentId)
+      .all();
+
+    const updatedServers = updatedServersResult.results.map((row: any) => ({
+      id: row.id,
+      agent_id: row.agent_id,
+      name: row.name,
+      container_id: row.container_id,
+      config: row.config,
+      image_tag: row.image_tag,
+      game_port: row.game_port,
+      udp_port: row.udp_port,
+      rcon_port: row.rcon_port,
+      status: row.status,
+      data_exists: row.data_exists === 1,
+      deleted_at: row.deleted_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }));
+
+    return {
+      success: true,
+      servers: updatedServers,
+      synced: syncedCount,
+    };
+  }
+
+  /**
+   * Trigger server status sync
+   * Called on agent connection to sync server statuses with actual container/data state
+   */
+  private async triggerServerSync(): Promise<void> {
+    if (!this.agentId) {
+      console.error("[AgentConnection] Cannot trigger sync: no agent ID");
+      return;
+    }
+
+    try {
+      console.log(`[AgentConnection] Triggering server status sync for agent ${this.agentId}`);
+      const result = await this.syncServers();
+      console.log(`[AgentConnection] Sync completed: ${result.synced || 0} servers updated`);
+    } catch (error) {
+      console.error("[AgentConnection] Error triggering sync:", error);
+      // Don't throw - sync failure shouldn't prevent agent connection
     }
   }
 }

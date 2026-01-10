@@ -42,7 +42,28 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
    - Handler supports batch checking (array of server names)
    - Built and deployed agent successfully (PID 3340469)
 
-**Next Steps**: Implement Phase 3 (status sync), Phase 4 (container recreation), Phase 5 (soft delete/purge), Phase 6 (UI)
+8. **Committed and Pushed Phase 1-2** ✅
+   - Commit: 3b89dc9 - "Add server lifecycle management Phase 1-2 (database migration and agent data checking)"
+   - Pushed to main branch
+   - All Phase 1-2 changes committed
+
+9. **Phase 3: Server Status Sync** ✅
+   - Added `POST /api/agents/:id/servers/sync` endpoint in `manager/src/routes/agents.ts`
+   - Implemented `syncServers()` method in `AgentConnection` DO
+   - Added `/servers/sync` endpoint handler in `AgentConnection.ts`
+   - Sync logic queries agent for:
+     - Container list (containers.list message)
+     - Data existence (server.checkdata message)
+   - Updates DB with:
+     - `status` based on container state and data existence
+     - `data_exists` from actual directory check
+   - Added automatic sync on agent connect:
+     - Triggers after successful registration
+     - Triggers after successful authentication
+     - Uses `ctx.waitUntil()` for non-blocking execution
+   - Updated `GET /api/agents/:id/servers` to return `data_exists` and `deleted_at` fields
+
+**Next Steps**: Implement Phase 4 (container recreation), Phase 5 (soft delete/purge), Phase 6 (UI)
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`
@@ -56,6 +77,8 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
 - `manager/src/types/Server.ts` - Added data_exists, deleted_at fields and new statuses
 - `agent/server.go` - Added CheckServerData function and related types
 - `agent/main.go` - Added server.checkdata message handler
+- `manager/src/routes/agents.ts` - Added sync endpoint, updated GET /servers to include new fields
+- `manager/src/durable-objects/AgentConnection.ts` - Added sync logic and auto-sync on agent connect
 
 ---
 

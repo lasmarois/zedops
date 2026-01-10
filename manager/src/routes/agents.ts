@@ -838,6 +838,8 @@ agents.get('/:id/servers', async (c) => {
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,
       status: row.status,
+      data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
+      deleted_at: row.deleted_at,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));
@@ -849,6 +851,63 @@ agents.get('/:id/servers', async (c) => {
   } catch (error) {
     console.error('[Agents API] Error listing servers:', error);
     return c.json({ error: 'Failed to list servers' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/sync
+ * Sync server statuses with actual container and data existence
+ *
+ * Queries agent for container list and data existence, then updates DB
+ * Returns: Updated server list
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "sync" as a serverId
+ */
+agents.post('/:id/servers/sync', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get AgentConnection DO and call its sync endpoint
+    const doId = c.env.AGENT_CONNECTION.idFromName(agentId);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const syncResponse = await stub.fetch('http://internal/servers/sync', {
+      method: 'POST',
+    });
+
+    if (!syncResponse.ok) {
+      const errorText = await syncResponse.text();
+      console.error(`[Agents API] Sync failed: ${errorText}`);
+      return c.json({ error: 'Failed to sync servers' }, syncResponse.status);
+    }
+
+    const result = await syncResponse.json();
+    return c.json(result);
+  } catch (error) {
+    console.error('[Agents API] Error syncing servers:', error);
+    return c.json({ error: 'Failed to sync servers' }, 500);
   }
 });
 
