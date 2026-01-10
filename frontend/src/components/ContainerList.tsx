@@ -9,7 +9,7 @@ import {
   useStopContainer,
   useRestartContainer,
 } from '../hooks/useContainers';
-import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers } from '../hooks/useServers';
+import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, useStopServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
 
@@ -30,6 +30,11 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   const deleteServerMutation = useDeleteServer();
   const rebuildServerMutation = useRebuildServer();
   const cleanupFailedServersMutation = useCleanupFailedServers();
+  const startServerMutation = useStartServer();
+  const stopServerMutation = useStopServer();
+  const purgeServerMutation = usePurgeServer();
+  const restoreServerMutation = useRestoreServer();
+  const syncServersMutation = useSyncServers();
 
   const [operationStatus, setOperationStatus] = useState<{
     containerId: string;
@@ -43,6 +48,8 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     message: string;
     type: 'success' | 'error';
   } | null>(null);
+  const [showDeletedServers, setShowDeletedServers] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
 
   const handleStart = async (containerId: string) => {
     try {
@@ -338,6 +345,118 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
       });
       setTimeout(() => setServerMessage(null), 5000);
     }
+  };
+
+  const handleServerStart = async (serverId: string, serverName: string) => {
+    try {
+      const result = await startServerMutation.mutateAsync({ agentId, serverId });
+      setServerMessage({
+        message: result.recovered
+          ? `Server "${serverName}" container recreated and started successfully`
+          : `Server "${serverName}" started successfully`,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to start server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleServerStop = async (serverId: string, serverName: string) => {
+    try {
+      await stopServerMutation.mutateAsync({ agentId, serverId });
+      setServerMessage({
+        message: `Server "${serverName}" stopped successfully`,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to stop server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleServerPurge = async (serverId: string, serverName: string, removeData: boolean) => {
+    try {
+      await purgeServerMutation.mutateAsync({ agentId, serverId, removeData });
+      setServerMessage({
+        message: removeData
+          ? `Server "${serverName}" permanently deleted (data removed)`
+          : `Server "${serverName}" permanently deleted (data preserved on host)`,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+      setConfirmPurge(null);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to purge server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+      setConfirmPurge(null);
+    }
+  };
+
+  const handleServerRestore = async (serverId: string, serverName: string) => {
+    try {
+      await restoreServerMutation.mutateAsync({ agentId, serverId });
+      setServerMessage({
+        message: `Server "${serverName}" restored successfully. Click Start to recreate container.`,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to restore server',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const handleSyncServers = async () => {
+    try {
+      const result = await syncServersMutation.mutateAsync({ agentId });
+      setServerMessage({
+        message: `Synced ${result.synced} server(s) successfully`,
+        type: 'success',
+      });
+      setTimeout(() => setServerMessage(null), 3000);
+    } catch (error) {
+      setServerMessage({
+        message: error instanceof Error ? error.message : 'Failed to sync servers',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 5000);
+    }
+  };
+
+  const getServerStatusBadge = (server: Server) => {
+    const { status, data_exists } = server;
+
+    const badgeStyles: Record<string, { bg: string; text: string }> = {
+      running: { bg: '#28a745', text: '✓ Running' },
+      stopped: { bg: '#6c757d', text: '⏸ Stopped' },
+      creating: { bg: '#17a2b8', text: '⏳ Creating' },
+      deleting: { bg: '#fd7e14', text: '⏳ Deleting' },
+      failed: { bg: '#dc3545', text: '❌ Failed' },
+      deleted: { bg: '#fd7e14', text: '🗑️ Deleted' },
+    };
+
+    if (status === 'missing') {
+      return data_exists
+        ? { bg: '#ffc107', text: '⚠️ Missing (Recoverable)' }
+        : { bg: '#dc3545', text: '⚠️ Orphaned' };
+    }
+
+    return badgeStyles[status] || { bg: '#6c757d', text: status };
   };
 
   const isOperationPending = (): boolean => {
@@ -777,6 +896,407 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* All Servers Section */}
+      {serversData && serversData.servers.length > 0 && (
+        <div style={{ marginTop: '3rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2>All Servers (Manager Database)</h2>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={showDeletedServers}
+                  onChange={(e) => setShowDeletedServers(e.target.checked)}
+                />
+                Show Deleted Servers
+              </label>
+              <button
+                onClick={handleSyncServers}
+                disabled={syncServersMutation.isPending}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#17a2b8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: syncServersMutation.isPending ? 'not-allowed' : 'pointer',
+                  opacity: syncServersMutation.isPending ? 0.6 : 1,
+                }}
+              >
+                {syncServersMutation.isPending ? '🔄 Syncing...' : '🔄 Sync Status'}
+              </button>
+            </div>
+          </div>
+
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              marginTop: '1rem',
+              backgroundColor: 'white',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            }}
+          >
+            <thead>
+              <tr style={{ backgroundColor: '#f8f9fa' }}>
+                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
+                  Server Name
+                </th>
+                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
+                  Status
+                </th>
+                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
+                  Ports (Game/UDP)
+                </th>
+                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {serversData.servers
+                .filter((server) => showDeletedServers || server.status !== 'deleted')
+                .map((server) => {
+                  const badge = getServerStatusBadge(server);
+                  return (
+                    <tr key={server.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: '1rem' }}>
+                        <strong>{server.name}</strong>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <span
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '4px',
+                            backgroundColor: badge.bg,
+                            color: 'white',
+                            fontSize: '0.875rem',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {badge.text}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        {server.game_port}/{server.udp_port}
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          {/* Running: Stop, Rebuild, Delete */}
+                          {server.status === 'running' && (
+                            <>
+                              <button
+                                onClick={() => handleServerStop(server.id, server.name)}
+                                disabled={stopServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#ffc107',
+                                  color: '#000',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: stopServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Stop
+                              </button>
+                              <button
+                                onClick={() => handleRebuildServer(server.id, server.name, server.container_id!)}
+                                disabled={rebuildServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#17a2b8',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: rebuildServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Rebuild
+                              </button>
+                              <button
+                                onClick={() => handleDeleteServer(server.id, server.name)}
+                                disabled={deleteServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+
+                          {/* Stopped: Start, Delete */}
+                          {server.status === 'stopped' && (
+                            <>
+                              <button
+                                onClick={() => handleServerStart(server.id, server.name)}
+                                disabled={startServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#28a745',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: startServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Start
+                              </button>
+                              <button
+                                onClick={() => handleDeleteServer(server.id, server.name)}
+                                disabled={deleteServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+
+                          {/* Missing + Data Exists: Start (Recovery), Purge */}
+                          {server.status === 'missing' && server.data_exists && (
+                            <>
+                              <button
+                                onClick={() => handleServerStart(server.id, server.name)}
+                                disabled={startServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#28a745',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: startServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                ▶️ Start (Recovery)
+                              </button>
+                              <button
+                                onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                disabled={purgeServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#6c757d',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                🗑️ Purge
+                              </button>
+                            </>
+                          )}
+
+                          {/* Missing + No Data: Purge Only */}
+                          {server.status === 'missing' && !server.data_exists && (
+                            <button
+                              onClick={() => handleServerPurge(server.id, server.name, false)}
+                              disabled={purgeServerMutation.isPending}
+                              style={{
+                                padding: '0.375rem 0.75rem',
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                fontSize: '0.875rem',
+                              }}
+                            >
+                              🗑️ Purge (Orphaned)
+                            </button>
+                          )}
+
+                          {/* Deleted: Restore, Purge Now */}
+                          {server.status === 'deleted' && (
+                            <>
+                              <button
+                                onClick={() => handleServerRestore(server.id, server.name)}
+                                disabled={restoreServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#17a2b8',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: restoreServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                ↩️ Restore
+                              </button>
+                              <button
+                                onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                disabled={purgeServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                🗑️ Purge Now
+                              </button>
+                            </>
+                          )}
+
+                          {/* Failed: Edit & Retry, Purge */}
+                          {server.status === 'failed' && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditServer(server);
+                                  setShowServerForm(true);
+                                }}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#007bff',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                Edit & Retry
+                              </button>
+                              <button
+                                onClick={() => handleServerPurge(server.id, server.name, true)}
+                                disabled={purgeServerMutation.isPending}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                🗑️ Purge
+                              </button>
+                            </>
+                          )}
+
+                          {/* Creating/Deleting: No actions */}
+                          {(server.status === 'creating' || server.status === 'deleting') && (
+                            <span style={{ color: '#6c757d', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                              Operation in progress...
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+
+          {serversData.servers.filter((s) => s.status === 'deleted').length > 0 && !showDeletedServers && (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '0.875rem', color: '#6c757d' }}>
+              💡 {serversData.servers.filter((s) => s.status === 'deleted').length} deleted server(s) hidden. Check "Show Deleted Servers" to view them.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Purge Confirmation Modal */}
+      {confirmPurge && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '8px',
+            maxWidth: '500px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          }}>
+            <h3 style={{ marginTop: 0, color: '#dc3545' }}>⚠️ Permanent Deletion</h3>
+            <p>
+              You are about to permanently delete server <strong>"{confirmPurge.serverName}"</strong>.
+            </p>
+            <p style={{ marginBottom: '1.5rem' }}>
+              This action cannot be undone. The server record will be removed from the database.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmPurge(null)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, false)}
+                disabled={purgeServerMutation.isPending}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#ffc107',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Keep Data & Purge
+              </button>
+              <button
+                onClick={() => handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, true)}
+                disabled={purgeServerMutation.isPending}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                {purgeServerMutation.isPending ? 'Purging...' : 'Remove Data & Purge'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showServerForm && (

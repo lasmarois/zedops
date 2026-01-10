@@ -110,7 +110,7 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
    - Pushed to main branch
    - All Phase 5 changes committed
 
-15. **Phase 6: UI Updates (API Layer)** ✅
+15. **Phase 6a: UI Updates (API Layer)** ✅
    - Added API functions in `frontend/src/lib/api.ts`:
      - `startServer()` - Start server with container recreation
      - `stopServer()` - Stop server by server ID
@@ -125,7 +125,34 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
      - `useSyncServers()` - Hook for syncing server statuses
    - All hooks invalidate queries for automatic UI refresh
 
-**Next Steps**: Update ContainerList component to use new hooks and show all server states
+16. **Phase 6b: UI Updates (Component Layer)** ✅
+   - Updated `frontend/src/components/ContainerList.tsx`:
+     - Added imports for all new hooks (useStartServer, useStopServer, usePurgeServer, useRestoreServer, useSyncServers)
+     - Added state variables: `showDeletedServers`, `confirmPurge`
+     - Added handler functions:
+       - `handleServerStart()` - Shows recovery message if container was recreated
+       - `handleServerStop()` - Stops server
+       - `handleServerPurge()` - Purges server with or without data removal
+       - `handleServerRestore()` - Restores soft-deleted server
+       - `handleSyncServers()` - Manual sync trigger with feedback
+       - `getServerStatusBadge()` - Returns badge styling based on server status
+     - Added complete "All Servers" section with:
+       - Table showing all servers from manager database
+       - Status badges (running, stopped, missing, deleted, failed, creating, deleting)
+       - State-specific action buttons:
+         - Running: Stop, Rebuild, Delete
+         - Stopped: Start, Delete
+         - Missing + data exists: Start (Recovery), Purge
+         - Missing + no data: Purge (Orphaned)
+         - Deleted: Restore, Purge Now
+         - Failed: Edit & Retry, Purge
+         - Creating/Deleting: Status message only
+       - "Show Deleted Servers" toggle (hidden by default)
+       - "Sync Status" button for manual synchronization
+       - Purge confirmation modal with options to keep or remove data
+       - Hidden deleted servers count indicator
+
+**Next Steps**: Test UI in browser, deploy frontend
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`
@@ -139,8 +166,11 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
 - `manager/src/types/Server.ts` - Added data_exists, deleted_at fields and new statuses
 - `agent/server.go` - Added CheckServerData function and related types
 - `agent/main.go` - Added server.checkdata message handler
-- `manager/src/routes/agents.ts` - Added sync endpoint, updated GET /servers to include new fields
+- `manager/src/routes/agents.ts` - Added sync endpoint, start/stop/purge/restore endpoints, updated GET /servers
 - `manager/src/durable-objects/AgentConnection.ts` - Added sync logic and auto-sync on agent connect
+- `frontend/src/lib/api.ts` - Added startServer, stopServer, purgeServer, restoreServer, syncServers functions
+- `frontend/src/hooks/useServers.ts` - Added useStartServer, useStopServer, usePurgeServer, useRestoreServer, useSyncServers hooks
+- `frontend/src/components/ContainerList.tsx` - Added All Servers section with state-specific UI
 
 ---
 
