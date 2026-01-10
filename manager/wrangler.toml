@@ -16,7 +16,7 @@ class_name = "AgentConnection"
 [[d1_databases]]
 binding = "DB"
 database_name = "zedops-db"
-database_id = "" # Will be populated after creating database
+database_id = "0c225574-390c-4c51-ba42-8629c7b01f35"
 
 # Environment Variables (for development)
 [vars]
