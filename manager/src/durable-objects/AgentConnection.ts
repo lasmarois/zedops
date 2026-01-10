@@ -340,6 +340,10 @@ export class AgentConnection extends DurableObject {
       this.agentName = agentName;
       this.isRegistered = true;
 
+      // Persist agentId to storage for hibernation recovery
+      await this.ctx.storage.put('agentId', agentId);
+      await this.ctx.storage.put('agentName', agentName);
+
       console.log(`[AgentConnection] Agent registered: ${agentName} (${agentId})`);
 
       // Send permanent token to agent
@@ -417,6 +421,10 @@ export class AgentConnection extends DurableObject {
       this.agentId = agentId;
       this.agentName = agentName;
       this.isRegistered = true;
+
+      // Persist agentId to storage for hibernation recovery
+      await this.ctx.storage.put('agentId', agentId);
+      await this.ctx.storage.put('agentName', agentName);
 
       // Update status to online and last_seen
       const now = Math.floor(Date.now() / 1000);
@@ -1345,6 +1353,12 @@ export class AgentConnection extends DurableObject {
    * Returns: { success: boolean, servers: Server[], synced: number }
    */
   private async syncServers(): Promise<any> {
+    // Load agentId from storage if not in memory (DO may have hibernated)
+    if (!this.agentId) {
+      this.agentId = await this.ctx.storage.get<string>('agentId') || null;
+      this.agentName = await this.ctx.storage.get<string>('agentName') || null;
+    }
+
     if (!this.agentId) {
       throw new Error("Cannot sync: no agent ID");
     }
