@@ -252,23 +252,34 @@ CREATE TABLE agents (
    npx wrangler d1 execute zedops-db --file=manager/schema.sql --remote
    ```
 
-3. **Set production secrets:**
+3. **Set up local development secrets:**
    ```bash
-   npx wrangler secret put TOKEN_SECRET
-   npx wrangler secret put ADMIN_PASSWORD
+   cd manager
+   cp .dev.vars.example .dev.vars
+   # Edit .dev.vars and set TOKEN_SECRET and ADMIN_PASSWORD
    ```
 
-4. **Build frontend:**
+4. **Set production secrets:**
+   ```bash
+   cd manager
+   npx wrangler secret put TOKEN_SECRET
+   # Enter a strong random string (e.g., output of: openssl rand -base64 32)
+
+   npx wrangler secret put ADMIN_PASSWORD
+   # Enter a strong admin password
+   ```
+
+5. **Build frontend:**
    ```bash
    cd frontend && npm install && npm run build
    ```
 
-5. **Deploy manager:**
+6. **Deploy manager:**
    ```bash
    cd manager && npm install && npm run deploy
    ```
 
-6. **Build agent:**
+7. **Build agent:**
    ```bash
    cd agent && go build -o zedops-agent main.go
    ```

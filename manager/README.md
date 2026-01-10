@@ -23,6 +23,10 @@ Cloudflare Worker that serves as the control plane for ZedOps.
 # Install dependencies
 npm install
 
+# Set up local secrets
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars and set your TOKEN_SECRET and ADMIN_PASSWORD
+
 # Run local dev server
 npm run dev
 # → http://localhost:8787
@@ -70,10 +74,23 @@ src/
 
 ## Environment Variables
 
-Set in `wrangler.toml` (development) or via `wrangler secret put` (production):
+**Local Development:**
+Create `.dev.vars` file (copy from `.dev.vars.example`):
+```
+TOKEN_SECRET=your-dev-secret-here
+ADMIN_PASSWORD=your-dev-password-here
+```
 
-- `TOKEN_SECRET` - Secret for signing JWTs
-- `ADMIN_PASSWORD` - Hardcoded admin password (MVP only, replaced in M6)
+**Production:**
+Set secrets using Wrangler CLI:
+```bash
+wrangler secret put TOKEN_SECRET
+wrangler secret put ADMIN_PASSWORD
+```
+
+**Required Secrets:**
+- `TOKEN_SECRET` - Secret for signing JWTs (use a strong random string)
+- `ADMIN_PASSWORD` - Admin password for API access (MVP only, replaced in M6)
 
 ## API Endpoints
 

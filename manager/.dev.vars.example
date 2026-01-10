@@ -1,0 +1,9 @@
+# Local Development Environment Variables
+# Copy this file to .dev.vars and fill in your values
+# .dev.vars is gitignored and will NOT be committed
+
+# JWT signing secret (use a strong random string)
+TOKEN_SECRET=dev-secret-change-me
+
+# Admin password for API access
+ADMIN_PASSWORD=admin
