@@ -206,6 +206,62 @@
 
 ---
 
+## Session 6: Phase 5 - Go Agent - WebSocket Client (2026-01-10)
+
+**Time:** ~20 minutes
+**Phase:** Phase 5 - Go Agent - WebSocket Client
+**Actions:**
+- ✅ Created agent/message.go with Message struct
+- ✅ Implemented NewMessage() and NewMessageWithReply() constructors
+- ✅ Implemented ToJSON() and FromJSON() for serialization
+- ✅ Created RegisterRequest and RegisterResponse structs
+- ✅ Created ErrorResponse struct for error handling
+- ✅ Created agent/token.go with token management
+- ✅ Implemented LoadToken() to read from ~/.zedops-agent/token
+- ✅ Implemented SaveToken() with directory creation and permissions
+- ✅ Implemented DeleteToken() for cleanup
+- ✅ Created agent/main.go with WebSocket client
+- ✅ Implemented command-line flags (--manager-url, --token, --name)
+- ✅ Implemented WebSocket connection using gorilla/websocket
+- ✅ Implemented registration flow with ephemeral token
+- ✅ Implemented message receiving loop
+- ✅ Added graceful shutdown with SIGTERM/SIGINT handling
+- ✅ Added registration timeout (10 seconds)
+
+**Implementation Details:**
+- Message protocol: Matches TypeScript interface (subject, reply, data, timestamp)
+- Token storage: ~/.zedops-agent/token with 0600 permissions
+- Registration: Sends ephemeral token, receives and saves permanent token
+- Agent name: Defaults to hostname if not provided
+- Connection: Uses gorilla/websocket DefaultDialer
+- Shutdown: Sends CloseMessage before exiting
+- Error handling: Comprehensive error messages for all failures
+
+**Agent Flow:**
+1. Parse command-line flags
+2. Load permanent token (if exists)
+3. If no permanent token: require ephemeral token for registration
+4. Connect to manager via WebSocket
+5. Register (if ephemeral token provided)
+6. Save permanent token to disk
+7. Receive messages in background goroutine
+8. Wait for shutdown signal or connection close
+
+**Files Created:**
+- agent/message.go (Message protocol)
+- agent/token.go (Token storage)
+- agent/main.go (WebSocket client + registration)
+
+**Validation:**
+- ✅ Message struct matches TypeScript interface
+- ✅ Token storage with proper permissions
+- ✅ Registration flow logic complete
+- ⏳ Runtime testing requires manager deployment
+
+**Next:** Phase 6 - Agent Reconnection Logic
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |
