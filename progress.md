@@ -242,6 +242,81 @@ docker inspect registry.gitlab.nicomarois.com/nicolas/steam-zomboid:2.1.0 --form
 
 ---
 
+## Session 4: 2026-01-10 (Phase 3 - Manager API)
+
+**Time:** Continuation of Session 3
+
+**Goals:**
+- Implement manager API endpoints for server CRUD operations
+- Add database migrations for servers table
+- Update AgentConnection Durable Object to forward server messages
+
+**Work Completed:**
+- ✅ Created TypeScript types: `/manager/src/types/Server.ts`
+  - `Server`, `CreateServerRequest`, `DeleteServerRequest`, `CreateServerResponse`, etc.
+- ✅ Added three server endpoints to `/manager/src/routes/agents.ts`:
+  - **POST /api/agents/:id/servers** - Create server
+    - Validates server name (DNS-safe regex: `^[a-z][a-z0-9-]{2,31}$`)
+    - Auto-suggests ports (finds max game_port, adds 2)
+    - Checks for name/port conflicts
+    - Stores in D1 with status='creating'
+    - Forwards to AgentConnection DO with registry + imageTag
+    - Updates status to 'running' after success
+  - **GET /api/agents/:id/servers** - List servers
+    - Queries servers table filtered by agent_id
+    - Returns array of servers
+  - **DELETE /api/agents/:id/servers/:serverId** - Delete server
+    - Validates server exists and belongs to agent
+    - Updates status to 'deleting'
+    - Forwards to AgentConnection DO
+    - Removes from D1 after success
+    - Supports optional `removeVolumes` flag
+- ✅ Updated `/manager/src/durable-objects/AgentConnection.ts`:
+  - Added HTTP endpoint routing for `/servers` (POST) and `/servers/:id` (DELETE)
+  - Added `handleServerCreateRequest()` - Request/reply pattern (60s timeout)
+  - Added `handleServerDeleteRequest()` - Request/reply pattern (30s timeout)
+  - Forwards `server.create` and `server.delete` messages to agent via WebSocket
+- ✅ Deployed manager successfully to Cloudflare Workers
+  - Version ID: 2c4c2c26-f8be-43ac-8378-3a3c6ad07571
+  - URL: https://zedops.mail-bcf.workers.dev
+
+**API Flow:**
+```
+UI → POST /api/agents/:id/servers
+  → agents.ts validates + stores in D1 (status='creating')
+  → Looks up agent's steam_zomboid_registry from D1
+  → AgentConnection.handleServerCreateRequest()
+  → Sends server.create message to agent via WebSocket (with registry + imageTag)
+  → Agent creates container via Docker SDK
+  → Agent replies with success + containerId
+  → agents.ts updates D1 (status='running', container_id)
+  → Returns server object to UI
+```
+
+**Database Schema:**
+- servers table with 12 columns: id, agent_id, name, container_id, config, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at
+- Foreign key: agent_id → agents(id) ON DELETE CASCADE
+- Unique constraints: (agent_id, name), (agent_id, game_port)
+- Indexes: idx_servers_agent_id, idx_servers_status
+
+**Next Steps:**
+- Phase 4: UI Server Form
+  - Add "Create Server" button to UI
+  - Create form with fields: name, imageTag (dropdown), config (ENV variables)
+  - Fetch .env.template from steam-zomboid image to populate config form
+  - Submit to POST /api/agents/:id/servers endpoint
+  - Show server in UI with status
+  - Add delete button
+
+**Notes:**
+- Phase 3 complete: Manager API fully implemented
+- Server creation uses manager-side registry configuration (looked up from agents table)
+- Port allocation strategy: Auto-increment by 2 from 16261 (game_port), auto-increment by 1 from 27015 (rcon_port)
+- Request/reply pattern ensures synchronous HTTP responses for async WebSocket operations
+- Server status lifecycle: creating → running | failed | stopped | deleting
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

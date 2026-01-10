@@ -87,6 +87,20 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Server create endpoint
+    if (url.pathname === "/servers" && request.method === "POST") {
+      return this.handleServerCreateRequest(request);
+    }
+
+    // Server delete endpoint
+    if (url.pathname.startsWith("/servers/") && request.method === "DELETE") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleServerDeleteRequest(request, serverId);
+      }
+    }
+
     return new Response("Not Found", { status: 404 });
   }
 
@@ -931,6 +945,185 @@ export class AgentConnection extends DurableObject {
         console.error(`[AgentConnection] Failed to send error to subscriber ${subscriber.id}:`, err);
         this.logSubscribers.delete(subscriber.id);
       }
+    }
+  }
+
+  /**
+   * HTTP handler for server create request
+   * Implements request/reply pattern with agent
+   */
+  private async handleServerCreateRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate required fields
+    const { serverId, name, registry, imageTag, config, gamePort, udpPort, rconPort } = body;
+    if (!serverId || !name || !registry || !imageTag || !config || !gamePort || !udpPort || !rconPort) {
+      return new Response(JSON.stringify({
+        error: "Missing required fields",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (60 seconds for server creation)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server creation timeout"));
+      }, 60000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send server.create request to agent with reply inbox
+    this.send({
+      subject: "server.create",
+      data: {
+        serverId,
+        name,
+        registry,
+        imageTag,
+        config,
+        gamePort,
+        udpPort,
+        rconPort,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server creation failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for server delete request
+   * Implements request/reply pattern with agent
+   */
+  private async handleServerDeleteRequest(request: Request, serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { containerId, removeVolumes } = body;
+    if (!containerId) {
+      return new Response(JSON.stringify({
+        error: "Missing containerId",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (30 seconds for server deletion)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server deletion timeout"));
+      }, 30000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send server.delete request to agent with reply inbox
+    this.send({
+      subject: "server.delete",
+      data: {
+        containerId,
+        removeVolumes: removeVolumes ?? false,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server deletion failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 }
