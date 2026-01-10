@@ -4,8 +4,13 @@
 
 import { useAgents } from '../hooks/useAgents';
 import { useAuthStore } from '../stores/authStore';
+import type { Agent } from '../lib/api';
 
-export function AgentList() {
+interface AgentListProps {
+  onSelectAgent: (agent: Agent) => void;
+}
+
+export function AgentList({ onSelectAgent }: AgentListProps) {
   const { data, isLoading, error } = useAgents();
   const clearPassword = useAuthStore((state) => state.clearPassword);
 
@@ -98,9 +103,31 @@ export function AgentList() {
           </thead>
           <tbody>
             {data?.agents.map((agent) => (
-              <tr key={agent.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+              <tr
+                key={agent.id}
+                onClick={() => agent.status === 'online' && onSelectAgent(agent)}
+                style={{
+                  borderBottom: '1px solid #dee2e6',
+                  cursor: agent.status === 'online' ? 'pointer' : 'default',
+                  backgroundColor: 'white',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (agent.status === 'online') {
+                    e.currentTarget.style.backgroundColor = '#f8f9fa';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'white';
+                }}
+              >
                 <td style={{ padding: '1rem' }}>
                   {agent.name}
+                  {agent.status === 'online' && (
+                    <span style={{ marginLeft: '0.5rem', color: '#6c757d', fontSize: '0.875rem' }}>
+                      →
+                    </span>
+                  )}
                 </td>
                 <td style={{ padding: '1rem' }}>
                   <span style={{

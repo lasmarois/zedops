@@ -150,6 +150,68 @@
 
 ---
 
+## Session 4: 2026-01-10 (UI Container List & Actions)
+
+**Time:** 03:00 - 03:15
+
+**Goals:**
+- Add container types and API functions to frontend
+- Create useContainers hooks with TanStack Query
+- Create ContainerList React component with actions
+- Add routing to view containers for agents
+- Add manager API endpoints for container operations
+
+**Work Completed:**
+- ✅ Added container types to lib/api.ts
+  - Container, PortMapping, ContainersResponse, ContainerOperationResponse interfaces
+  - fetchContainers(), startContainer(), stopContainer(), restartContainer()
+- ✅ Created hooks/useContainers.ts
+  - useContainers() - fetch containers with 5s refetch interval
+  - useStartContainer(), useStopContainer(), useRestartContainer() - mutations
+  - Auto-invalidates queries after successful operations
+- ✅ Created components/ContainerList.tsx
+  - Displays containers in table with name, image, state, status
+  - Color-coded state indicators (green=running, red=exited, etc.)
+  - Start/Stop/Restart buttons based on container state
+  - Loading states during operations
+  - Success/error toast notifications (3s timeout)
+  - Back button to return to agent list
+- ✅ Modified components/AgentList.tsx
+  - Made agent rows clickable (only online agents)
+  - Hover effect on clickable rows
+  - Arrow indicator for online agents
+  - onSelectAgent callback prop
+- ✅ Modified App.tsx
+  - Added selectedAgent state management
+  - Routing logic: Login → AgentList → ContainerList
+  - handleSelectAgent and handleBackToAgents callbacks
+- ✅ Added manager API endpoints in routes/agents.ts
+  - GET /api/agents/:id/containers - list containers
+  - POST /api/agents/:id/containers/:containerId/start
+  - POST /api/agents/:id/containers/:containerId/stop
+  - POST /api/agents/:id/containers/:containerId/restart
+  - All endpoints forward to Durable Object
+
+**Blockers Encountered:**
+- None
+
+**Next Steps:**
+- Phase 5: End-to-end testing with real agent and containers
+- Build and deploy frontend
+- Build and deploy manager
+- Test full flow: UI → Manager → Agent → Docker
+
+**Notes:**
+- UI uses TanStack Query for data fetching and caching
+- 5-second refetch interval for real-time container status updates
+- Mutations auto-invalidate queries for immediate UI updates
+- Only online agents are clickable in agent list
+- Container actions disabled during operations (prevents double-clicks)
+- Toast notifications auto-dismiss after 3 seconds
+- Phase 4 complete: Full UI implementation with container list and actions
+
+---
+
 ## Template for Next Session
 
 **Session X: DATE**

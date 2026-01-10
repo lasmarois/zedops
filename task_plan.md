@@ -19,9 +19,8 @@
 | 1. Research | complete | Docker SDK options, message protocol design, UI architecture |
 | 2. Agent Docker Integration | complete | Implement Docker client in Go agent |
 | 3. Manager Message Handlers | complete | HTTP endpoints + request/reply pattern for container control |
-| 4. UI Container List | pending | Display containers in React UI |
-| 5. UI Container Actions | pending | Start/stop/restart buttons with real-time updates |
-| 6. Testing | pending | End-to-end validation of all operations |
+| 4. UI Container List & Actions | complete | React components, hooks, and manager API endpoints |
+| 5. Testing | pending | End-to-end validation of all operations |
 
 ---
 
@@ -106,51 +105,56 @@
 
 ---
 
-## Phase 5: UI Container List
+## Phase 4: UI Container List & Actions ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
-- Display list of containers in UI
-- Show container status, name, image
+- Add container types and API functions to frontend
+- Create useContainers hooks with TanStack Query
+- Create ContainerList React component with actions
+- Add routing to view containers for agents
+- Add manager API endpoints for container operations
 
-**Tasks:**
-- [ ] Create ContainerList React component
-- [ ] Add container state to Zustand store
-- [ ] Fetch containers via WebSocket
-- [ ] Display container metadata (name, status, image, ports)
-- [ ] Auto-refresh on status changes
+**Tasks Completed:**
+- [x] Add container types to lib/api.ts (Container, PortMapping, etc.)
+- [x] Add API functions: fetchContainers(), startContainer(), stopContainer(), restartContainer()
+- [x] Create hooks/useContainers.ts with TanStack Query
+- [x] Create useContainers() hook - fetch with 5s refetch interval
+- [x] Create useStartContainer(), useStopContainer(), useRestartContainer() mutations
+- [x] Create components/ContainerList.tsx component
+- [x] Display containers in table (name, image, state, status)
+- [x] Add Start/Stop/Restart buttons based on state
+- [x] Show loading states during operations
+- [x] Display success/error toast notifications
+- [x] Modify AgentList to be clickable (only online agents)
+- [x] Add routing in App.tsx (selectedAgent state)
+- [x] Add manager API endpoints in routes/agents.ts
+- [x] Forward container requests to Durable Objects
 
-**Files to Create:**
-- frontend/src/components/ContainerList.tsx
-- frontend/src/stores/containerStore.ts (or add to existing store)
+**Files Created:**
+- frontend/src/hooks/useContainers.ts (~100 lines)
+- frontend/src/components/ContainerList.tsx (~350 lines)
+
+**Files Modified:**
+- frontend/src/lib/api.ts (added ~160 lines)
+- frontend/src/components/AgentList.tsx (made clickable)
+- frontend/src/App.tsx (added routing logic)
+- manager/src/routes/agents.ts (added ~180 lines)
+
+**Implementation Details:**
+- Used TanStack Query for data fetching and state management
+- 5-second refetch interval for real-time status updates
+- Mutations auto-invalidate queries for immediate UI updates
+- Color-coded state indicators (green=running, red=exited, yellow=paused, etc.)
+- Only online agents are clickable in agent list
+- Container actions disabled during operations (prevents double-clicks)
+- Toast notifications auto-dismiss after 3 seconds
+- Manager API endpoints forward to Durable Objects
 
 ---
 
-## Phase 6: UI Container Actions
-
-**Status:** pending
-
-**Goals:**
-- Add start/stop/restart buttons
-- Show loading states during operations
-- Display success/error messages
-- Real-time status updates
-
-**Tasks:**
-- [ ] Add action buttons to ContainerList rows
-- [ ] Implement WebSocket message sending for operations
-- [ ] Show loading spinner during operations
-- [ ] Handle success/error responses
-- [ ] Update container status in real-time
-
-**Files to Modify:**
-- frontend/src/components/ContainerList.tsx
-- frontend/src/stores/containerStore.ts
-
----
-
-## Phase 7: Testing
+## Phase 5: Testing
 
 **Status:** pending
 
