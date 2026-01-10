@@ -133,7 +133,7 @@ export function ContainerList({ agentId, agentName, onBack }: ContainerListProps
     }
   };
 
-  const isOperationPending = (containerId: string): boolean => {
+  const isOperationPending = (): boolean => {
     return (
       startMutation.isPending ||
       stopMutation.isPending ||
@@ -291,54 +291,54 @@ export function ContainerList({ agentId, agentName, onBack }: ContainerListProps
                     {container.state.toLowerCase() !== 'running' && (
                       <button
                         onClick={() => handleStart(container.id)}
-                        disabled={isOperationPending(container.id)}
+                        disabled={isOperationPending()}
                         style={{
                           padding: '0.25rem 0.75rem',
                           backgroundColor: '#28a745',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
-                          cursor: isOperationPending(container.id) ? 'not-allowed' : 'pointer',
+                          cursor: isOperationPending() ? 'not-allowed' : 'pointer',
                           fontSize: '0.875rem',
-                          opacity: isOperationPending(container.id) ? 0.6 : 1,
+                          opacity: isOperationPending() ? 0.6 : 1,
                         }}
                       >
-                        {isOperationPending(container.id) ? 'Working...' : 'Start'}
+                        {isOperationPending() ? 'Working...' : 'Start'}
                       </button>
                     )}
                     {container.state.toLowerCase() === 'running' && (
                       <>
                         <button
                           onClick={() => handleStop(container.id)}
-                          disabled={isOperationPending(container.id)}
+                          disabled={isOperationPending()}
                           style={{
                             padding: '0.25rem 0.75rem',
                             backgroundColor: '#dc3545',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            cursor: isOperationPending(container.id) ? 'not-allowed' : 'pointer',
+                            cursor: isOperationPending() ? 'not-allowed' : 'pointer',
                             fontSize: '0.875rem',
-                            opacity: isOperationPending(container.id) ? 0.6 : 1,
+                            opacity: isOperationPending() ? 0.6 : 1,
                           }}
                         >
-                          {isOperationPending(container.id) ? 'Working...' : 'Stop'}
+                          {isOperationPending() ? 'Working...' : 'Stop'}
                         </button>
                         <button
                           onClick={() => handleRestart(container.id)}
-                          disabled={isOperationPending(container.id)}
+                          disabled={isOperationPending()}
                           style={{
                             padding: '0.25rem 0.75rem',
                             backgroundColor: '#17a2b8',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            cursor: isOperationPending(container.id) ? 'not-allowed' : 'pointer',
+                            cursor: isOperationPending() ? 'not-allowed' : 'pointer',
                             fontSize: '0.875rem',
-                            opacity: isOperationPending(container.id) ? 0.6 : 1,
+                            opacity: isOperationPending() ? 0.6 : 1,
                           }}
                         >
-                          {isOperationPending(container.id) ? 'Working...' : 'Restart'}
+                          {isOperationPending() ? 'Working...' : 'Restart'}
                         </button>
                       </>
                     )}
