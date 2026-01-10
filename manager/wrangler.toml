@@ -12,6 +12,11 @@ not_found_handling = "single-page-application"
 name = "AGENT_CONNECTION"
 class_name = "AgentConnection"
 
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["AgentConnection"]
+
 # D1 Database
 [[d1_databases]]
 binding = "DB"
