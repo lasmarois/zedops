@@ -63,7 +63,27 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
      - Uses `ctx.waitUntil()` for non-blocking execution
    - Updated `GET /api/agents/:id/servers` to return `data_exists` and `deleted_at` fields
 
-**Next Steps**: Implement Phase 4 (container recreation), Phase 5 (soft delete/purge), Phase 6 (UI)
+10. **Committed and Pushed Phase 3** ✅
+   - Commit: 16c59c5 - "Add server lifecycle management Phase 3 (server status sync)"
+   - Pushed to main branch
+   - All Phase 3 changes committed
+
+11. **Phase 4: Server Start with Container Recreation** ✅
+   - Added `POST /api/agents/:id/servers/:serverId/start` endpoint
+   - Handles three scenarios:
+     1. Container exists + stopped → start existing container
+     2. Container missing + data_exists=true → recreate container from DB config
+     3. Container missing + data_exists=false → error with suggestion to purge
+   - Container recreation logic:
+     - Loads server config from DB (ports, ENV, image_tag)
+     - Calls existing server.create on agent
+     - Updates container_id in DB with new container
+     - Sets status='running'
+   - Added `POST /api/agents/:id/servers/:serverId/stop` endpoint for consistency
+   - Both endpoints use server ID instead of container ID
+   - Status validation prevents invalid operations
+
+**Next Steps**: Implement Phase 5 (soft delete/purge), Phase 6 (UI)
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`

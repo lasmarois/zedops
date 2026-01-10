@@ -912,6 +912,271 @@ agents.post('/:id/servers/sync', async (c) => {
 });
 
 /**
+ * POST /api/agents/:id/servers/:serverId/start
+ * Start a server (with container recreation if missing)
+ *
+ * Handles three scenarios:
+ * 1. Container exists and stopped → start it
+ * 2. Container missing + data exists → recreate container from DB config
+ * 3. Container missing + no data → error
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "start" as a full serverId
+ */
+agents.post('/:id/servers/:serverId/start', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, steam_zomboid_registry, server_data_path FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Query server from DB
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Get AgentConnection DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Check current server status
+    if (server.status === 'running') {
+      return c.json({ error: 'Server is already running' }, 400);
+    }
+
+    if (server.status === 'creating' || server.status === 'deleting') {
+      return c.json({ error: `Server is currently ${server.status}` }, 400);
+    }
+
+    // Scenario 1: Container exists (status='stopped') → start it
+    if (server.container_id && server.status === 'stopped') {
+      console.log(`[Server Start] Starting existing container: ${server.container_id}`);
+
+      const startResponse = await stub.fetch(
+        `http://do/containers/${server.container_id}/start`,
+        { method: 'POST' }
+      );
+
+      if (!startResponse.ok) {
+        const errorData = await startResponse.json();
+        return c.json({ error: errorData.error || 'Failed to start container' }, startResponse.status);
+      }
+
+      // Update status to running
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'running', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+
+      return c.json({
+        success: true,
+        message: 'Server started successfully',
+        serverId,
+        containerId: server.container_id,
+      });
+    }
+
+    // Scenario 2 & 3: Container missing (status='missing')
+    if (server.status === 'missing') {
+      // Check if data exists
+      if (!server.data_exists) {
+        return c.json({
+          error: 'Cannot start server: no container or data found',
+          suggestion: 'This server is orphaned. Use DELETE to purge it.',
+        }, 400);
+      }
+
+      // Data exists → recreate container from DB config
+      console.log(`[Server Start] Recreating container for server: ${server.name}`);
+
+      // Update status to creating
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'creating', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+
+      // Parse config from DB
+      const config = JSON.parse(server.config as string);
+
+      // Call server.create on agent
+      const createResponse = await stub.fetch(`http://do/servers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverId: server.id,
+          name: server.name,
+          registry: agent.steam_zomboid_registry,
+          imageTag: server.image_tag,
+          config,
+          gamePort: server.game_port,
+          udpPort: server.udp_port,
+          rconPort: server.rcon_port,
+          dataPath: agent.server_data_path,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        // Update status back to missing (failed to recreate)
+        await c.env.DB.prepare(
+          `UPDATE servers SET status = 'missing', updated_at = ? WHERE id = ?`
+        )
+          .bind(Date.now(), serverId)
+          .run();
+
+        const errorData = await createResponse.json();
+        return c.json({
+          error: errorData.error || 'Failed to recreate container',
+        }, createResponse.status);
+      }
+
+      const result = await createResponse.json();
+
+      // Update container_id and status to running
+      await c.env.DB.prepare(
+        `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
+      )
+        .bind(result.containerId, Date.now(), serverId)
+        .run();
+
+      return c.json({
+        success: true,
+        message: 'Server container recreated and started successfully',
+        serverId,
+        containerId: result.containerId,
+        recovered: true,
+      });
+    }
+
+    // Unexpected status
+    return c.json({
+      error: `Cannot start server with status: ${server.status}`,
+    }, 400);
+  } catch (error) {
+    console.error('[Agents API] Error starting server:', error);
+    return c.json({ error: 'Failed to start server' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/:serverId/stop
+ * Stop a server
+ *
+ * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "stop" as a full serverId
+ */
+agents.post('/:id/servers/:serverId/stop', async (c) => {
+  // Check admin password
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+  }
+
+  const providedPassword = authHeader.substring(7);
+  if (providedPassword !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid admin password' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Query server from DB
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Check if server has a container
+    if (!server.container_id) {
+      return c.json({ error: 'Server has no container to stop' }, 400);
+    }
+
+    // Check current status
+    if (server.status === 'stopped') {
+      return c.json({ error: 'Server is already stopped' }, 400);
+    }
+
+    if (server.status !== 'running') {
+      return c.json({ error: `Cannot stop server with status: ${server.status}` }, 400);
+    }
+
+    // Get AgentConnection DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Stop the container
+    const stopResponse = await stub.fetch(
+      `http://do/containers/${server.container_id}/stop`,
+      { method: 'POST' }
+    );
+
+    if (!stopResponse.ok) {
+      const errorData = await stopResponse.json();
+      return c.json({ error: errorData.error || 'Failed to stop container' }, stopResponse.status);
+    }
+
+    // Update status to stopped
+    await c.env.DB.prepare(
+      `UPDATE servers SET status = 'stopped', updated_at = ? WHERE id = ?`
+    )
+      .bind(Date.now(), serverId)
+      .run();
+
+    return c.json({
+      success: true,
+      message: 'Server stopped successfully',
+      serverId,
+      containerId: server.container_id,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error stopping server:', error);
+    return c.json({ error: 'Failed to stop server' }, 500);
+  }
+});
+
+/**
  * DELETE /api/agents/:id/servers/failed
  * Bulk cleanup of all failed servers for a specific agent
  *
