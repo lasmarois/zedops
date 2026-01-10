@@ -151,7 +151,7 @@ export class AgentConnection extends DurableObject {
     // Route to appropriate handler based on subject
     switch (subject) {
       case "agent.heartbeat":
-        this.handleAgentHeartbeat(message);
+        await this.handleAgentHeartbeat(message);
         break;
 
       case "test.echo":
@@ -261,12 +261,27 @@ export class AgentConnection extends DurableObject {
 
   /**
    * Handle agent.heartbeat message
-   * (Will be fully implemented in Phase 6 with D1 updates)
+   * Update last_seen timestamp in D1
    */
-  private handleAgentHeartbeat(message: Message): void {
-    console.log("[AgentConnection] Heartbeat received");
+  private async handleAgentHeartbeat(message: Message): Promise<void> {
+    if (!this.isRegistered || !this.agentId) {
+      this.sendError("Agent must be registered to send heartbeat");
+      return;
+    }
 
-    // For now, just acknowledge (full implementation in Phase 6)
+    // Update last_seen in D1
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      await this.env.DB.prepare(
+        `UPDATE agents SET last_seen = ? WHERE id = ?`
+      )
+        .bind(now, this.agentId)
+        .run();
+    } catch (error) {
+      console.error("[AgentConnection] Failed to update last_seen:", error);
+    }
+
+    // Acknowledge heartbeat
     this.send(createMessage("agent.heartbeat.ack", {
       timestamp: Date.now(),
     }));

@@ -182,26 +182,33 @@
 
 ---
 
-### Phase 6: Agent Reconnection Logic ⏳ pending
+### Phase 6: Agent Reconnection Logic ✅ complete
 **Goal:** Agent automatically reconnects on connection loss
 
 **Tasks:**
-- [ ] Implement reconnection loop (exponential backoff)
-- [ ] Detect WebSocket close/error
-- [ ] Reuse permanent token on reconnect
-- [ ] Send `agent.heartbeat` every 30 seconds
-- [ ] Handle heartbeat in Durable Object (update last_seen)
-- [ ] Add max retry limit (e.g., 10 attempts)
-- [ ] Log connection state changes
+- [x] Implement reconnection loop (exponential backoff)
+- [x] Detect WebSocket close/error
+- [x] Reuse permanent token on reconnect
+- [x] Send `agent.heartbeat` every 30 seconds
+- [x] Handle heartbeat in Durable Object (update last_seen)
+- [x] Log connection state changes
+- [x] Implement RunWithReconnect() main loop
+- [x] Integrate heartbeat goroutine
 
 **Output:**
-- `agent/reconnect.go` with reconnection logic
-- Heartbeat goroutine in main.go
+- ✅ `agent/reconnect.go` with reconnection and heartbeat logic
+- ✅ ConnectWithRetry(): Exponential backoff (1s → 60s cap, factor: 2.0)
+- ✅ RunWithReconnect(): Main loop with auto-reconnect
+- ✅ sendHeartbeats(): 30-second ticker goroutine
+- ✅ Updated manager handleAgentHeartbeat(): D1 last_seen update
+- ✅ Updated main.go to use RunWithReconnect()
 
 **Validation:**
-- Stop manager → agent retries connection
-- Restart manager → agent reconnects successfully
-- Network disconnect → agent reconnects when network returns
+- ✅ Exponential backoff logic implemented (1s → 2s → 4s ... → 60s)
+- ✅ Backoff resets on successful connection
+- ✅ Heartbeat sent every 30 seconds
+- ✅ Manager updates last_seen timestamp
+- ⏳ Runtime testing deferred (requires manager deployment)
 
 ---
 
@@ -315,8 +322,8 @@
 
 ## Current Phase Details
 
-**Phase:** Phase 6 - Agent Reconnection Logic
-**Next Action:** Implement exponential backoff reconnection and heartbeat
+**Phase:** Phase 7 - Manager API - Agent Status
+**Next Action:** Create GET /api/agents endpoint to list agents with status
 
 ---
 

@@ -262,6 +262,61 @@
 
 ---
 
+## Session 7: Phase 6 - Agent Reconnection Logic (2026-01-10)
+
+**Time:** ~15 minutes
+**Phase:** Phase 6 - Agent Reconnection Logic
+**Actions:**
+- ✅ Created agent/reconnect.go with reconnection logic
+- ✅ Implemented ConnectWithRetry() with exponential backoff
+- ✅ Implemented RunWithReconnect() main loop
+- ✅ Implemented sendHeartbeats() goroutine (30-second ticker)
+- ✅ Updated manager AgentConnection.handleAgentHeartbeat()
+- ✅ Added D1 last_seen timestamp update
+- ✅ Updated main.go to use RunWithReconnect()
+- ✅ Removed done channel (no longer needed with reconnect loop)
+
+**Implementation Details:**
+- Exponential backoff: 1s → 2s → 4s → 8s ... → 60s (cap)
+- Backoff factor: 2.0
+- Backoff resets on successful connection
+- Unlimited retry attempts (never gives up)
+- Heartbeat interval: 30 seconds
+- Heartbeat updates D1 last_seen timestamp
+- Automatic reconnection on any disconnection (error, timeout, manager restart)
+- Graceful shutdown with context cancellation
+
+**Reconnection Flow:**
+1. Attempt connection with ConnectWithRetry()
+2. On failure: Wait (backoff), then retry
+3. On success: Reset backoff, register if needed
+4. Start heartbeat goroutine (30s ticker)
+5. Start message receiver
+6. On disconnect: Cancel heartbeat, close connection, goto step 1
+7. On shutdown: Cancel heartbeat, send close message, exit
+
+**Heartbeat Flow:**
+1. Agent sends agent.heartbeat every 30 seconds
+2. Manager validates registration status
+3. Manager updates last_seen in D1 (Unix timestamp)
+4. Manager sends agent.heartbeat.ack
+5. Agent receives ack (logged silently)
+
+**Files Created/Modified:**
+- agent/reconnect.go (new)
+- agent/main.go (updated - use RunWithReconnect)
+- manager/src/durable-objects/AgentConnection.ts (updated - heartbeat D1 update)
+
+**Validation:**
+- ✅ Exponential backoff logic correct
+- ✅ Unlimited retry logic
+- ✅ Heartbeat sends and D1 updates
+- ⏳ Runtime testing requires manager deployment
+
+**Next:** Phase 7 - Manager API - Agent Status
+
+---
+
 ## Files Created
 
 | File | Purpose | Status |

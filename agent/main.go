@@ -23,12 +23,11 @@ var (
 
 type Agent struct {
 	managerURL    string
-	agentName     string
+	agentName      string
 	ephemeralToken string
 	permanentToken string
-	agentID       string
-	conn          *websocket.Conn
-	done          chan struct{}
+	agentID        string
+	conn           *websocket.Conn
 }
 
 func main() {
@@ -65,7 +64,6 @@ func main() {
 		agentName:      name,
 		ephemeralToken: *token,
 		permanentToken: permanentToken,
-		done:           make(chan struct{}),
 	}
 
 	// Set up graceful shutdown
@@ -81,53 +79,15 @@ func main() {
 		cancel()
 	}()
 
-	// Connect and run
-	if err := agent.Run(ctx); err != nil {
+	// Run with automatic reconnection
+	log.Printf("Starting agent: %s", a.agentName)
+	log.Printf("Manager URL: %s", a.managerURL)
+
+	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
 		log.Fatal("Agent error:", err)
 	}
-}
 
-func (a *Agent) Run(ctx context.Context) error {
-	log.Printf("Starting agent: %s", a.agentName)
-	log.Printf("Connecting to manager: %s", a.managerURL)
-
-	// Parse manager URL
-	u, err := url.Parse(a.managerURL)
-	if err != nil {
-		return fmt.Errorf("invalid manager URL: %w", err)
-	}
-
-	// Connect to manager
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return fmt.Errorf("failed to connect to manager: %w", err)
-	}
-	defer conn.Close()
-
-	a.conn = conn
-	log.Println("WebSocket connection established")
-
-	// Register agent
-	if err := a.register(); err != nil {
-		return fmt.Errorf("registration failed: %w", err)
-	}
-
-	// Start message receiver
-	go a.receiveMessages()
-
-	// Wait for shutdown or connection close
-	select {
-	case <-ctx.Done():
-		log.Println("Shutting down...")
-		// Send close message
-		err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			log.Println("Error sending close message:", err)
-		}
-		return nil
-	case <-a.done:
-		return fmt.Errorf("connection closed")
-	}
+	log.Println("Agent stopped")
 }
 
 func (a *Agent) register() error {
@@ -208,8 +168,6 @@ func (a *Agent) sendMessage(msg Message) error {
 }
 
 func (a *Agent) receiveMessages() {
-	defer close(a.done)
-
 	for {
 		var msg Message
 		err := a.conn.ReadJSON(&msg)
@@ -228,7 +186,7 @@ func (a *Agent) receiveMessages() {
 			// Already handled in register()
 			continue
 		case "agent.heartbeat.ack":
-			// Heartbeat acknowledged
+			// Heartbeat acknowledged (silent)
 			continue
 		case "error":
 			var errResp ErrorResponse
