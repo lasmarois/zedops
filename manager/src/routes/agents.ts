@@ -318,4 +318,47 @@ agents.post('/:id/containers/:containerId/restart', async (c) => {
   }
 });
 
+/**
+ * GET /api/agents/:id/logs/ws
+ * WebSocket endpoint for log streaming
+ *
+ * UI clients connect here to receive container logs
+ * Password authentication via query parameter (since WebSocket doesn't support headers)
+ */
+agents.get('/:id/logs/ws', async (c) => {
+  const agentId = c.req.param('id');
+
+  // Check admin password from query parameter
+  const password = c.req.query('password');
+  if (!password || password !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'Invalid or missing password' }, 401);
+  }
+
+  // Verify agent exists and get name
+  try {
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get Durable Object for this agent using agent name
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+
+    // Forward WebSocket upgrade request to Durable Object
+    return stub.fetch(`http://do/logs/ws`, {
+      method: 'GET',
+      headers: c.req.raw.headers,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error establishing log WebSocket:', error);
+    return c.json({ error: 'Failed to connect to agent' }, 500);
+  }
+});
+
 export { agents };

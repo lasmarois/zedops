@@ -16,17 +16,17 @@
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1. Research | pending | Docker log streaming APIs, pub/sub patterns, UI libraries |
-| 2. Agent Log Streaming | pending | Implement Docker log streaming in Go agent |
-| 3. Durable Object Pub/Sub | pending | Multi-client log forwarding with caching |
-| 4. UI Log Viewer | pending | Real-time log display with auto-scroll and filtering |
+| 1. Research | complete | Docker log streaming APIs, pub/sub patterns, UI libraries |
+| 2. Agent Log Streaming | complete | Implement Docker log streaming in Go agent |
+| 3. Durable Object Pub/Sub | complete | Multi-client log forwarding with caching |
+| 4. UI Log Viewer | complete | Real-time log display with auto-scroll and filtering |
 | 5. Testing | pending | End-to-end validation with multiple clients |
 
 ---
 
-## Phase 1: Research
+## Phase 1: Research ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
 - Research Docker log streaming APIs
@@ -82,69 +82,79 @@
 
 ---
 
-## Phase 3: Durable Object Pub/Sub
+## Phase 3: Durable Object Pub/Sub ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
-- Forward logs from agent to multiple UI clients
-- Implement pub/sub pattern in Durable Objects
-- Cache last 1000 lines for new clients
-- Handle client subscribe/unsubscribe
+- ✅ Forward logs from agent to multiple UI clients
+- ✅ Implement pub/sub pattern in Durable Objects
+- ✅ Cache last 1000 lines for new clients
+- ✅ Handle client subscribe/unsubscribe
 
 **Tasks:**
-- [ ] Add log subscription management to AgentConnection
-- [ ] Implement log buffer (ring buffer, 1000 lines)
-- [ ] Forward logs to all subscribed clients
-- [ ] Add log.subscribe / log.unsubscribe message handlers
-- [ ] Send cached logs to new subscribers
-- [ ] Handle client disconnections gracefully
+- [x] Add log subscription management to AgentConnection
+- [x] Implement log buffer (ring buffer, 1000 lines)
+- [x] Forward logs to all subscribed clients
+- [x] Add log.subscribe / log.unsubscribe message handlers
+- [x] Send cached logs to new subscribers
+- [x] Handle client disconnections gracefully
 
-**Files to Create/Modify:**
-- manager/src/durable-objects/AgentConnection.ts - Add pub/sub logic
-- manager/src/types/LogMessage.ts - Log message types
+**Files Created/Modified:**
+- manager/src/types/LogMessage.ts - Created with log types and CircularBuffer class
+- manager/src/durable-objects/AgentConnection.ts - Added pub/sub logic with subscriber maps and log buffers
 
-**Implementation Considerations:**
-- Use Map<string, WebSocket> for subscriber tracking
-- Use circular buffer for 1000-line cache
-- Each container has its own log buffer
-- Broadcast logs to all subscribers efficiently
+**Implementation Details:**
+- Map<string, LogSubscriber> for subscriber tracking (subscriberId → subscriber)
+- Map<string, CircularBuffer<LogLine>> for log buffers (containerId → buffer)
+- Reference counting: start/stop agent streaming based on subscriber count
+- /logs/ws endpoint for UI WebSocket connections
+- Broadcast pattern: agent → Durable Object → all UI subscribers
+- Cached logs sent immediately on subscribe (log.history message)
 
 ---
 
-## Phase 4: UI Log Viewer
+## Phase 4: UI Log Viewer ✅ complete
 
-**Status:** pending
+**Status:** complete
 
 **Goals:**
-- Create log viewer component
-- Display logs with auto-scroll
-- Add log filtering (by level, by search term)
-- Handle WebSocket connection to manager
-- Subscribe to container logs
+- ✅ Create log viewer component
+- ✅ Display logs with auto-scroll
+- ✅ Add log filtering (by stream type and search term)
+- ✅ Handle WebSocket connection to manager
+- ✅ Subscribe to container logs
 
 **Tasks:**
-- [ ] Create LogViewer.tsx component
-- [ ] Integrate terminal/log library (xterm.js or react-lazylog)
-- [ ] Add auto-scroll functionality (toggle on/off)
-- [ ] Add log filtering UI (dropdown + search)
-- [ ] Implement WebSocket connection logic
-- [ ] Handle log.stream messages from manager
-- [ ] Add loading state and error handling
-- [ ] Test with high-volume logs
+- [x] Create LogViewer.tsx component
+- [x] Custom log viewer with terminal-like display (no external library needed)
+- [x] Add auto-scroll functionality (toggle on/off)
+- [x] Add log filtering UI (stream dropdown + search input)
+- [x] Implement WebSocket connection logic (useLogStream hook)
+- [x] Handle log.stream messages from manager
+- [x] Add loading state and error handling
+- [x] Add "View Logs" button to ContainerList
+- [x] Update App.tsx routing for log viewer
+- [ ] Test with high-volume logs (pending live testing)
 
-**Files to Create:**
-- frontend/src/components/LogViewer.tsx
-- frontend/src/hooks/useLogStream.ts
-- frontend/src/lib/websocket.ts (if not exists)
+**Files Created/Modified:**
+- frontend/src/hooks/useLogStream.ts - Created WebSocket hook for log streaming
+- frontend/src/components/LogViewer.tsx - Created log viewer component
+- frontend/src/components/ContainerList.tsx - Added onViewLogs prop and "View Logs" button
+- frontend/src/App.tsx - Added routing for log viewer
 
-**UI Design:**
-- Terminal-like display (black background, monospace font)
-- Auto-scroll toggle button
-- Filter controls (level dropdown, search input)
-- Container selector (dropdown)
+**Implementation Details:**
+- Terminal-like display with Dracula color scheme
+- Auto-scroll with automatic detection when user scrolls up
+- Stream filtering (all, stdout, stderr)
+- Search filtering (case-insensitive substring match)
+- Pause/Resume streaming
 - Clear logs button
-- Pause/Resume streaming button
+- Line count display (filtered / total)
+- Timestamp formatting (HH:MM:SS.mmm)
+- Color-coded stream types (stdout=green, stderr=red, unknown=yellow)
+- WebSocket reconnection with exponential backoff
+- Graceful cleanup on unmount
 
 ---
 
@@ -234,3 +244,12 @@
 - May need to limit number of concurrent log streams per agent
 - Consider rate limiting to prevent DoS via log flooding
 - Log timestamps should be preserved from container
+
+## Known Limitations
+
+- **Container restart handling**: If a container restarts while viewing logs, the log stream ends and doesn't automatically resume. User must close and reopen the log viewer. This is because:
+  - Docker closes the old container's log stream (EOF) on restart
+  - Agent detects EOF and exits the streaming goroutine
+  - UI remains subscribed but no new logs arrive
+  - **Workaround**: Close log viewer and reopen after container restart
+  - **Future enhancement**: Auto-detect container restart and reconnect stream

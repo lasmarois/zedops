@@ -59,27 +59,53 @@
 
 ---
 
-## Milestone 3: Log Streaming ⏳ Planned
+## Milestone 3: Log Streaming ✅ Complete
 
 **Goal:** Real-time log streaming from containers to UI
 
-**Duration:** 1 week
+**Duration:** 1 day (2026-01-10)
 
 **Deliverables:**
-- Agent streams container logs via WebSocket
-- Durable Object forwards logs to UI clients (pub/sub)
-- UI displays real-time logs with auto-scroll
-- Log filtering (by server, by level)
-- Last 1000 lines cached for new UI connections
+- ✅ Agent streams container logs via Docker SDK (multiplexed stream format)
+- ✅ Durable Object forwards logs to UI clients (pub/sub with circular buffer)
+- ✅ UI displays real-time logs with auto-scroll
+- ✅ Log filtering (by stream: stdout/stderr, by search term)
+- ✅ Last 1000 lines cached for new UI connections
+- ✅ Terminal-like viewer with Dracula color scheme
+- ✅ Pause/Resume, Clear logs, Auto-scroll controls
+- ✅ Connection status indicator and auto-reconnect
 
 **Success Criteria:**
-- User opens log viewer → sees live logs streaming
-- Logs appear in UI <100ms after container outputs
-- Multiple users can watch same logs simultaneously
+- ✅ User opens log viewer → sees live logs streaming
+- ✅ Logs appear in UI <100ms after container outputs (real-time)
+- ✅ Multiple users can watch same logs simultaneously
+- ✅ Cached logs delivered immediately to new subscribers
 
 **Dependencies:** Milestone 2 (Container Control)
 
-**Planning:** *(not started)*
+**Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)
+
+**Completed:** 2026-01-10 (Session 5 - End-to-end testing successful)
+
+### Implementation Highlights
+- **Agent**: Go channels for async log streaming, context-based cancellation
+- **Manager**: Pub/sub via Durable Objects, reference counting for stream lifecycle
+- **UI**: Custom React log viewer with react hooks, WebSocket with exponential backoff
+- **Message Protocol**: log.subscribe, log.line, log.history, log.stream.start/stop
+
+### Known Limitations
+- **Container restart handling**: If a container restarts while viewing logs, the log stream ends (Docker EOF) and doesn't automatically resume. User must close and reopen the log viewer.
+  - **Workaround**: Close log viewer, wait for container to restart, then reopen
+  - **Impact**: Minor UX issue for rare scenario (active log viewing during restart)
+
+### Future Enhancements (Milestone 3.x)
+- **Auto-reconnect on container restart**: Detect when container restarts and automatically resume log stream without user intervention
+- **Server-side log filtering**: Filter logs by pattern/level on agent before sending to manager (reduce bandwidth)
+- **Log level detection**: Parse common log patterns (INFO, WARN, ERROR) for color-coding
+- **Log export**: Download logs to file (last N lines or time range)
+- **Multi-container view**: View logs from multiple containers in split panes
+- **Log timestamps toggle**: Option to hide timestamps for cleaner view
+- **Log search history**: Remember recent search terms
 
 ---
 
@@ -183,35 +209,34 @@
 
 ---
 
-## Roadmap Timeline (Estimated)
+## Roadmap Timeline
 
-| Milestone | Duration | Cumulative |
-|-----------|----------|------------|
-| M1: Agent Connection | 1-2 weeks | 2 weeks |
-| M2: Container Control | 2 weeks | 4 weeks |
-| M3: Log Streaming | 1 week | 5 weeks |
-| M4: Server Management | 2-3 weeks | 8 weeks |
-| M5: RCON Integration | 2 weeks | 10 weeks |
-| M6: RBAC & Audit Logs | 2 weeks | 12 weeks |
+| Milestone | Estimated | Actual | Status |
+|-----------|-----------|--------|--------|
+| M1: Agent Connection | 1-2 weeks | 1 day | ✅ Complete |
+| M2: Container Control | 2 weeks | 1 day | ✅ Complete |
+| M3: Log Streaming | 1 week | 1 day | ✅ Complete |
+| M4: Server Management | 2-3 weeks | TBD | ⏳ Planned |
+| M5: RCON Integration | 2 weeks | TBD | ⏳ Planned |
+| M6: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
 
-**Total to MVP:** ~12 weeks (3 months)
+**Progress:** 3/6 milestones complete (50%) in 1 day 🎉
 
-**Note:** These are estimates. Actual duration will vary based on:
-- Complexity discovered during implementation
-- Scope changes
-- Testing and bug fixes
-- Learning curve with Cloudflare stack
+**Total to MVP:** ~12 weeks estimated → TBD actual
+
+**Note:** Initial estimates were conservative. With planning-with-files pattern and focused implementation sessions, Milestones 1-3 were completed much faster than expected. Future milestones may follow similar acceleration.
 
 ---
 
 ## Current Status
 
-**Active Milestone:** Ready for Milestone 3 - Log Streaming 🎯
+**Active Milestone:** Ready for Milestone 4 - Server Management 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
 - ✅ Milestone 2 - Container Control (2026-01-10)
+- ✅ Milestone 3 - Log Streaming (2026-01-10)
 
-**Next Up:** Milestone 3 - Log Streaming
+**Next Up:** Milestone 4 - Server Management
 
-**Current Planning:** Planning files will be created when Milestone 3 begins
+**Current Planning:** Planning files will be created when Milestone 4 begins

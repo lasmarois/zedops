@@ -15,9 +15,10 @@ interface ContainerListProps {
   agentId: string;
   agentName: string;
   onBack: () => void;
+  onViewLogs: (containerId: string, containerName: string) => void;
 }
 
-export function ContainerList({ agentId, agentName, onBack }: ContainerListProps) {
+export function ContainerList({ agentId, agentName, onBack, onViewLogs }: ContainerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
   const startMutation = useStartContainer();
   const stopMutation = useStopContainer();
@@ -287,7 +288,7 @@ export function ContainerList({ agentId, agentName, onBack }: ContainerListProps
                   {container.status}
                 </td>
                 <td style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     {container.state.toLowerCase() !== 'running' && (
                       <button
                         onClick={() => handleStart(container.id)}
@@ -339,6 +340,20 @@ export function ContainerList({ agentId, agentName, onBack }: ContainerListProps
                           }}
                         >
                           {isOperationPending() ? 'Working...' : 'Restart'}
+                        </button>
+                        <button
+                          onClick={() => onViewLogs(container.id, getContainerName(container))}
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            backgroundColor: '#6f42c1',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          View Logs
                         </button>
                       </>
                     )}

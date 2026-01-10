@@ -20,6 +20,11 @@ import {
   generatePermanentToken,
   hashToken,
 } from "../lib/tokens";
+import {
+  LogLine,
+  LogSubscriber,
+  CircularBuffer,
+} from "../types/LogMessage";
 
 export class AgentConnection extends DurableObject {
   private ws: WebSocket | null = null;
@@ -27,6 +32,10 @@ export class AgentConnection extends DurableObject {
   private agentName: string | null = null;
   private isRegistered: boolean = false;
   private pendingReplies: Map<string, (msg: Message) => void> = new Map();
+
+  // Log streaming pub/sub
+  private logSubscribers: Map<string, LogSubscriber> = new Map(); // subscriberId -> LogSubscriber
+  private logBuffers: Map<string, CircularBuffer<LogLine>> = new Map(); // containerId -> buffer
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -39,9 +48,14 @@ export class AgentConnection extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    // WebSocket upgrade endpoint
+    // WebSocket upgrade endpoint (for agent)
     if (url.pathname === "/ws") {
       return this.handleWebSocketUpgrade(request);
+    }
+
+    // WebSocket upgrade endpoint (for UI log subscribers)
+    if (url.pathname === "/logs/ws") {
+      return this.handleUIWebSocketUpgrade(request);
     }
 
     // Status endpoint (for debugging)
@@ -50,6 +64,8 @@ export class AgentConnection extends DurableObject {
         connected: this.ws !== null,
         agentId: this.agentId,
         isRegistered: this.isRegistered,
+        logSubscribers: this.logSubscribers.size,
+        logBuffers: this.logBuffers.size,
       }), {
         headers: { "Content-Type": "application/json" },
       });
@@ -190,6 +206,14 @@ export class AgentConnection extends DurableObject {
 
       case "container.restart":
         await this.handleContainerOperation(message, "restart");
+        break;
+
+      case "log.line":
+        await this.handleLogLine(message);
+        break;
+
+      case "log.stream.error":
+        await this.handleLogStreamError(message);
         break;
 
       case "test.echo":
@@ -637,6 +661,276 @@ export class AgentConnection extends DurableObject {
         status: 504,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }
+
+  /**
+   * Handle UI WebSocket upgrade (for log subscribers)
+   */
+  private async handleUIWebSocketUpgrade(request: Request): Promise<Response> {
+    const upgradeHeader = request.headers.get("Upgrade");
+    if (upgradeHeader !== "websocket") {
+      return new Response("Expected Upgrade: websocket", { status: 426 });
+    }
+
+    // Create WebSocket pair
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    // Accept the WebSocket connection
+    server.accept();
+
+    // Generate unique subscriber ID
+    const subscriberId = crypto.randomUUID();
+
+    console.log(`[AgentConnection] UI subscriber connected: ${subscriberId}`);
+
+    // Set up message handlers for UI client
+    server.addEventListener("message", (event) => {
+      this.handleUIMessage(subscriberId, server, event);
+    });
+
+    server.addEventListener("close", () => {
+      console.log(`[AgentConnection] UI subscriber disconnected: ${subscriberId}`);
+      this.logSubscribers.delete(subscriberId);
+    });
+
+    server.addEventListener("error", (event) => {
+      console.error(`[AgentConnection] UI subscriber error: ${subscriberId}`, event);
+      this.logSubscribers.delete(subscriberId);
+    });
+
+    // Return the client side to the UI
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
+  }
+
+  /**
+   * Handle messages from UI clients
+   */
+  private async handleUIMessage(
+    subscriberId: string,
+    ws: WebSocket,
+    event: MessageEvent
+  ): Promise<void> {
+    try {
+      const message = parseMessage(event.data);
+      const validation = validateMessage(message);
+
+      if (!validation.valid) {
+        ws.send(JSON.stringify(createMessage("error", { message: validation.error })));
+        return;
+      }
+
+      console.log(`[AgentConnection] UI message from ${subscriberId}: ${message.subject}`);
+
+      // Route UI messages
+      switch (message.subject) {
+        case "log.subscribe":
+          await this.handleLogSubscribe(subscriberId, ws, message);
+          break;
+
+        case "log.unsubscribe":
+          await this.handleLogUnsubscribe(subscriberId, message);
+          break;
+
+        default:
+          ws.send(JSON.stringify(createMessage("error", { message: `Unknown subject: ${message.subject}` })));
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] Error handling UI message:`, error);
+      ws.send(JSON.stringify(createMessage("error", { message: "Failed to process message" })));
+    }
+  }
+
+  /**
+   * Handle log.subscribe from UI client
+   */
+  private async handleLogSubscribe(
+    subscriberId: string,
+    ws: WebSocket,
+    message: Message
+  ): Promise<void> {
+    try {
+      const { containerId } = message.data as { containerId?: string };
+
+      if (!containerId) {
+        ws.send(JSON.stringify(createMessage("error", { message: "Missing containerId" })));
+        return;
+      }
+
+      // Add subscriber
+      this.logSubscribers.set(subscriberId, {
+        id: subscriberId,
+        ws,
+        containerId,
+      });
+
+      console.log(`[AgentConnection] Subscriber ${subscriberId} subscribed to container ${containerId}`);
+
+      // Create log buffer for this container if it doesn't exist
+      if (!this.logBuffers.has(containerId)) {
+        this.logBuffers.set(containerId, new CircularBuffer<LogLine>(1000));
+      }
+
+      // Send cached logs to new subscriber
+      const buffer = this.logBuffers.get(containerId)!;
+      const cachedLogs = buffer.getAll();
+
+      if (cachedLogs.length > 0) {
+        ws.send(JSON.stringify(createMessage("log.history", {
+          containerId,
+          lines: cachedLogs,
+        })));
+        console.log(`[AgentConnection] Sent ${cachedLogs.length} cached logs to ${subscriberId}`);
+      } else {
+        console.log(`[AgentConnection] No cached logs for container ${containerId}`);
+      }
+
+      // Check if we need to start log streaming from agent
+      const subscribersForContainer = Array.from(this.logSubscribers.values())
+        .filter(sub => sub.containerId === containerId);
+
+      if (subscribersForContainer.length === 1) {
+        // First subscriber for this container, start streaming from agent
+        console.log(`[AgentConnection] Starting log stream for container ${containerId} on agent`);
+
+        // Check if agent is connected
+        if (!this.ws) {
+          console.error(`[AgentConnection] Cannot start log stream: agent not connected`);
+          ws.send(JSON.stringify(createMessage("log.stream.error", {
+            containerId,
+            error: "Agent not connected",
+          })));
+        } else {
+          this.send(createMessage("log.stream.start", {
+            containerId,
+            tail: 1000,
+            follow: true,
+            timestamps: true,
+          }));
+        }
+      }
+
+      // Send acknowledgment
+      ws.send(JSON.stringify(createMessage("log.subscribed", {
+        containerId,
+        message: "Subscribed to log stream",
+      })));
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleLogSubscribe:`, error);
+      ws.send(JSON.stringify(createMessage("error", {
+        message: error instanceof Error ? error.message : "Failed to subscribe to logs",
+      })));
+    }
+  }
+
+  /**
+   * Handle log.unsubscribe from UI client
+   */
+  private async handleLogUnsubscribe(
+    subscriberId: string,
+    message: Message
+  ): Promise<void> {
+    const subscriber = this.logSubscribers.get(subscriberId);
+    if (!subscriber) {
+      return; // Already unsubscribed
+    }
+
+    const { containerId } = subscriber;
+
+    // Remove subscriber
+    this.logSubscribers.delete(subscriberId);
+
+    console.log(`[AgentConnection] Subscriber ${subscriberId} unsubscribed from container ${containerId}`);
+
+    // Check if there are any remaining subscribers for this container
+    const subscribersForContainer = Array.from(this.logSubscribers.values())
+      .filter(sub => sub.containerId === containerId);
+
+    if (subscribersForContainer.length === 0) {
+      // No more subscribers, stop streaming from agent
+      console.log(`[AgentConnection] Stopping log stream for container ${containerId} on agent`);
+      this.send(createMessage("log.stream.stop", {
+        containerId,
+      }));
+    }
+
+    // Send acknowledgment
+    subscriber.ws.send(JSON.stringify(createMessage("log.unsubscribed", {
+      containerId,
+      message: "Unsubscribed from log stream",
+    })));
+  }
+
+  /**
+   * Handle log.line from agent
+   * Broadcast to all subscribers and cache
+   */
+  private async handleLogLine(message: Message): Promise<void> {
+    const logLine = message.data as LogLine;
+    const { containerId } = logLine;
+
+    // Add to buffer
+    let buffer = this.logBuffers.get(containerId);
+    if (!buffer) {
+      buffer = new CircularBuffer<LogLine>(1000);
+      this.logBuffers.set(containerId, buffer);
+    }
+    buffer.append(logLine);
+
+    // Broadcast to all subscribers watching this container
+    const subscribers = Array.from(this.logSubscribers.values())
+      .filter(sub => sub.containerId === containerId);
+
+    if (subscribers.length > 0) {
+      const broadcastMessage = JSON.stringify(createMessage("log.line", logLine));
+      for (const subscriber of subscribers) {
+        try {
+          subscriber.ws.send(broadcastMessage);
+        } catch (error) {
+          console.error(`[AgentConnection] Failed to send log to subscriber ${subscriber.id}:`, error);
+          // Remove dead subscriber
+          this.logSubscribers.delete(subscriber.id);
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle log.stream.error from agent
+   * Forward error to all subscribers
+   */
+  private async handleLogStreamError(message: Message): Promise<void> {
+    const { containerId, error, errorCode } = message.data as {
+      containerId?: string;
+      error?: string;
+      errorCode?: string;
+    };
+
+    console.error(`[AgentConnection] Log stream error for ${containerId}: ${error} (${errorCode})`);
+
+    if (!containerId) return;
+
+    // Forward error to all subscribers watching this container
+    const subscribers = Array.from(this.logSubscribers.values())
+      .filter(sub => sub.containerId === containerId);
+
+    const errorMessage = JSON.stringify(createMessage("log.stream.error", {
+      containerId,
+      error,
+      errorCode,
+    }));
+
+    for (const subscriber of subscribers) {
+      try {
+        subscriber.ws.send(errorMessage);
+      } catch (err) {
+        console.error(`[AgentConnection] Failed to send error to subscriber ${subscriber.id}:`, err);
+        this.logSubscribers.delete(subscriber.id);
+      }
     }
   }
 }
