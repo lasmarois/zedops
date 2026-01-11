@@ -80,13 +80,13 @@ wrangler deploy
 
 ```bash
 # Get installation token from manager UI
-curl -sSL https://your-manager.pages.dev/install.sh | \
+curl -sSL https://your-manager.workers.dev/install.sh | \
   TOKEN=your-token-here bash
 ```
 
 ### 3. Manage Servers
 
-1. Visit manager UI: `https://your-manager.pages.dev`
+1. Visit manager UI: `https://your-manager.workers.dev`
 2. See connected agents
 3. Add servers, configure settings, view logs
 4. Use RCON console for administration

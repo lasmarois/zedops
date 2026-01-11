@@ -10,6 +10,47 @@ interface AgentListProps {
   onSelectAgent: (agent: Agent) => void;
 }
 
+function getMetricColor(value: number, thresholds: [number, number]): string {
+  if (value < thresholds[0]) return '#28a745'; // Green
+  if (value < thresholds[1]) return '#ffc107'; // Yellow
+  return '#dc3545'; // Red
+}
+
+function MetricBadge({ label, value, unit = '%', thresholds = [70, 85] }: {
+  label: string;
+  value: number | null | undefined;
+  unit?: string;
+  thresholds?: [number, number];
+}) {
+  if (value === null || value === undefined) {
+    return (
+      <span style={{
+        padding: '0.25rem 0.5rem',
+        borderRadius: '4px',
+        fontSize: '0.75rem',
+        backgroundColor: '#6c757d',
+        color: 'white',
+      }}>
+        {label}: N/A
+      </span>
+    );
+  }
+
+  const color = getMetricColor(value, thresholds);
+  return (
+    <span style={{
+      padding: '0.25rem 0.5rem',
+      borderRadius: '4px',
+      fontSize: '0.75rem',
+      backgroundColor: color,
+      color: 'white',
+      fontWeight: 'bold',
+    }}>
+      {label}: {value.toFixed(1)}{unit}
+    </span>
+  );
+}
+
 export function AgentList({ onSelectAgent }: AgentListProps) {
   const { data, isLoading, error } = useAgents();
   const clearPassword = useAuthStore((state) => state.clearPassword);
@@ -94,6 +135,9 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                 Status
               </th>
               <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
+                Resources
+              </th>
+              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
                 Last Seen
               </th>
               <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
@@ -141,6 +185,28 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                   }}>
                     {agent.status === 'online' ? '● Online' : '○ Offline'}
                   </span>
+                </td>
+                <td style={{ padding: '1rem' }}>
+                  {agent.status === 'online' && agent.metadata?.metrics ? (
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <MetricBadge
+                        label="CPU"
+                        value={agent.metadata.metrics.cpuPercent}
+                      />
+                      <MetricBadge
+                        label="MEM"
+                        value={(agent.metadata.metrics.memoryUsedMB / agent.metadata.metrics.memoryTotalMB) * 100}
+                      />
+                      <MetricBadge
+                        label="DSK"
+                        value={agent.metadata.metrics.diskPercent}
+                      />
+                    </div>
+                  ) : (
+                    <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>
+                      {agent.status === 'offline' ? 'Offline' : 'Collecting...'}
+                    </span>
+                  )}
                 </td>
                 <td style={{ padding: '1rem', color: '#6c757d' }}>
                   {new Date(agent.lastSeen * 1000).toLocaleString()}

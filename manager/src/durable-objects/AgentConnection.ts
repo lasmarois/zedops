@@ -461,16 +461,40 @@ export class AgentConnection extends DurableObject {
       return;
     }
 
-    // Update last_seen in D1
     const now = Math.floor(Date.now() / 1000);
+
+    // Extract metrics if present (backward compatible)
+    const metrics = message.data.metrics || null;
+
     try {
-      await this.env.DB.prepare(
-        `UPDATE agents SET last_seen = ? WHERE id = ?`
-      )
-        .bind(now, this.agentId)
-        .run();
+      if (metrics) {
+        // Update with metrics in metadata
+        const metadataJson = JSON.stringify({
+          metrics: {
+            ...metrics,
+            lastUpdate: now,
+          }
+        });
+
+        await this.env.DB.prepare(
+          `UPDATE agents SET last_seen = ?, metadata = ? WHERE id = ?`
+        )
+          .bind(now, metadataJson, this.agentId)
+          .run();
+
+        console.log(`[AgentConnection] Agent ${this.agentName} heartbeat with metrics: CPU ${metrics.cpuPercent}%, Mem ${metrics.memoryUsedMB}/${metrics.memoryTotalMB}MB`);
+      } else {
+        // Update without metrics (backward compatible)
+        await this.env.DB.prepare(
+          `UPDATE agents SET last_seen = ? WHERE id = ?`
+        )
+          .bind(now, this.agentId)
+          .run();
+
+        console.log(`[AgentConnection] Agent ${this.agentName} heartbeat (no metrics)`);
+      }
     } catch (error) {
-      console.error("[AgentConnection] Failed to update last_seen:", error);
+      console.error("[AgentConnection] Failed to update agent:", error);
     }
 
     // Acknowledge heartbeat

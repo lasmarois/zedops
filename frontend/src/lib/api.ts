@@ -7,13 +7,25 @@
 
 const API_BASE = window.location.origin;
 
+export interface HostMetrics {
+  cpuPercent: number;
+  memoryUsedMB: number;
+  memoryTotalMB: number;
+  diskUsedGB: number;
+  diskTotalGB: number;
+  diskPercent: number;
+  lastUpdate: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
   status: 'online' | 'offline';
   lastSeen: number;
   createdAt: number;
-  metadata: Record<string, unknown>;
+  metadata: {
+    metrics?: HostMetrics;
+  };
 }
 
 export interface AgentsResponse {

@@ -139,14 +139,34 @@ func (a *Agent) sendHeartbeats(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			msg := NewMessage("agent.heartbeat", map[string]string{
+			// Collect host metrics
+			metrics, err := CollectHostMetrics()
+			if err != nil {
+				log.Printf("Warning: Failed to collect metrics: %v", err)
+				// Send heartbeat without metrics (backward compatible)
+				msg := NewMessage("agent.heartbeat", map[string]string{
+					"agentId": a.agentID,
+				})
+				if err := a.sendMessage(msg); err != nil {
+					log.Printf("Failed to send heartbeat: %v", err)
+					return
+				}
+				log.Println("Heartbeat sent (without metrics)")
+				continue
+			}
+
+			// Send heartbeat with metrics
+			msg := NewMessage("agent.heartbeat", map[string]interface{}{
 				"agentId": a.agentID,
+				"metrics": metrics,
 			})
 			if err := a.sendMessage(msg); err != nil {
 				log.Printf("Failed to send heartbeat: %v", err)
 				return
 			}
-			log.Println("Heartbeat sent")
+			log.Printf("Heartbeat sent with metrics (CPU: %.1f%%, Mem: %dMB/%dMB, Disk: %dGB/%dGB)",
+				metrics.CPUPercent, metrics.MemoryUsedMB, metrics.MemoryTotalMB,
+				metrics.DiskUsedGB, metrics.DiskTotalGB)
 		case <-ctx.Done():
 			return
 		}
