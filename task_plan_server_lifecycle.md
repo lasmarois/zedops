@@ -2,10 +2,10 @@
 
 **Goal:** Make the manager the source of truth for server state, with robust recovery and delete operations
 
-**Status:** Planning
+**Status:** Phase 1-6 Complete, Phase 7 In Progress
 **Priority:** High (architectural improvement discovered during port validation work)
 **Created:** 2026-01-10
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-11
 
 ---
 
@@ -328,16 +328,112 @@ State Badges:
 
 ---
 
+### Phase 7: Automatic Sync Detection (Post-Implementation Enhancement)
+
+**Context:** After implementing Phases 1-6, user observed that `docker stop` is detected instantly in UI, but `docker rm` requires manual sync button. Investigation revealed the frontend already has all data needed to detect this discrepancy automatically.
+
+**Problem:**
+- Frontend polls both containers (Docker) and servers (DB) every 5s
+- `docker stop` appears instant because stopped containers remain in container list
+- `docker rm` requires manual sync because server DB record shows `status='running'` but container is gone
+- Manual sync button feels redundant when system already detects stopped containers
+
+**Solution:**
+- Add automatic sync detection via `useEffect` in ContainerList
+- Watch for servers with `status='running'` but missing from container list
+- Automatically trigger sync when discrepancy detected
+- Debounce with 10s cooldown per server to prevent excessive calls
+
+**Tasks:**
+- [x] Document investigation in findings_server_lifecycle.md
+- [x] Add `useEffect` hook in ContainerList.tsx after line 52
+- [x] Import `useRef` from React for debounce tracking
+- [x] Implement mismatch detection logic
+- [x] Implement automatic sync trigger with debounce
+- [ ] Test with manual `docker rm` commands
+- [ ] Verify sync only triggers once per discrepancy
+- [x] Keep manual sync button for debugging/force refresh
+
+**Files to Modify:**
+- `frontend/src/components/ContainerList.tsx` - Add automatic sync detection
+
+**Implementation Code:**
+```typescript
+// Automatic sync detection
+const lastSyncRef = useRef<{ [serverId: string]: number }>({});
+
+useEffect(() => {
+  if (!data || !serversData || syncServersMutation.isPending) return;
+
+  const now = Date.now();
+  const containers = data.containers;
+  const servers = serversData.servers;
+
+  // Find servers with missing containers
+  const missingContainers = servers.filter(server => {
+    // Skip transient states
+    if (['creating', 'deleting', 'deleted'].includes(server.status)) {
+      return false;
+    }
+
+    // Server thinks it has a running container
+    if (server.status === 'running' && server.container_id) {
+      // But container doesn't exist
+      return !containers.find(c => c.id === server.container_id);
+    }
+
+    return false;
+  });
+
+  // Trigger sync if discrepancies found
+  if (missingContainers.length > 0) {
+    // Check if we recently synced for these servers (within 10s)
+    const needsSync = missingContainers.some(server => {
+      const lastSync = lastSyncRef.current[server.id] || 0;
+      return now - lastSync > 10000; // 10 second debounce
+    });
+
+    if (needsSync) {
+      console.log('Auto-sync triggered for', missingContainers.length, 'servers');
+      syncServersMutation.mutateAsync({ agentId }).then(() => {
+        // Mark all as synced
+        missingContainers.forEach(server => {
+          lastSyncRef.current[server.id] = now;
+        });
+      });
+    }
+  }
+}, [data, serversData, agentId, syncServersMutation]);
+```
+
+**Benefits:**
+- `docker rm` detection feels as instant as `docker stop` detection
+- Uses existing polling mechanism (no new backend infrastructure)
+- Reuses existing sync endpoint
+- Minimal code (~30 lines)
+- Manual sync button remains for edge cases
+
+**Edge Cases Handled:**
+- Don't sync during transient states (`creating`, `deleting`, `deleted`)
+- Don't sync if already syncing (check `syncServersMutation.isPending`)
+- Don't re-sync same servers within 10s (debounce)
+- Skip servers without container_id (never had container)
+
+**Estimated Complexity:** Low
+
+---
+
 ## Success Criteria
 
-- [ ] Accidentally deleted container can be recovered with "Start" button
-- [ ] Server config (ports, ENV) preserved even if container deleted
-- [ ] Clear distinction between soft delete and hard delete (purge)
-- [ ] UI shows server state regardless of container existence
-- [ ] Data existence is tracked and displayed
-- [ ] Soft-deleted servers auto-purge after 24h (configurable)
-- [ ] Port allocations preserved until server is purged
-- [ ] All server operations work regardless of container state
+- [x] Accidentally deleted container can be recovered with "Start" button
+- [x] Server config (ports, ENV) preserved even if container deleted
+- [x] Clear distinction between soft delete and hard delete (purge)
+- [x] UI shows server state regardless of container existence
+- [x] Data existence is tracked and displayed
+- [ ] Soft-deleted servers auto-purge after 24h (configurable) - Not implemented yet
+- [x] Port allocations preserved until server is purged
+- [x] All server operations work regardless of container state
+- [ ] Container deletion automatically detected without manual sync button (Phase 7)
 
 ---
 
@@ -450,14 +546,15 @@ State Badges:
 
 ## Estimated Timeline
 
-- Phase 1: 1 session (DB schema)
-- Phase 2: 1 session (Agent data checking)
-- Phase 3: 1-2 sessions (Status sync)
-- Phase 4: 2 sessions (Container creation from config)
-- Phase 5: 2 sessions (Soft delete + purge)
-- Phase 6: 2-3 sessions (UI updates)
+- Phase 1: 1 session (DB schema) ✅ Complete
+- Phase 2: 1 session (Agent data checking) ✅ Complete
+- Phase 3: 1-2 sessions (Status sync) ✅ Complete
+- Phase 4: 2 sessions (Container creation from config) ✅ Complete
+- Phase 5: 2 sessions (Soft delete + purge) ✅ Complete
+- Phase 6: 2-3 sessions (UI updates) ✅ Complete
+- Phase 7: 1 session (Automatic sync detection) 🚧 In Progress
 
-**Total:** ~10-12 development sessions
+**Total:** ~10-12 development sessions (11 sessions completed so far)
 
 ---
 

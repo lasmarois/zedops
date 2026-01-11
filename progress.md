@@ -165,7 +165,104 @@ This file tracks implementation sessions across all tasks in the ZedOps project.
    - Deployed to Cloudflare: https://zedops.mail-bcf.workers.dev
    - Version ID: 7c3bc62c-1eae-4831-bd74-3042afd6a654
 
-**Next Steps**: Test complete server lifecycle feature in browser
+19. **Phase 6c: Debugging Sync Functionality** ✅
+   - Applied database migration 0005 to production D1 (added data_exists and deleted_at columns)
+   - Rebuilt agent with Phase 2 code (server.checkdata handler)
+   - Fixed multiple issues with sync endpoint:
+     - **Issue 1**: Missing sendMessageWithReply() method implementation
+     - **Issue 2**: Wrong message subject name ('containers.list' → 'container.list')
+     - **Issue 3**: Durable Object hibernation losing WebSocket and registration state
+     - **Issue 4**: CRITICAL - Sync endpoint using wrong DO lookup key (agentId instead of agent.name)
+   - Fixed getActiveWebSocket() to restore state from storage after hibernation
+   - Fixed agents.ts sync endpoint to use agent.name for DO lookup (line 893)
+   - Added comprehensive debug logging for troubleshooting
+   - Sync functionality now working correctly
+
+20. **User Testing Session** ✅
+   - User successfully tested container recovery:
+     - Created server → docker rm container → clicked Start → container recreated
+   - User successfully tested orphaned server cleanup:
+     - Bulk cleanup button removed all orphaned servers from DB
+   - **Discovered remaining issues**:
+     - Issue A: Yellow warning banner still showing (should be removed)
+     - Issue B: "Clean Up Orphaned Servers" button still visible after cleanup
+     - Issue C: Recovered server shows as "missing (recoverable)" instead of "running" in All Servers list
+
+21. **Phase 6d: UI Cleanup** ✅
+   - **Issue A - Removed yellow warning banner** (lines 614-640)
+     - Old orphaned server detection logic no longer needed
+     - All server states now properly tracked in "All Servers" section
+   - **Issue B - Removed "Clean Up Orphaned Servers" button** (lines 596-616)
+     - Bulk cleanup now handled via Purge actions in All Servers section
+     - Removed unused `handleCleanupOrphanedServers()` function
+     - Removed unused `getOrphanedServers()` function
+   - **Issue C - Fixed recovered server status sync** (lines 350-376)
+     - Added manual sync trigger after server start completes
+     - Ensures server status updates from 'missing' to 'running' immediately
+     - Graceful error handling if sync fails
+   - Deployed frontend with all fixes
+   - Version ID: e3930de7-0085-46fa-903f-2187632802a7
+
+**Phase 6 Complete!** All server lifecycle management UI features working correctly.
+
+22. **Bug Fix: Container Labels Not Included in Sync** ✅
+   - **Issue**: Server "jeanguy" showing as "missing (recoverable)" despite container running
+   - **Root Cause**: `ContainerInfo` struct in agent didn't include `Labels` field
+   - **Impact**: Sync logic couldn't match containers to servers via `zedops.server.name` label
+   - **Fix Applied**:
+     - Added `Labels map[string]string` field to `ContainerInfo` struct (docker.go:161)
+     - Updated `ListContainers()` to populate Labels field (docker.go:65)
+     - Rebuilt agent binary
+   - **Verification**: Manual sync now correctly updates server status from "missing" → "running"
+   - Agent automatically syncs on connect, fixing orphaned status immediately
+   - Commit: 38e3ced - "Fix server lifecycle sync: include container labels in ContainerInfo"
+   - Pushed to main branch
+
+23. **Phase 6e: Automatic Sync Detection Investigation**
+   - **User Observation**: Manual sync button feels redundant
+   - **Key Insight**: `docker stop` already detected instantly by UI via container polling
+   - **Question**: Why not detect `docker rm` the same way?
+   - **Investigation Findings**:
+     - Frontend already polls both containers (Docker) and servers (DB) every 5s
+     - `docker stop` shows instantly because container list includes stopped containers
+     - `docker rm` requires sync because server DB record still has `status='running'`
+     - Frontend has all data needed to detect mismatch!
+   - **Solution Designed**: Automatic sync detection via useEffect
+     - Watch for servers with `status='running'` but container missing from Docker
+     - Automatically trigger sync when discrepancy detected
+     - Debounce with 10s cooldown per server to prevent excessive calls
+     - Keep manual sync button for debugging/force refresh
+   - **Documentation Updated**:
+     - Added "Container State Detection Analysis" section to findings_server_lifecycle.md
+     - Documented why `docker stop` appears instant vs `docker rm` needs sync
+     - Explained rejection of Docker Events API approach in favor of smart polling
+     - Implementation code ready in findings file
+   - **Next**: Implement automatic sync detection in ContainerList.tsx
+
+24. **Phase 7: Automatic Sync Detection Implementation** ✅
+   - Added automatic sync detection to ContainerList.tsx
+   - Implementation details:
+     - Added `useRef` hook for debounce tracking (line 55)
+     - Added `useEffect` hook after state declarations (lines 57-100)
+     - Watches for servers with `status='running'` but missing from container list
+     - Automatically triggers sync when discrepancy detected
+     - 10-second debounce per server to prevent excessive sync calls
+     - Error handling with console logging
+   - Changes made:
+     - Updated imports: Added `useEffect` and `useRef` from React
+     - Added `lastSyncRef` for tracking last sync time per server
+     - Automatic sync triggers on container list/server list changes
+   - Built frontend successfully
+   - Deployed to Cloudflare: https://zedops.mail-bcf.workers.dev
+   - Version ID: 6884bd61-4fbe-4297-b86a-713020b2c0e9
+   - **Testing Required**: Manual `docker rm` to verify automatic sync detection
+
+**Next Steps**:
+- Test automatic sync detection with manual `docker rm` commands
+- Verify sync only triggers once per discrepancy
+- Verify 10s debounce works correctly
+- Update progress.md with test results
+- Move planning files to planning-history/server-lifecycle-management/
 
 **Files Created**:
 - `task_plan_server_lifecycle.md`

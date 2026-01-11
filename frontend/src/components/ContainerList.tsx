@@ -2,7 +2,7 @@
  * Container list component for a specific agent
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   useContainers,
   useStartContainer,
@@ -50,6 +50,54 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   } | null>(null);
   const [showDeletedServers, setShowDeletedServers] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
+
+  // Automatic sync detection - detects when containers are deleted via docker rm
+  const lastSyncRef = useRef<{ [serverId: string]: number }>({});
+
+  useEffect(() => {
+    if (!data || !serversData || syncServersMutation.isPending) return;
+
+    const now = Date.now();
+    const containers = data.containers;
+    const servers = serversData.servers;
+
+    // Find servers with missing containers
+    const missingContainers = servers.filter(server => {
+      // Skip transient states
+      if (['creating', 'deleting', 'deleted'].includes(server.status)) {
+        return false;
+      }
+
+      // Server thinks it has a running container
+      if (server.status === 'running' && server.container_id) {
+        // But container doesn't exist
+        return !containers.find(c => c.id === server.container_id);
+      }
+
+      return false;
+    });
+
+    // Trigger sync if discrepancies found
+    if (missingContainers.length > 0) {
+      // Check if we recently synced for these servers (within 10s)
+      const needsSync = missingContainers.some(server => {
+        const lastSync = lastSyncRef.current[server.id] || 0;
+        return now - lastSync > 10000; // 10 second debounce
+      });
+
+      if (needsSync) {
+        console.log('Auto-sync triggered for', missingContainers.length, 'servers');
+        syncServersMutation.mutateAsync({ agentId }).then(() => {
+          // Mark all as synced
+          missingContainers.forEach(server => {
+            lastSyncRef.current[server.id] = now;
+          });
+        }).catch(err => {
+          console.error('Auto-sync failed:', err);
+        });
+      }
+    }
+  }, [data, serversData, agentId, syncServersMutation]);
 
   const handleStart = async (containerId: string) => {
     try {
@@ -229,58 +277,6 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     }
   };
 
-  const handleCleanupOrphanedServers = async () => {
-    const orphanedServers = getOrphanedServers();
-    if (orphanedServers.length === 0) {
-      alert('No orphaned servers to clean up');
-      return;
-    }
-
-    if (!confirm(
-      `Clean up ${orphanedServers.length} orphaned server(s)?\n\n` +
-      `These servers exist in the database but their containers are missing.\n` +
-      `Server data will be preserved.`
-    )) {
-      return;
-    }
-
-    try {
-      let deletedCount = 0;
-      const errors: string[] = [];
-
-      for (const server of orphanedServers) {
-        try {
-          await deleteServerMutation.mutateAsync({
-            agentId,
-            serverId: server.id,
-            removeVolumes: false, // Preserve data
-          });
-          deletedCount++;
-        } catch (error) {
-          errors.push(`Failed to delete ${server.name}`);
-        }
-      }
-
-      if (errors.length > 0) {
-        setServerMessage({
-          message: `Cleaned up ${deletedCount} of ${orphanedServers.length} orphaned servers. Errors: ${errors.join(', ')}`,
-          type: 'error',
-        });
-      } else {
-        setServerMessage({
-          message: `Successfully cleaned up ${deletedCount} orphaned server(s)`,
-          type: 'success',
-        });
-      }
-      setTimeout(() => setServerMessage(null), 5000);
-    } catch (error) {
-      setServerMessage({
-        message: error instanceof Error ? error.message : 'Failed to cleanup orphaned servers',
-        type: 'error',
-      });
-      setTimeout(() => setServerMessage(null), 5000);
-    }
-  };
 
   const handleDeleteServer = async (serverId: string, serverName: string) => {
     if (!confirm(`Delete server "${serverName}"? Container will be removed but data will be preserved.`)) {
@@ -350,6 +346,15 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   const handleServerStart = async (serverId: string, serverName: string) => {
     try {
       const result = await startServerMutation.mutateAsync({ agentId, serverId });
+
+      // Trigger a sync to update server status immediately
+      try {
+        await syncServersMutation.mutateAsync({ agentId });
+      } catch (syncError) {
+        console.warn('Failed to sync after server start:', syncError);
+        // Don't fail the whole operation if sync fails
+      }
+
       setServerMessage({
         message: result.recovered
           ? `Server "${serverName}" container recreated and started successfully`
@@ -471,18 +476,6 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     return serversData?.servers.find((s) => s.container_id === containerId);
   };
 
-  const getOrphanedServers = (): Server[] => {
-    if (!serversData || !data) return [];
-
-    const containerIds = new Set(data.containers.map(c => c.id));
-
-    // Find servers whose container_id doesn't exist in the actual container list
-    return serversData.servers.filter(server => {
-      if (!server.container_id) return true; // No container ID at all
-      return !containerIds.has(server.container_id); // Container ID doesn't exist
-    });
-  };
-
   if (isLoading) {
     return (
       <div style={{ padding: '2rem' }}>
@@ -593,27 +586,6 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                 : `🧹 Clean Up Failed Servers (${serversData.servers.filter(s => s.status === 'failed').length})`}
             </button>
           )}
-          {getOrphanedServers().length > 0 && (
-            <button
-              onClick={handleCleanupOrphanedServers}
-              disabled={deleteServerMutation.isPending}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#dc3545',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                opacity: deleteServerMutation.isPending ? 0.6 : 1,
-              }}
-            >
-              {deleteServerMutation.isPending
-                ? 'Cleaning...'
-                : `⚠️ Clean Up Orphaned Servers (${getOrphanedServers().length})`}
-            </button>
-          )}
         </div>
       </div>
 
@@ -629,34 +601,6 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
           }}
         >
           {serverMessage.message}
-        </div>
-      )}
-
-      {getOrphanedServers().length > 0 && (
-        <div
-          style={{
-            padding: '1rem',
-            marginBottom: '1rem',
-            borderRadius: '4px',
-            backgroundColor: '#fff3cd',
-            color: '#856404',
-            border: '1px solid #ffeeba',
-          }}
-        >
-          <strong>⚠️ Orphaned Servers Detected ({getOrphanedServers().length})</strong>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
-            The following servers exist in the database but their containers are missing:
-          </p>
-          <ul style={{ margin: '0.5rem 0 0 1.5rem', fontSize: '0.875rem' }}>
-            {getOrphanedServers().map(server => (
-              <li key={server.id}>
-                <strong>{server.name}</strong> - Status: {server.status}, Ports: {server.game_port}-{server.udp_port}, RCON: {server.rcon_port}
-              </li>
-            ))}
-          </ul>
-          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
-            Use the "Clean Up Orphaned Servers" button above to remove these database entries.
-          </p>
         </div>
       )}
 

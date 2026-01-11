@@ -99,7 +99,7 @@ export class AgentConnection extends DurableObject {
 
     // Server sync endpoint
     if (url.pathname === "/servers/sync" && request.method === "POST") {
-      return this.handleServerSyncRequest();
+      return this.handleServerSyncRequest(request);
     }
 
     // Server delete endpoint
@@ -347,7 +347,7 @@ export class AgentConnection extends DurableObject {
       console.log(`[AgentConnection] Agent registered: ${agentName} (${agentId})`);
 
       // Send permanent token to agent
-      this.send(createMessage("agent.register.success", {
+      await this.send(createMessage("agent.register.success", {
         agentId,
         token: permanentToken,
         message: "Registration successful",
@@ -480,12 +480,96 @@ export class AgentConnection extends DurableObject {
   }
 
   /**
+   * Get the active WebSocket connection (handles hibernation)
+   * Also restores agent state from storage if needed
+   */
+  private async getActiveWebSocket(): Promise<WebSocket | null> {
+    // Try instance variable first (performance optimization)
+    if (this.ws && this.isRegistered) {
+      return this.ws;
+    }
+
+    console.log(`[AgentConnection] getActiveWebSocket: ws=${!!this.ws}, isRegistered=${this.isRegistered}, agentId=${this.agentId}`);
+
+    // Fallback to ctx.getWebSockets() for hibernation scenarios
+    const sockets = this.ctx.getWebSockets();
+    console.log(`[AgentConnection] getActiveWebSocket: found ${sockets.length} sockets`);
+
+    if (sockets.length > 0) {
+      // Update instance variable for future calls
+      this.ws = sockets[0];
+
+      // Restore agent state from storage if not already registered
+      if (!this.isRegistered) {
+        console.log(`[AgentConnection] Attempting to restore state from storage...`);
+        const storedAgentId = await this.ctx.storage.get<string>('agentId');
+        const storedAgentName = await this.ctx.storage.get<string>('agentName');
+        console.log(`[AgentConnection] Storage read: agentId=${storedAgentId}, agentName=${storedAgentName}`);
+
+        if (storedAgentId && storedAgentName) {
+          this.agentId = storedAgentId;
+          this.agentName = storedAgentName;
+          this.isRegistered = true;
+          console.log(`[AgentConnection] Restored agent state from storage: ${storedAgentName} (${storedAgentId})`);
+        } else {
+          console.error(`[AgentConnection] Failed to restore state: agentId or agentName not found in storage`);
+        }
+      }
+
+      return sockets[0];
+    }
+
+    console.log(`[AgentConnection] No WebSocket found`);
+    return null;
+  }
+
+  /**
    * Send a message to the agent
    */
-  private send(message: Message): void {
-    if (this.ws) {
-      this.ws.send(JSON.stringify(message));
+  private async send(message: Message): Promise<void> {
+    const ws = await this.getActiveWebSocket();
+    if (ws) {
+      ws.send(JSON.stringify(message));
     }
+  }
+
+  /**
+   * Send a message to the agent and wait for a reply
+   * Returns a promise that resolves with the reply message
+   */
+  private async sendMessageWithReply(message: { subject: string; data: any }, timeout: number = 10000): Promise<Message> {
+    const ws = await this.getActiveWebSocket();
+    if (!ws || !this.isRegistered) {
+      throw new Error("Agent not connected");
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout
+      const timeoutId = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error(`Request timeout after ${timeout}ms`));
+      }, timeout);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeoutId);
+        resolve(msg);
+      });
+    });
+
+    // Send request to agent with reply inbox
+    this.send({
+      subject: message.subject,
+      data: message.data,
+      reply: inbox,
+      timestamp: Date.now(),
+    });
+
+    return replyPromise;
   }
 
   /**
@@ -926,14 +1010,15 @@ export class AgentConnection extends DurableObject {
         console.log(`[AgentConnection] Starting log stream for container ${containerId} on agent`);
 
         // Check if agent is connected
-        if (!this.ws) {
+        const agentWs = await this.getActiveWebSocket();
+        if (!agentWs) {
           console.error(`[AgentConnection] Cannot start log stream: agent not connected`);
           ws.send(JSON.stringify(createMessage("log.stream.error", {
             containerId,
             error: "Agent not connected",
           })));
         } else {
-          this.send(createMessage("log.stream.start", {
+          await this.send(createMessage("log.stream.start", {
             containerId,
             tail: 1000,
             follow: true,
@@ -1330,9 +1415,11 @@ export class AgentConnection extends DurableObject {
   /**
    * Handle server sync request from API
    */
-  private async handleServerSyncRequest(): Promise<Response> {
+  private async handleServerSyncRequest(request: Request): Promise<Response> {
     try {
-      const result = await this.syncServers();
+      // Get agentId from header (passed from agents.ts route)
+      const agentId = request.headers.get('X-Agent-Id');
+      const result = await this.syncServers(agentId);
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -1352,22 +1439,23 @@ export class AgentConnection extends DurableObject {
    * Sync server statuses with actual container and data existence
    * Returns: { success: boolean, servers: Server[], synced: number }
    */
-  private async syncServers(): Promise<any> {
-    // Load agentId from storage if not in memory (DO may have hibernated)
-    if (!this.agentId) {
-      this.agentId = await this.ctx.storage.get<string>('agentId') || null;
-      this.agentName = await this.ctx.storage.get<string>('agentName') || null;
-    }
+  private async syncServers(agentId: string | null = null): Promise<any> {
+    // Use provided agentId (from header) or fall back to instance state
+    const effectiveAgentId = agentId || this.agentId;
 
-    if (!this.agentId) {
+    if (!effectiveAgentId) {
       throw new Error("Cannot sync: no agent ID");
     }
+
+    // Note: We don't check this.ws here because during deployments,
+    // the HTTP request might hit a different DO instance than the one
+    // with the WebSocket. The sendMessageWithReply will fail gracefully if not connected.
 
     // Query all servers for this agent
     const serversResult = await this.env.DB.prepare(
       `SELECT * FROM servers WHERE agent_id = ?`
     )
-      .bind(this.agentId)
+      .bind(effectiveAgentId)
       .all();
 
     const servers = serversResult.results;
@@ -1375,11 +1463,11 @@ export class AgentConnection extends DurableObject {
       return { success: true, servers: [], synced: 0 };
     }
 
-    console.log(`[Sync] Syncing ${servers.length} servers for agent ${this.agentId}`);
+    console.log(`[Sync] Syncing ${servers.length} servers for agent ${effectiveAgentId}`);
 
     // Query agent for container list
     const containersResponse = await this.sendMessageWithReply({
-      subject: 'containers.list',
+      subject: 'container.list',  // Note: singular "container" not "containers"
       data: {},
     }, 10000);
 
@@ -1461,7 +1549,7 @@ export class AgentConnection extends DurableObject {
     const updatedServersResult = await this.env.DB.prepare(
       `SELECT * FROM servers WHERE agent_id = ? ORDER BY created_at DESC`
     )
-      .bind(this.agentId)
+      .bind(effectiveAgentId)
       .all();
 
     const updatedServers = updatedServersResult.results.map((row: any) => ({

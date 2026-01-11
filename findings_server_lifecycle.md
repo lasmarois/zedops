@@ -343,14 +343,167 @@ func (dc *DockerClient) CheckServerData(serverName, dataPath string) ServerDataS
 
 ---
 
+## Container State Detection Analysis (Post-Implementation)
+
+**Context**: After implementing Phases 1-6, user observed that `docker stop` is detected instantly in UI, but `docker rm` requires manual sync button.
+
+### Current Polling Mechanism
+
+**Frontend Hooks** (`frontend/src/hooks/`):
+- `useContainers()`: Polls `GET /api/agents/:id/containers` every 5s (useContainers.ts:24)
+- `useServers()`: Polls `GET /api/agents/:id/servers` every 5s (useServers.ts:31)
+
+**Two Data Streams**:
+1. **Containers** → Queries Docker directly via agent → Live container state
+2. **Servers** → Queries D1 database → Stored server state
+
+### Why `docker stop` Appears Instant
+
+**Path**: Docker → Agent → Manager DO → Frontend
+- Container list endpoint returns stopped containers with `state='exited'`
+- Frontend renders container state directly from Docker response
+- This is showing **container state** from Docker, not **server status** from DB
+- No database update required
+
+**UI Behavior**:
+- Shows "State: exited" badge immediately
+- Shows "Start" button (container-level operation)
+- Server status in DB still shows `'running'` until sync
+
+### Why `docker rm` Needs Manual Sync
+
+**What Happens**:
+1. Container deleted from Docker
+2. Container disappears from `GET /containers` response
+3. Server record in DB still has:
+   - `status='running'`
+   - `container_id=<deleted-container-id>`
+4. Frontend shows server in "All Servers" list with wrong status
+5. Manual sync button triggers status update
+
+**Database Sync Required**:
+- Update `status` to `'missing'`
+- Update `data_exists` based on directory check
+- Clear stale `container_id` reference (optional)
+
+### Automatic Sync Detection Solution
+
+**Key Insight**: Frontend already has all data needed to detect discrepancy!
+
+**Detection Logic**:
+```typescript
+// Frontend receives both:
+containers: Container[]  // From Docker (every 5s)
+servers: Server[]        // From DB (every 5s)
+
+// Detect servers with missing containers:
+servers.filter(server => {
+  // Server claims to be running with a container
+  if (server.status === 'running' && server.container_id) {
+    // But container doesn't exist in Docker
+    return !containers.find(c => c.id === server.container_id);
+  }
+  return false;
+});
+
+// Automatically trigger sync when discrepancy detected
+```
+
+**Implementation Approach**:
+1. Add `useEffect()` in ContainerList.tsx
+2. Watch for mismatches between servers and containers data
+3. Automatically call `syncServersMutation` when mismatch detected
+4. Debounce to avoid excessive sync calls
+5. Track last sync time to prevent re-syncing same issue
+
+**Benefits**:
+- No manual sync button needed
+- Feels as responsive as `docker stop` detection
+- Uses existing polling mechanism
+- No new backend infrastructure required
+- Minimal frontend code (~20 lines)
+
+**Edge Cases to Handle**:
+- Don't sync during `creating` or `deleting` states (transient)
+- Don't sync if already syncing (prevent duplicate calls)
+- Don't sync immediately after user action (wait for DB update)
+- Only sync once per discrepancy (use ref to track)
+
+### Why This Works Better Than Event Monitoring
+
+**Rejected Approach**: Docker Events API
+- Requires agent to monitor Docker daemon events
+- Need WebSocket push from agent to manager
+- Complex state management (which DO instance to notify)
+- Adds latency (event → agent → manager → DO → DB → frontend)
+
+**Chosen Approach**: Smart Polling
+- Already polling both data sources every 5s
+- Frontend can detect discrepancy immediately
+- Sync only when needed (not every 5s)
+- Reuses existing infrastructure
+- Simple to implement and debug
+
+### Implementation Location
+
+**File**: `frontend/src/components/ContainerList.tsx`
+
+**Add After Line 52** (after state declarations):
+```typescript
+// Automatic sync detection
+const lastSyncRef = useRef<{ [serverId: string]: number }>({});
+
+useEffect(() => {
+  if (!data || !serversData || syncServersMutation.isPending) return;
+
+  const now = Date.now();
+  const containers = data.containers;
+  const servers = serversData.servers;
+
+  // Find servers with missing containers
+  const missingContainers = servers.filter(server => {
+    // Skip transient states
+    if (['creating', 'deleting', 'deleted'].includes(server.status)) {
+      return false;
+    }
+
+    // Server thinks it has a running container
+    if (server.status === 'running' && server.container_id) {
+      // But container doesn't exist
+      return !containers.find(c => c.id === server.container_id);
+    }
+
+    return false;
+  });
+
+  // Trigger sync if discrepancies found
+  if (missingContainers.length > 0) {
+    // Check if we recently synced for these servers (within 10s)
+    const needsSync = missingContainers.some(server => {
+      const lastSync = lastSyncRef.current[server.id] || 0;
+      return now - lastSync > 10000; // 10 second debounce
+    });
+
+    if (needsSync) {
+      console.log('Auto-sync triggered for', missingContainers.length, 'servers');
+      syncServersMutation.mutateAsync({ agentId }).then(() => {
+        // Mark all as synced
+        missingContainers.forEach(server => {
+          lastSyncRef.current[server.id] = now;
+        });
+      });
+    }
+  }
+}, [data, serversData, agentId, syncServersMutation]);
+```
+
+**Outcome**: Manual sync button becomes optional (keep for debugging/force refresh)
+
+---
+
 ## Next Steps
 
-Implement in order:
-1. Database migration (Phase 1)
-2. Agent data checking (Phase 2)
-3. Status sync endpoint (Phase 3)
-4. Container recreation (Phase 4)
-5. Soft delete/purge/restore (Phase 5)
-6. UI overhaul (Phase 6)
-
-**Estimated**: 5 implementation sessions
+All phases implemented (1-6). Final enhancement:
+- Add automatic sync detection to eliminate manual sync button
+- Update progress.md with final session notes
+- Archive planning files to `planning-history/server-lifecycle-management/`

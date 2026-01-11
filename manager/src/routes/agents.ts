@@ -878,9 +878,9 @@ agents.post('/:id/servers/sync', async (c) => {
   const agentId = c.req.param('id');
 
   try {
-    // Verify agent exists
+    // Verify agent exists and get name
     const agent = await c.env.DB.prepare(
-      `SELECT id FROM agents WHERE id = ?`
+      `SELECT id, name FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -889,12 +889,15 @@ agents.post('/:id/servers/sync', async (c) => {
       return c.json({ error: 'Agent not found' }, 404);
     }
 
-    // Get AgentConnection DO and call its sync endpoint
-    const doId = c.env.AGENT_CONNECTION.idFromName(agentId);
+    // Get AgentConnection DO using agent NAME (not ID)
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
     const stub = c.env.AGENT_CONNECTION.get(doId);
 
     const syncResponse = await stub.fetch('http://internal/servers/sync', {
       method: 'POST',
+      headers: {
+        'X-Agent-Id': agentId, // Pass agentId via header
+      },
     });
 
     if (!syncResponse.ok) {
