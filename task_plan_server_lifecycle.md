@@ -2,7 +2,7 @@
 
 **Goal:** Make the manager the source of truth for server state, with robust recovery and delete operations
 
-**Status:** Phase 1-6 Complete, Phase 7 In Progress
+**Status:** ✅ Complete (All Phases 1-7)
 **Priority:** High (architectural improvement discovered during port validation work)
 **Created:** 2026-01-10
 **Last Updated:** 2026-01-11
@@ -350,9 +350,12 @@ State Badges:
 - [x] Import `useRef` from React for debounce tracking
 - [x] Implement mismatch detection logic
 - [x] Implement automatic sync trigger with debounce
-- [ ] Test with manual `docker rm` commands
-- [ ] Verify sync only triggers once per discrepancy
+- [x] Test with manual `docker rm` commands
+- [x] Verify sync only triggers once per discrepancy
 - [x] Keep manual sync button for debugging/force refresh
+- [x] Extended to detect `docker stop` state changes
+- [x] Extended to detect `docker start` state changes
+- [x] User testing confirmed all three cases working
 
 **Files to Modify:**
 - `frontend/src/components/ContainerList.tsx` - Add automatic sync detection
@@ -433,7 +436,8 @@ useEffect(() => {
 - [ ] Soft-deleted servers auto-purge after 24h (configurable) - Not implemented yet
 - [x] Port allocations preserved until server is purged
 - [x] All server operations work regardless of container state
-- [ ] Container deletion automatically detected without manual sync button (Phase 7)
+- [x] Container deletion automatically detected without manual sync button (Phase 7)
+- [x] Container stop/start automatically detected and synced (Phase 7)
 
 ---
 
@@ -552,9 +556,11 @@ useEffect(() => {
 - Phase 4: 2 sessions (Container creation from config) ✅ Complete
 - Phase 5: 2 sessions (Soft delete + purge) ✅ Complete
 - Phase 6: 2-3 sessions (UI updates) ✅ Complete
-- Phase 7: 1 session (Automatic sync detection) 🚧 In Progress
+- Phase 7: 1 session (Automatic sync detection) ✅ Complete
 
-**Total:** ~10-12 development sessions (11 sessions completed so far)
+**Total:** ~10-12 development sessions (11 sessions completed)
+
+**Actual Implementation:** Session 10 (2026-01-10 to 2026-01-11)
 
 ---
 

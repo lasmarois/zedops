@@ -61,17 +61,41 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     const containers = data.containers;
     const servers = serversData.servers;
 
-    // Find servers with missing containers
+    console.log('[Auto-sync] Checking for mismatches...', {
+      containerCount: containers.length,
+      serverCount: servers.length,
+      containerIds: containers.map(c => c.id.substring(0, 12)),
+      servers: servers.map(s => ({ name: s.name, status: s.status, containerId: s.container_id?.substring(0, 12) }))
+    });
+
+    // Find servers with container state mismatches
     const missingContainers = servers.filter(server => {
       // Skip transient states
       if (['creating', 'deleting', 'deleted'].includes(server.status)) {
         return false;
       }
 
-      // Server thinks it has a running container
-      if (server.status === 'running' && server.container_id) {
-        // But container doesn't exist
-        return !containers.find(c => c.id === server.container_id);
+      if (!server.container_id) {
+        return false; // Server never had a container
+      }
+
+      const container = containers.find(c => c.id === server.container_id);
+
+      // Case 1: Container deleted (missing from list)
+      if (!container) {
+        console.log(`[Auto-sync] Server ${server.name}: container DELETED (status=${server.status}, containerId=${server.container_id.substring(0, 12)})`);
+        return true;
+      }
+
+      // Case 2: Status mismatch (e.g., server='running' but container='exited')
+      if (server.status === 'running' && (container.state === 'exited' || container.state === 'stopped')) {
+        console.log(`[Auto-sync] Server ${server.name}: status mismatch (server='running', container='${container.state}')`);
+        return true;
+      }
+
+      if (server.status === 'stopped' && container.state === 'running') {
+        console.log(`[Auto-sync] Server ${server.name}: status mismatch (server='stopped', container='running')`);
+        return true;
       }
 
       return false;

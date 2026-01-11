@@ -499,11 +499,50 @@ useEffect(() => {
 
 **Outcome**: Manual sync button becomes optional (keep for debugging/force refresh)
 
+### Implementation Results (Post-Testing)
+
+**Initial Implementation** (befd7ff):
+- ✅ Detected container deletion (`docker rm`)
+- ❌ Did NOT detect container stop (`docker stop`)
+
+**Issue Discovered**: Detection only checked for missing containers, not state mismatches.
+
+**Extended Implementation** (4ca4249b):
+- ✅ Case 1: Container deleted (missing from list)
+- ✅ Case 2: Server='running' but container='exited/stopped'
+- ✅ Case 3: Server='stopped' but container='running'
+
+**Final Detection Logic**:
+```typescript
+const container = containers.find(c => c.id === server.container_id);
+
+// Case 1: Container deleted
+if (!container) return true;
+
+// Case 2: Status mismatch (running → stopped)
+if (server.status === 'running' && (container.state === 'exited' || container.state === 'stopped')) {
+  return true;
+}
+
+// Case 3: Status mismatch (stopped → running)
+if (server.status === 'stopped' && container.state === 'running') {
+  return true;
+}
+```
+
+**User Testing Results**:
+- `docker rm <container>` → Auto-sync within 5-10s, status → 'missing'
+- `docker stop <container>` → Auto-sync within 5-10s, status → 'stopped'
+- `docker start <container>` → Auto-sync within 5-10s, status → 'running'
+- Debounce working correctly (no duplicate syncs within 10s)
+- Manual sync button still available for force refresh
+
+**Performance**: Detection happens during existing 5s polling cycle, no additional backend load.
+
 ---
 
 ## Next Steps
 
-All phases implemented (1-6). Final enhancement:
-- Add automatic sync detection to eliminate manual sync button
-- Update progress.md with final session notes
-- Archive planning files to `planning-history/server-lifecycle-management/`
+All phases implemented (1-7) and tested. Ready to archive:
+- Move planning files to `planning-history/server-lifecycle-management/`
+- Update main task_plan.md to reference completed work
