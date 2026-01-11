@@ -109,29 +109,46 @@
 
 ---
 
-## Milestone 4: Server Management ⏳ Planned
+## Milestone 4: Server Management ✅ Complete
 
 **Goal:** Full server lifecycle management (create, configure, deploy, delete)
 
-**Duration:** 2-3 weeks
+**Duration:** 2 days (2026-01-10 to 2026-01-11)
 
 **Deliverables:**
-- UI form to create new Zomboid server
-- ENV variable configuration (reads from steam-zomboid .env.template)
-- Manager sends server config to agent
-- Agent generates docker-compose.yml
-- Agent deploys container using steam-zomboid image
-- Delete server functionality
+- ✅ UI form to create new Zomboid server
+- ✅ ENV variable configuration (server name, passwords, beta branch)
+- ✅ Manager sends server config to agent
+- ✅ Agent uses Docker SDK directly (not docker-compose)
+- ✅ Agent deploys container using steam-zomboid image
+- ✅ Delete server functionality (soft delete + purge)
 
 **Success Criteria:**
-- User fills form → Server created on agent's machine
-- Server appears in UI with correct config
-- Server starts successfully with configured ENV vars
-- User can delete server → Container removed cleanly
+- ✅ User fills form → Server created on agent's machine
+- ✅ Server appears in UI with correct config
+- ✅ Server starts successfully with configured ENV vars
+- ✅ User can delete server → Container removed cleanly
+
+**Additional Features Delivered:**
+- ✅ Port validation with conflict detection and auto-suggestion
+- ✅ Soft delete with 24h retention period
+- ✅ Server recovery from accidental container deletion
+- ✅ Rebuild, start/stop, restore functionality
+- ✅ Automatic status sync (docker rm/stop/start detected within 5-10s)
+- ✅ Edit & Retry for failed servers
+- ✅ Beta branch selector (stable, build42, iwillbackupmysave, etc.)
+- ✅ State-specific UI actions based on server status
 
 **Dependencies:** Milestone 3 (Log Streaming)
 
-**Planning:** *(not started)*
+**Planning:** [task_plan.md](task_plan.md) | [planning-history/server-lifecycle-management/](planning-history/server-lifecycle-management/)
+
+**Completed:** 2026-01-11
+
+**Future Enhancements (deferred):**
+- Edit server config after creation
+- 24h auto-purge for soft-deleted servers
+- Mod management UI (Milestone 8)
 
 ---
 
@@ -304,14 +321,14 @@
 | M1: Agent Connection | 1-2 weeks | 1 day | ✅ Complete |
 | M2: Container Control | 2 weeks | 1 day | ✅ Complete |
 | M3: Log Streaming | 1 week | 1 day | ✅ Complete |
-| M4: Server Management | 2-3 weeks | TBD | 🚧 In Progress |
+| M4: Server Management | 2-3 weeks | 2 days | ✅ Complete |
 | M5: Agent Installation & System Service | 3-5 days | TBD | ⏳ Planned |
 | M6: RCON Integration | 2 weeks | TBD | ⏳ Planned |
 | M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 3/7 core milestones complete (43%) in 1 day 🎉
+**Progress:** 4/7 core milestones complete (57%) in 2 days 🎉
 
-**Total to MVP:** ~12 weeks estimated → TBD actual
+**Total to MVP:** ~12 weeks estimated → ~1-2 weeks actual (at current pace)
 
 **Note:** Initial estimates were conservative. With planning-with-files pattern and focused implementation sessions, Milestones 1-3 were completed much faster than expected. Future milestones may follow similar acceleration.
 
@@ -319,13 +336,16 @@
 
 ## Current Status
 
-**Active Milestone:** Ready for Milestone 4 - Server Management 🎯
+**Active Milestone:** Ready for Milestone 5 or 6 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
 - ✅ Milestone 2 - Container Control (2026-01-10)
 - ✅ Milestone 3 - Log Streaming (2026-01-10)
+- ✅ Milestone 4 - Server Management (2026-01-10 to 2026-01-11)
 
-**Next Up:** Milestone 4 - Server Management
+**Next Up:** Choose between:
+- **Milestone 5** - Agent Installation & System Service (production-ready deployment)
+- **Milestone 6** - RCON Integration (server administration features)
 
-**Current Planning:** Planning files will be created when Milestone 4 begins
+**Current Planning:** Milestone 4 complete, ready for next phase
