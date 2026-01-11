@@ -8,7 +8,7 @@
 - Server starts successfully with configured ENV vars
 - User can delete server → Container removed cleanly
 
-**Status:** ✅ Feature Complete - Ready for Testing
+**Status:** ✅ Complete (All deliverables implemented and tested)
 **Started:** 2026-01-10
 **Completed:** 2026-01-11
 
@@ -264,6 +264,17 @@ CREATE TABLE servers (
 - [x] Start/Stop controls
 - [x] Server status badges with state-specific actions
 - [x] Automatic status sync detection
+
+**Remaining Tasks for Phase 4:**
+- [x] Add beta branch selector to server creation form
+  - [x] Add BETA_BRANCH dropdown (none, build42, iwillbackupmysave, etc.)
+  - [x] Pass BETA_BRANCH in server config ENV
+  - [x] Display beta branch in server list (passed via ENV to agent)
+
+**Future Enhancements (deferred):**
+- [ ] Edit server config after creation (update ENV vars, recreate container)
+- [ ] Mod management UI (part of Milestone 8)
+- [ ] Advanced server settings (memory limits, CPU allocation)
 
 **Files to Create:**
 - frontend/src/components/ServerForm.tsx

@@ -20,6 +20,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
 
   const [serverName, setServerName] = useState(editServer?.name || '');
   const [imageTag, setImageTag] = useState(editServer?.image_tag || 'latest');
+  const [betaBranch, setBetaBranch] = useState(editConfig?.BETA_BRANCH || 'none');
   const [serverPublicName, setServerPublicName] = useState(editConfig?.SERVER_PUBLIC_NAME || '');
   const [adminPassword, setAdminPassword] = useState(editConfig?.ADMIN_PASSWORD || '');
   const [serverPassword, setServerPassword] = useState(editConfig?.SERVER_PASSWORD || '');
@@ -68,6 +69,11 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
       ADMIN_PASSWORD: adminPassword,
       SERVER_PASSWORD: serverPassword,
     };
+
+    // Add beta branch if specified (don't add if "none")
+    if (betaBranch && betaBranch !== 'none') {
+      config.BETA_BRANCH = betaBranch;
+    }
 
     const request: CreateServerRequest = {
       name: serverName,
@@ -209,6 +215,37 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
               <option value="2.0.1">2.0.1</option>
               <option value="2.0.0">2.0.0</option>
             </select>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label
+              htmlFor="betaBranch"
+              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
+            >
+              Beta Branch
+            </label>
+            <select
+              id="betaBranch"
+              value={betaBranch}
+              onChange={(e) => setBetaBranch(e.target.value)}
+              disabled={isSubmitting}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                fontSize: '1rem',
+              }}
+            >
+              <option value="none">None (Stable)</option>
+              <option value="build42">build42 (Unstable Build 42)</option>
+              <option value="iwillbackupmysave">iwillbackupmysave (Build 41 Multiplayer)</option>
+              <option value="b41multiplayer">b41multiplayer (Build 41 MP Beta)</option>
+              <option value="unstable">unstable (Latest Unstable)</option>
+            </select>
+            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+              Select game beta branch from Steam. Leave as "None" for stable release.
+            </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
