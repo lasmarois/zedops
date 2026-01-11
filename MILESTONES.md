@@ -177,65 +177,58 @@
 
 ---
 
-## Milestone 5: Agent Installation & System Service ⏳ Planned
+## Milestone 5: Host Metrics Display ⏳ Planned
 
-**Goal:** Agent runs as native system service on host (not containerized), with proper installation script
+**Goal:** Display agent host resource usage (CPU, memory, disk) in UI
 
-**Duration:** 3-5 days
+**Duration:** 4-6 hours (1 session)
 
-**Why This Matters:**
-- ✅ Fixes port checking (no network namespace isolation)
-- ✅ Enables host metrics collection (CPU, RAM, disk)
-- ✅ Matches architecture specification (single binary deployment)
-- ✅ Production-ready deployment model
-- ✅ Cross-platform support (Linux, Windows, macOS)
+**Rationale:**
+Focus on product core features before deployment polish. Agent already runs natively on host and has full network access. Port checking works. Installation scripts and systemd services are deferred for later polish phase (see Milestone 8).
 
 **Deliverables:**
-- Single compiled Go binary (cross-platform)
-- Build script using Docker (builds binary, extracts to host)
-- Installation script (`curl | bash` style for Linux)
-- Systemd service file (Linux)
-- Agent runs on host with full network access
-- Host metrics collection (CPU, RAM, disk, network)
-- Agent metrics endpoint (`/metrics` for Prometheus-style monitoring)
+- Agent collects host metrics (CPU, RAM, disk usage)
+- Agent sends metrics to manager via message protocol
+- Manager stores metrics in Durable Object state
+- UI displays metrics with visual indicators (progress bars/badges)
+- Metrics refresh automatically with existing polling
 
 **Success Criteria:**
-- User runs: `curl -sSL https://zedops.example.com/install.sh | sudo bash`
-- Script downloads agent binary for correct OS/arch
-- Prompts for registration token (from UI)
-- Installs as systemd service (auto-start on boot)
-- Agent connects to manager successfully
-- Port checking detects actual host-level bindings
-- Agent reports host metrics to manager
-- Service survives reboot (auto-restart)
+- Agent reports CPU percentage, memory usage, disk space
+- Manager receives and stores latest metrics
+- UI shows metrics prominently in agent details view
+- Metrics update within 10-15 seconds (existing polling interval)
+- Visual indicators show resource health (green/yellow/red)
 
 **Current State:**
-- ❌ Agent runs in Docker container (dev mode)
-- ❌ Network namespace isolation breaks port checking
-- ❌ No host metrics collection
-- ✅ Docker used to BUILD binary (good pattern)
+- ✅ Agent runs natively on host (single binary, manual start)
+- ✅ Port checking works (3-layer validation via /proc/net)
+- ✅ Full network access (no Docker isolation)
+- ❌ No host metrics collection yet
+- ❌ No metrics display in UI
 
 **Implementation Plan:**
-1. Create build script (`scripts/build-agent.sh`)
-   - Uses Docker to compile Go binary
-   - Extracts binary from container to host
-   - Cross-compile for Linux/Windows/macOS
-2. Create systemd service file (`agent/zedops-agent.service`)
-3. Create installation script (`install.sh`)
-   - Detects OS and architecture
-   - Downloads appropriate binary
-   - Prompts for token and agent name
-   - Installs systemd service
-   - Starts agent
-4. Add host metrics collection to agent
-   - CPU usage, memory, disk space
-   - Network stats
-   - Running processes count
-5. Update manager to display agent metrics
+1. **Phase 1: Agent Metrics Collection** (~2-3 hours)
+   - Add metrics collection in `agent/main.go` using Go runtime package
+   - CPU: via runtime.NumCPU() and /proc/stat
+   - Memory: via runtime.MemStats and /proc/meminfo
+   - Disk: via syscall.Statfs() for /var/lib/zedops/
+   - Send metrics with agent heartbeat or new message type
 
-**Dependencies:** None (can run in parallel with Milestone 4)
+2. **Phase 2: Manager Storage & API** (~1 hour)
+   - Store metrics in Durable Object state (latest values only)
+   - Add GET /api/agents/:id/metrics endpoint (or include in existing agent details)
+   - Handle metric updates from agent messages
 
-**Planning:** [task_plan_agent_installation.md](task_plan_agent_installation.md) *(to be created)*
+3. **Phase 3: UI Display** (~1-2 hours)
+   - Add metrics section in ContainerList or AgentDetails component
+   - Progress bars or badges for CPU/memory/disk
+   - Color-coded thresholds (green <70%, yellow 70-90%, red >90%)
+   - Auto-refresh with existing polling
+
+**Dependencies:** None
+
+**Planning:** [planning-history/milestone-5-host-metrics/](planning-history/milestone-5-host-metrics/) *(to be created)*
 
 ---
 
@@ -289,28 +282,62 @@
 
 ---
 
+## Milestone 8: Agent Deployment & Polish ⏳ Deferred
+
+**Goal:** Production-ready agent deployment with installation automation
+
+**Duration:** 3-5 days
+
+**Rationale:**
+Deferred until after core product features are complete and UI is styled. Agent already runs natively on host as a single binary. This milestone focuses on deployment convenience and multi-platform support.
+
+**Deliverables:**
+- Cross-platform build script (Linux, Windows, macOS)
+- Installation script (`curl | bash` style for Linux)
+- Systemd service file (Linux)
+- Windows service configuration
+- Agent auto-update mechanism
+- UI "Install Agent" button with copy-to-clipboard command
+- Multi-arch support (amd64, arm64)
+
+**Success Criteria:**
+- User runs: `curl -sSL https://zedops.example.com/install.sh | sudo bash`
+- Script downloads agent binary for correct OS/arch
+- Prompts for registration token (from UI)
+- Installs as systemd service (auto-start on boot)
+- Agent connects to manager successfully
+- Service survives reboot (auto-restart)
+- Agent can auto-update when new version released
+
+**Dependencies:** Milestone 5 (Host Metrics) and Milestone 6 (RCON)
+
+**Planning:** *(not started)*
+
+---
+
 ## Future Milestones (Ideas)
 
-### Milestone 8: Mod Management UI
+### Milestone 9: Mod Management UI
 - UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)
 - Mod browser (popular mods with descriptions)
 - One-click mod installation
 
-### Milestone 9: Server Metrics & Monitoring
-- Agent reports CPU, memory, disk usage (partially covered in M5)
+### Milestone 10: Server Metrics & Monitoring
+- Server-level CPU, memory, disk usage (per-container)
 - UI dashboards with charts
 - Alerts for resource thresholds
 - Historical metrics storage
 
-### Milestone 10: Backup & Restore
+### Milestone 11: Backup & Restore
 - Automated server backups
 - Backup schedule configuration
 - One-click restore from backup
 
-### Milestone 11: Agent Auto-Update
+### Milestone 12: Agent Auto-Update
 - Manager notifies agents of new version
 - Agent downloads and replaces binary
 - Graceful restart without losing connections
+- Rollback on failure
 
 ---
 
@@ -322,13 +349,16 @@
 | M2: Container Control | 2 weeks | 1 day | ✅ Complete |
 | M3: Log Streaming | 1 week | 1 day | ✅ Complete |
 | M4: Server Management | 2-3 weeks | 2 days | ✅ Complete |
-| M5: Agent Installation & System Service | 3-5 days | TBD | ⏳ Planned |
-| M6: RCON Integration | 2 weeks | TBD | ⏳ Planned |
+| M5: Host Metrics Display | 4-6 hours | TBD | ⏳ Planned |
+| M6: RCON Integration | 1-2 weeks | TBD | ⏳ Planned |
 | M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
+| M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 
-**Progress:** 4/7 core milestones complete (57%) in 2 days 🎉
+**Progress:** 4/8 core milestones complete (50%) in 2 days 🎉
 
-**Total to MVP:** ~12 weeks estimated → ~1-2 weeks actual (at current pace)
+**Next Focus:** M5 (Host Metrics) → M6 (RCON) → M7 (RBAC) → M8 (Deployment Polish)
+
+**Total to MVP:** ~12 weeks estimated → ~2-3 weeks actual (at current pace)
 
 **Note:** Initial estimates were conservative. With planning-with-files pattern and focused implementation sessions, Milestones 1-3 were completed much faster than expected. Future milestones may follow similar acceleration.
 
@@ -336,7 +366,7 @@
 
 ## Current Status
 
-**Active Milestone:** Ready for Milestone 5 or 6 🎯
+**Active Milestone:** Ready for Milestone 5 (Host Metrics) 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -344,8 +374,12 @@
 - ✅ Milestone 3 - Log Streaming (2026-01-10)
 - ✅ Milestone 4 - Server Management (2026-01-10 to 2026-01-11)
 
-**Next Up:** Choose between:
-- **Milestone 5** - Agent Installation & System Service (production-ready deployment)
+**Next Up:**
+- **Milestone 5** - Host Metrics Display (4-6 hours, focus on product core)
 - **Milestone 6** - RCON Integration (server administration features)
+- **Milestone 7** - RBAC & Audit Logs (multi-user support)
 
-**Current Planning:** Milestone 4 complete, ready for next phase
+**Deferred:**
+- **Milestone 8** - Agent Deployment & Polish (installation automation, deferred until UI styling complete)
+
+**Current Planning:** Milestone 4 archived, ready to start M5

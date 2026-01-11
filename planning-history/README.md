@@ -61,38 +61,78 @@ git commit -m "Complete Milestone 1: Agent Connection"
 ## Session Index
 
 ### Milestone 1: Agent Connection
-**Status:** ⏳ Not Started
-**Planning:** *(not started)*
+**Status:** ✅ Complete (2026-01-10)
+**Planning:** [milestone-1-agent-connection/](milestone-1-agent-connection/)
 
 **Goal:** Establish WebSocket connection between agent and manager using NATS-inspired message protocol.
+
+**Key Achievements:**
+- WebSocket connection with Durable Objects
+- NATS-inspired message protocol (subject-based routing)
+- Agent registration flow (ephemeral → permanent token)
+- Reconnection logic with exponential backoff
 
 ---
 
 ### Milestone 2: Container Control
-**Status:** ⏳ Not Started
-**Planning:** *(not started)*
+**Status:** ✅ Complete (2026-01-10)
+**Planning:** [milestone-2-container-control/](milestone-2-container-control/)
 
 **Goal:** Agent can list and control Docker containers via manager commands.
+
+**Key Achievements:**
+- Docker SDK integration in Go agent
+- Start/stop/restart commands via WebSocket
+- Real-time status updates (5s polling)
+- Container filtering by labels
 
 ---
 
 ### Milestone 3: Log Streaming
-**Status:** ⏳ Not Started
-**Planning:** *(not started)*
+**Status:** ✅ Complete (2026-01-10)
+**Planning:** [milestone-3-log-streaming/](milestone-3-log-streaming/)
 
 **Goal:** Real-time log streaming from containers to UI.
+
+**Key Achievements:**
+- Multiplexed Docker log stream handling
+- Pub/sub architecture with circular buffer (1000 lines)
+- Terminal-like viewer with Dracula color scheme
+- Auto-scroll, pause/resume, filtering
+- <100ms latency for log delivery
 
 ---
 
 ### Milestone 4: Server Management
-**Status:** ⏳ Not Started
-**Planning:** *(not started)*
+**Status:** ✅ Complete (2026-01-10 to 2026-01-11)
+**Planning:** [milestone-4-server-management/](milestone-4-server-management/)
 
 **Goal:** Full server lifecycle management (create, configure, deploy, delete).
 
+**Key Achievements:**
+- Server creation form with ENV configuration
+- Docker SDK direct container creation (no docker-compose)
+- Port validation with auto-suggestion
+- Beta branch selection (stable, build42, etc.)
+- Soft delete with 24h retention
+- Server recovery from accidental container deletion
+- Automatic status sync detection
+
+**Additional Work:**
+- [port-validation/](port-validation/) - 3-layer port checking (DB, Docker, host)
+- [server-lifecycle-management/](server-lifecycle-management/) - Soft delete, restore, purge
+
 ---
 
-### Milestone 5: RCON Integration
+### Milestone 5: Host Metrics Display
+**Status:** ⏳ Not Started
+**Planning:** *(not started)*
+
+**Goal:** Display agent host resource usage (CPU, memory, disk) in UI.
+
+---
+
+### Milestone 6: RCON Integration
 **Status:** ⏳ Not Started
 **Planning:** *(not started)*
 
@@ -100,11 +140,19 @@ git commit -m "Complete Milestone 1: Agent Connection"
 
 ---
 
-### Milestone 6: RBAC & Audit Logs
+### Milestone 7: RBAC & Audit Logs
 **Status:** ⏳ Not Started
 **Planning:** *(not started)*
 
 **Goal:** Role-based access control and audit logging.
+
+---
+
+### Milestone 8: Agent Deployment & Polish
+**Status:** ⏳ Deferred
+**Planning:** *(not started)*
+
+**Goal:** Production-ready agent deployment with installation automation. Deferred until core product features complete.
 
 ---
 
