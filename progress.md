@@ -146,17 +146,30 @@
 - Manager deployed to: https://zedops.mail-bcf.workers.dev
 - Static assets uploaded (188.84 KB / gzip: 35.43 KB)
 
-### Phase 4: Testing & Verification ⏳
-- [ ] End-to-end test (agent → manager → frontend)
-- [ ] Test backward compatibility (old agent)
-- [ ] Test error handling (missing /proc files)
-- [ ] Test edge cases (reconnection, hibernation)
-- [ ] Verify performance (no slowdowns)
+### Phase 4: Testing & Verification ✅
+- [x] End-to-end test (agent → manager → frontend)
+- [x] Agent collects metrics successfully
+- [x] Manager stores metrics in D1 metadata field
+- [x] Frontend displays metrics with color-coded badges
+- [x] Verify color thresholds (disk at 74% shows yellow badge)
+- [ ] Test backward compatibility (old agent) - Deferred
+- [ ] Test error handling (missing /proc files) - Deferred
+- [ ] Test edge cases (reconnection, hibernation) - Deferred
+- [ ] Verify performance (no slowdowns) - No issues observed
 
-**Next Steps:**
-1. Restart agent with new binary: `sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver`
-2. Wait 30 seconds for heartbeat
-3. Refresh UI and verify metrics appear
+**Test Results:**
+- ✅ Agent restart successful (PID: 3897544)
+- ✅ First heartbeat sent with metrics after 30 seconds
+- ✅ Metrics stored in D1: CPU 0%, Mem 40736/128288 MB, Disk 81/109 GB
+- ✅ UI displays metrics correctly
+- ✅ Yellow badge shown for disk (74.3% between 70-85% threshold)
+- ✅ Green badges for CPU (0%) and memory (31.7%)
+- ✅ No performance issues or errors
+
+**Metrics Collected:**
+- CPU: 0% (first sample, next will show delta)
+- Memory: 31.7% usage (40.7 GB / 128.3 GB)
+- Disk: 74.3% usage (81 GB / 109 GB)
 
 ---
 
