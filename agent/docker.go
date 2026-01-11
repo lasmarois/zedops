@@ -62,6 +62,7 @@ func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, er
 			Status:  c.Status,
 			Created: c.Created,
 			Ports:   convertPorts(c.Ports),
+			Labels:  c.Labels, // Include container labels for sync matching
 		}
 	}
 
@@ -151,13 +152,14 @@ func convertPorts(ports []types.Port) []PortMapping {
 
 // ContainerInfo represents container metadata
 type ContainerInfo struct {
-	ID      string        `json:"id"`
-	Names   []string      `json:"names"`
-	Image   string        `json:"image"`
-	State   string        `json:"state"`
-	Status  string        `json:"status"`
-	Created int64         `json:"created"`
-	Ports   []PortMapping `json:"ports"`
+	ID      string            `json:"id"`
+	Names   []string          `json:"names"`
+	Image   string            `json:"image"`
+	State   string            `json:"state"`
+	Status  string            `json:"status"`
+	Created int64             `json:"created"`
+	Ports   []PortMapping     `json:"ports"`
+	Labels  map[string]string `json:"labels"` // Container labels (for sync matching)
 }
 
 // PortMapping represents a port mapping
