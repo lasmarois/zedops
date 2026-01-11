@@ -276,7 +276,58 @@ Focus on product core features before deployment polish. Agent already runs nati
 - Viewer can view logs but not control server
 - All actions logged in D1 with timestamps
 
-**Dependencies:** Milestone 5 (RCON Integration)
+**Dependencies:** Milestone 6 (RCON Integration)
+
+**Planning:** *(not started)*
+
+---
+
+## Milestone 7.5: UI Styling & Design System ⏳ Planned
+
+**Goal:** Implement comprehensive UI styling with shadcn/ui and Tailwind CSS
+
+**Duration:** 1-2 weeks
+
+**Rationale:**
+After building all core features (M1-M7), apply consistent design system across the entire product. This approach ensures styling decisions are informed by complete product context and all features are styled cohesively.
+
+**Deliverables:**
+- Install and configure shadcn/ui + Tailwind CSS
+- Create design system (colors, spacing, typography, themes)
+- Replace custom components with shadcn components
+  - Forms (ServerForm with proper inputs, validation states)
+  - Tables (AgentList, ContainerList with sorting, filtering)
+  - Dialogs (confirmations, modals)
+  - Cards (server cards, agent cards)
+  - Badges (status indicators, labels)
+  - Buttons (consistent sizing, variants, states)
+- Implement responsive layouts (mobile, tablet, desktop)
+- Add proper loading states (skeletons, spinners)
+- Add error states (inline errors, toast notifications)
+- Add empty states (no servers, no agents, no logs)
+- Polish log viewer (terminal styling with shadcn theme)
+- Dark mode support (optional but recommended)
+- Accessibility improvements (ARIA labels, keyboard navigation)
+
+**Success Criteria:**
+- All pages use shadcn components consistently
+- Design tokens applied across entire app
+- Responsive layouts work on mobile, tablet, desktop
+- Loading/error/empty states present everywhere
+- UI feels polished and professional
+- No custom CSS outside design system
+- Consistent spacing, typography, colors throughout
+
+**Pages to Style:**
+1. Login page
+2. Agent list page
+3. Container list page (servers view)
+4. Server creation form
+5. Log viewer
+6. RCON console (if M6 complete)
+7. Audit logs viewer (if M7 complete)
+
+**Dependencies:** Milestone 7 (RBAC & Audit Logs)
 
 **Planning:** *(not started)*
 
@@ -309,7 +360,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - Service survives reboot (auto-restart)
 - Agent can auto-update when new version released
 
-**Dependencies:** Milestone 5 (Host Metrics) and Milestone 6 (RCON)
+**Dependencies:** Milestone 7.5 (UI Styling)
 
 **Planning:** *(not started)*
 
@@ -352,11 +403,12 @@ Deferred until after core product features are complete and UI is styled. Agent 
 | M5: Host Metrics Display | 4-6 hours | TBD | ⏳ Planned |
 | M6: RCON Integration | 1-2 weeks | TBD | ⏳ Planned |
 | M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
+| M7.5: UI Styling & Design System | 1-2 weeks | TBD | ⏳ Planned |
 | M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 
-**Progress:** 4/8 core milestones complete (50%) in 2 days 🎉
+**Progress:** 4/9 core milestones complete (44%) in 2 days 🎉
 
-**Next Focus:** M5 (Host Metrics) → M6 (RCON) → M7 (RBAC) → M8 (Deployment Polish)
+**Next Focus:** M5 (Host Metrics) → M6 (RCON) → M7 (RBAC) → M7.5 (UI Styling) → M8 (Deployment Polish)
 
 **Total to MVP:** ~12 weeks estimated → ~2-3 weeks actual (at current pace)
 
@@ -378,8 +430,9 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - **Milestone 5** - Host Metrics Display (4-6 hours, focus on product core)
 - **Milestone 6** - RCON Integration (server administration features)
 - **Milestone 7** - RBAC & Audit Logs (multi-user support)
+- **Milestone 7.5** - UI Styling & Design System (comprehensive shadcn/ui styling)
 
 **Deferred:**
-- **Milestone 8** - Agent Deployment & Polish (installation automation, deferred until UI styling complete)
+- **Milestone 8** - Agent Deployment & Polish (installation automation, deferred until after UI styling)
 
 **Current Planning:** Milestone 4 archived, ready to start M5
