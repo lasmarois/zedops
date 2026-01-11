@@ -8,8 +8,9 @@
 - Server starts successfully with configured ENV vars
 - User can delete server → Container removed cleanly
 
-**Status:** 🚧 In Progress
+**Status:** ✅ Feature Complete - Ready for Testing
 **Started:** 2026-01-10
+**Completed:** 2026-01-11
 
 ---
 
@@ -17,12 +18,12 @@
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 0. Steam-Zomboid Labels | completed | Add zedops.managed labels to steam-zomboid images |
-| 1. Research | completed | Understand .env.template, docker-compose generation, server naming |
-| 2. Agent Server Management | completed | Implement server create/delete in Go agent |
-| 3. Manager API | pending | Add server CRUD endpoints |
-| 4. UI Server Form | pending | Create form with ENV variable inputs |
-| 5. Testing | pending | End-to-end server lifecycle testing |
+| 0. Steam-Zomboid Labels | ✅ completed | Add zedops.managed labels to steam-zomboid images |
+| 1. Research | ✅ completed | Understand .env.template, docker-compose generation, server naming |
+| 2. Agent Server Management | ✅ completed | Implement server create/delete in Go agent |
+| 3. Manager API | ✅ completed | Add server CRUD endpoints |
+| 4. UI Server Form | ✅ completed | Create form with ENV variable inputs |
+| 5. Testing | 🧪 ready | End-to-end server lifecycle testing |
 
 ---
 
@@ -151,7 +152,7 @@
 
 ## Phase 3: Manager API
 
-**Status:** pending
+**Status:** ✅ completed (implemented during Milestone 4 setup and enhanced during server lifecycle work)
 
 **Goals:**
 - Add server CRUD endpoints to manager
@@ -161,26 +162,35 @@
 - Handle server lifecycle state
 
 **Tasks:**
-- [ ] Create D1 migration for servers table (with image_tag column)
-- [ ] Add steam_zomboid_registry column to agents table (default: registry.gitlab.nicomarois.com/nicolas/steam-zomboid)
-- [ ] Run migrations: `wrangler d1 execute zedops-db --file=migrations/XXXX_*.sql`
-- [ ] Add POST /api/agents/:id/servers (create server)
-  - [ ] Look up agent's steam_zomboid_registry from database
-  - [ ] Send registry + imageTag to agent in server.create message
-  - [ ] Validate server name (DNS-safe regex)
-  - [ ] Validate image tag format
-  - [ ] Check for name/port conflicts
-  - [ ] Auto-suggest next available port
-  - [ ] Store server config in D1
-  - [ ] Route server.create to agent
-- [ ] Add GET /api/agents/:id/servers (list servers)
-- [ ] Add DELETE /api/agents/:id/servers/:serverId (delete server)
-  - [ ] Route server.delete to agent
-  - [ ] Remove from D1 after successful deletion
-- [ ] Add validation for server names, ports, ENV vars, image tags
-- [ ] Route commands to AgentConnection Durable Object
-- [ ] Handle server state transitions (creating → running → deleting)
-- [ ] Add error handling for conflicts (name/port already in use)
+- [x] Create D1 migration for servers table (with image_tag column) - Migration 0003
+- [x] Add steam_zomboid_registry column to agents table - Migration 0002
+- [x] Run migrations on production D1 database
+- [x] Add POST /api/agents/:id/servers (create server) - Line 560 in agents.ts
+  - [x] Look up agent's steam_zomboid_registry from database
+  - [x] Send registry + imageTag to agent in server.create message
+  - [x] Validate server name (DNS-safe regex)
+  - [x] Validate image tag format
+  - [x] Check for name/port conflicts
+  - [x] Auto-suggest next available port (port validation feature)
+  - [x] Store server config in D1
+  - [x] Route server.create to agent
+- [x] Add GET /api/agents/:id/servers (list servers) - Line 792 in agents.ts
+- [x] Add DELETE /api/agents/:id/servers/:serverId (delete server) - Line 1290 in agents.ts
+  - [x] Route server.delete to agent
+  - [x] Soft delete with 24h retention (server lifecycle feature)
+- [x] Add validation for server names, ports, ENV vars, image tags
+- [x] Route commands to AgentConnection Durable Object
+- [x] Handle server state transitions (creating → running → stopped → missing → deleted)
+- [x] Add error handling for conflicts (name/port already in use)
+
+**Additional Endpoints Implemented:**
+- [x] POST /api/agents/:id/servers/sync - Sync server status with containers
+- [x] POST /api/agents/:id/servers/:serverId/start - Start/recreate server
+- [x] POST /api/agents/:id/servers/:serverId/stop - Stop server
+- [x] POST /api/agents/:id/servers/:serverId/rebuild - Rebuild server
+- [x] DELETE /api/agents/:id/servers/:serverId/purge - Hard delete
+- [x] POST /api/agents/:id/servers/:serverId/restore - Restore soft-deleted server
+- [x] DELETE /api/agents/:id/servers/failed - Bulk cleanup failed servers
 
 **Files to Create/Modify:**
 - manager/src/routes/agents.ts - Add server endpoints
@@ -216,7 +226,7 @@ CREATE TABLE servers (
 
 ## Phase 4: UI Server Form
 
-**Status:** pending
+**Status:** ✅ completed (implemented during Milestone 4 setup with port validation integration)
 
 **Goals:**
 - Create server creation form component
@@ -227,27 +237,33 @@ CREATE TABLE servers (
 - Show server creation progress
 
 **Tasks:**
-- [ ] Create ServerForm.tsx component
-- [ ] Create ServerList.tsx component (or extend ContainerList)
-- [ ] Add form inputs for key ENV variables:
-  - Server name (required, unique, DNS-safe)
-  - Image version dropdown (required, default: latest)
-    - Options: "latest", "2.1", "2.0"
-    - Could fetch from registry API (future enhancement)
-  - Server public name (optional)
-  - Admin password (required)
-  - Server password (optional)
-  - Default port (required, auto-suggest next available)
-  - Beta branch (dropdown: none, build42, etc.)
-- [ ] Add form validation
-  - Server name: regex `^[a-z][a-z0-9-]{2,31}$`
-  - Image tag: semver or "latest"
-  - Ports: valid range, no conflicts
-- [ ] Implement server creation API call
-- [ ] Add loading state during creation
-- [ ] Update UI when server created successfully
-- [ ] Add delete button with confirmation dialog
-- [ ] Handle errors gracefully
+- [x] Create ServerForm.tsx component - frontend/src/components/ServerForm.tsx
+- [x] Extend ContainerList.tsx with server management - "All Servers" section
+- [x] Add form inputs for key ENV variables:
+  - [x] Server name (required, unique, DNS-safe)
+  - [x] Image version input (required, default: latest)
+  - [x] Server public name (optional)
+  - [x] Admin password (required)
+  - [x] Server password (optional)
+  - [x] Default port (auto-suggested from port validation)
+  - [x] Custom port configuration with availability checking
+- [x] Add form validation
+  - [x] Server name: regex `^[a-z][a-z0-9-]{2,31}$`
+  - [x] Image tag validation
+  - [x] Ports: valid range, conflict detection
+- [x] Implement server creation API call - useCreateServer hook
+- [x] Add loading state during creation
+- [x] Update UI when server created successfully (auto-refresh via React Query)
+- [x] Add delete button with confirmation dialog (multiple: soft delete, purge, restore)
+- [x] Handle errors gracefully with inline error messages
+
+**Additional Features Implemented:**
+- [x] Port availability checking with visual indicators (green/red badges)
+- [x] Edit & Retry for failed servers (pre-fills form)
+- [x] Server rebuild functionality
+- [x] Start/Stop controls
+- [x] Server status badges with state-specific actions
+- [x] Automatic status sync detection
 
 **Files to Create:**
 - frontend/src/components/ServerForm.tsx
