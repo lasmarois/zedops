@@ -14,7 +14,7 @@
 - Tests pass for all permission scenarios
 - WebSocket auth uses JWT (logs, RCON)
 
-**Status:** ⏳ Planned - Awaiting architectural decisions
+**Status:** 🚀 Ready to Implement - Architecture Finalized
 **Started:** 2026-01-12
 
 ---
@@ -23,137 +23,175 @@
 
 | Phase | Status | Description | Duration |
 |-------|--------|-------------|----------|
-| 0. Architectural Decisions | ⏳ pending | User decides on role model, hierarchy, etc. | 30 min |
-| 1. Permission Hierarchy | ⏳ planned | Implement delete ⊃ control ⊃ view | 30 min |
-| 2. Backend Auth Migration | ⏳ planned | Migrate all endpoints to JWT + permissions | 2 hours |
-| 3. WebSocket Auth Migration | ⏳ planned | Update logs/RCON WebSocket to use JWT | 1 hour |
-| 4. Audit Logging Completion | ⏳ planned | Add missing audit log calls | 30 min |
-| 5. Frontend Updates | ⏳ planned | Update WebSocket connections to use JWT | 30 min |
-| 6. Agent-Level Permission UI | ⏳ optional | Add UI for agent-level grants | 1 hour |
-| 7. Testing & Verification | ⏳ planned | Test all permission scenarios | 1 hour |
-| 8. Documentation | ⏳ planned | Update API docs, permission model docs | 30 min |
+| 0. Architectural Decisions | ✅ complete | 4-role model with multi-scope assignments | 1 hour |
+| 1. Database Migration | ⏳ next | Create role_assignments table, update schema | 1 hour |
+| 2. Permission Logic Rewrite | ⏳ planned | Role-based checking with inheritance/override | 2 hours |
+| 3. Backend Auth Migration | ⏳ planned | Migrate all endpoints to JWT + role checks | 2 hours |
+| 4. WebSocket Auth Migration | ⏳ planned | Update logs/RCON WebSocket to use JWT | 1 hour |
+| 5. Frontend Updates | ⏳ planned | Role assignment UI + NULL role handling | 2 hours |
+| 6. Audit Logging Completion | ⏳ planned | Add missing audit log calls | 30 min |
+| 7. Testing & Verification | ⏳ planned | Test all role scenarios | 1 hour |
+| 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
 
 ---
 
-## Phase 0: Architectural Decisions ⏳ Pending User Input
+## Phase 0: Architectural Decisions ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete (1 hour)
 
 **Goals:**
 - Get user decisions on all architectural questions
 - Document decisions for implementation
 - Update task plan based on decisions
 
-**Questions for User:**
+**Final Decisions:**
 
-### Question 1: Role Model
-**Options:**
-- **A (Recommended)**: Keep 2 roles (admin/user) + flexible permissions
-- **B**: Expand to 4 roles (admin/operator/viewer/user) with predefined permissions
+### Decision 1: Role Model
+**Chosen:** 4 roles (admin/agent-admin/operator/viewer) with NULL system role option
 
-**Decision:** [PENDING]
-
----
-
-### Question 2: Permission Hierarchy
-**Options:**
-- **A (Recommended)**: Implement hierarchy (delete ⊃ control ⊃ view)
-- **B**: Keep independent (each permission must be explicitly granted)
-
-**Decision:** [PENDING]
+**Implementation:**
+- **admin**: System role (global, bypasses all checks)
+- **agent-admin**: Assignment role (agent-scope, can create/delete servers)
+- **operator**: Assignment role (multi-scope, control operations + RCON)
+- **viewer**: Assignment role (multi-scope, read-only)
+- **NULL role**: Users without system role, access via assignments only
 
 ---
 
-### Question 3: Agent-Level Permissions UI
-**Options:**
-- **A (Recommended)**: Add UI for granting access to all servers on an agent
-- **B**: Skip for now (code supports it, but UI doesn't expose it)
+### Decision 2: Permission Hierarchy
+**Chosen:** Implement role hierarchy (admin > agent-admin > operator > viewer)
 
-**Decision:** [PENDING]
-
----
-
-### Question 4: Server Creation Permission
-**Options:**
-- **A (Recommended)**: Admin-only (keep current)
-- **B**: Add 'create' permission type
-- **C**: Users with 'control' on agent can create
-
-**Decision:** [PENDING]
+**Implementation:**
+- operator implies viewer (can view what they control)
+- agent-admin includes all operator capabilities for their agent
+- Server-level assignments override agent-level assignments
 
 ---
 
-### Question 5: RCON Permission
-**Options:**
-- **A (Recommended)**: RCON requires 'control' permission
-- **B**: RCON requires separate 'rcon' permission
-- **C**: RCON requires 'delete' permission
+### Decision 3: Agent-Level Role Assignments
+**Chosen:** Implement multi-scope assignment (global/agent/server)
 
-**Decision:** [PENDING]
+**Implementation:**
+- Agent-level assignment: Role applies to ALL servers on that agent
+- Server-level assignment: Override for specific server
+- Most specific scope wins (server > agent > global)
+
+---
+
+### Decision 4: Server Creation Permission
+**Chosen:** agent-admin role can create servers on their assigned agent
+
+**Implementation:**
+- Only admin (global) and agent-admin (for their agent) can create servers
+- operator and viewer cannot create servers
+
+---
+
+### Decision 5: RCON Permission
+**Chosen:** operator role required for RCON access
+
+**Implementation:**
+- RCON endpoints require operator or higher role
+- viewer role cannot access RCON
+- Future enhancement: Expose specific RCON commands as UI buttons for viewer
 
 ---
 
 **Tasks:**
-- [ ] Present questions to user
-- [ ] Document decisions in progress.md
-- [ ] Update task plan phases based on decisions
-- [ ] Mark Phase 0 complete
+- [x] Present questions to user
+- [x] Document decisions in findings.md
+- [x] Update task plan phases based on decisions
+- [x] Mark Phase 0 complete
 
 **Outcome:** Clear architectural direction for implementation
 
 ---
 
-## Phase 1: Permission Hierarchy Implementation ⏳ Planned
+## Phase 1: Database Migration ⏳ Next
 
-**Status:** ⏳ planned (conditional on Phase 0 decision)
+**Status:** ⏳ next (1 hour)
 
 **Goals:**
-- Implement permission hierarchy: delete ⊃ control ⊃ view
-- Update checkPermission() logic
-- Maintain backward compatibility
+- Create new `role_assignments` table for multi-scope role assignments
+- Update `users` table to support NULL system role
+- Drop old `permissions` table (permission-based approach)
+- Preserve existing admin users
+
+**Database Schema Changes:**
+
+### New Schema:
+```sql
+-- Users: role can be NULL (no access) or 'admin' (global access)
+CREATE TABLE users_new (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT CHECK (role IN ('admin') OR role IS NULL),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- Role assignments: grant roles at specific scopes
+CREATE TABLE role_assignments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('agent-admin', 'operator', 'viewer')),
+  scope TEXT NOT NULL CHECK (scope IN ('global', 'agent', 'server')),
+  resource_id TEXT, -- NULL for global, agent_id for agent scope, server_id for server scope
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CHECK (role != 'agent-admin' OR scope = 'agent'),
+  UNIQUE (user_id, scope, resource_id, role)
+);
+
+-- Indexes for performance
+CREATE INDEX idx_role_assignments_user ON role_assignments(user_id);
+CREATE INDEX idx_role_assignments_scope_resource ON role_assignments(scope, resource_id);
+```
 
 **Tasks:**
 
-### 1.1 Update Permission Checking Logic
-- [ ] Read `manager/src/lib/permissions.ts`
-- [ ] Update `checkPermission()` function (line 43-68):
-  ```typescript
-  // Current logic: exact match only
-  const permission = await db.prepare(`
-    SELECT id FROM permissions
-    WHERE user_id = ? AND resource_type = ?
-    AND (resource_id = ? OR resource_id IS NULL)
-    AND permission = ?
-  `).bind(userId, resourceType, resourceId, action).first();
+### 1.1 Create Migration File
+- [ ] Create `manager/migrations/0009_role_based_rbac.sql`
+- [ ] Add DROP TABLE for old permissions table
+- [ ] Add CREATE TABLE statements for new schema
+- [ ] Add migration for existing users (admin role preserved, 'user' role → NULL)
+- [ ] Add indexes
 
-  // New logic: check hierarchy
-  let permissionQuery = '';
-  if (action === 'view') {
-    permissionQuery = "AND permission IN ('view', 'control', 'delete')";
-  } else if (action === 'control') {
-    permissionQuery = "AND permission IN ('control', 'delete')";
-  } else if (action === 'delete') {
-    permissionQuery = "AND permission = 'delete'";
-  } else {
-    permissionQuery = "AND permission = ?";
+### 1.2 Test Migration Locally
+- [ ] Run migration against local D1 database
+- [ ] Verify users table updated
+- [ ] Verify role_assignments table created
+- [ ] Verify existing admin users still have admin role
+- [ ] Verify existing 'user' role users now have NULL role
+
+### 1.3 Update TypeScript Interfaces
+- [ ] Update `manager/src/types.ts` or inline types in routes
+- [ ] Add RoleAssignment interface:
+  ```typescript
+  interface RoleAssignment {
+    id: string;
+    user_id: string;
+    role: 'agent-admin' | 'operator' | 'viewer';
+    scope: 'global' | 'agent' | 'server';
+    resource_id: string | null;
+    created_at: number;
   }
   ```
-- [ ] Update all convenience functions (canViewServer, canControlServer, canDeleteServer)
-- [ ] Add comments documenting hierarchy
+- [ ] Update User interface to allow NULL role
+- [ ] Remove Permission interface (deprecated)
 
-### 1.2 Update Documentation
-- [ ] Add hierarchy explanation to `manager/src/lib/permissions.ts` file header
-- [ ] Document in ISSUE-rbac-auth-migration.md
+**Files to Create:**
+- `manager/migrations/0009_role_based_rbac.sql` (NEW)
 
 **Files to Modify:**
-- `manager/src/lib/permissions.ts` - Update checkPermission()
+- `manager/src/types.ts` or inline type definitions
 
 **Verification:**
-- Create test: User with 'control' can view (no explicit 'view' grant)
-- Create test: User with 'delete' can control and view
-- Create test: User with only 'view' cannot control
-
-**Skip if:** User chooses to keep independent permissions (Phase 0 Decision 2B)
+- Migration runs without errors
+- Existing admin users retain access
+- role_assignments table is empty (ready for new assignments)
+- Old permissions table is dropped
 
 ---
 

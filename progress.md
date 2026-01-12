@@ -114,28 +114,94 @@ User must answer 5 questions before implementation can proceed:
 
 ### Status
 
-- ✅ Phase 0: Architectural Decisions - Planning Complete, Awaiting User Input
-- ⏳ Phase 1: Permission Hierarchy - Planned (conditional on Phase 0)
-- ⏳ Phase 2: Backend Auth Migration - Planned
-- ⏳ Phase 3: WebSocket Auth Migration - Planned
-- ⏳ Phase 4: Audit Logging Completion - Planned
+- ✅ Phase 0: Architectural Decisions - Complete (1 hour)
+- ⏳ Phase 1: Database Migration - Next
+- ⏳ Phase 2: Permission Logic Rewrite - Planned
+- ⏳ Phase 3: Backend Auth Migration - Planned
+- ⏳ Phase 4: WebSocket Auth Migration - Planned
 - ⏳ Phase 5: Frontend Updates - Planned
-- ⏳ Phase 6: Agent-Level Permission UI - Planned (conditional on Phase 0)
+- ⏳ Phase 6: Audit Logging Completion - Planned
 - ⏳ Phase 7: Testing & Verification - Planned
 - ⏳ Phase 8: Documentation - Planned
 
 ---
 
-## Pending User Decisions
+## Session 2: Architectural Decisions Complete ✅
 
-Before proceeding with implementation, waiting for user answers to 5 architectural questions (see Phase 0 in task_plan.md).
+**Date:** 2026-01-12 (continued)
+**Duration:** ~1 hour
+**Goal:** Finalize role model and architectural approach
 
-User should review:
-1. `findings.md` - Detailed analysis and recommendations
-2. `ISSUE-rbac-auth-migration.md` - Problem statement and options
-3. `task_plan.md` Phase 0 - Questions formatted for decision
+### Actions Taken
 
-Once decisions received, will:
-1. Document decisions in this file
-2. Update task_plan.md based on choices
-3. Begin Phase 1 or Phase 2 implementation
+1. **Discussed Role Model Options**
+   - User reviewed ARCHITECTURE.md original design (3 roles: admin/operator/viewer)
+   - User confirmed desire for role-based (not permission-based) approach
+   - User clarified need for per-agent and per-server role assignments
+   - User requested 4th role: agent-admin (can create/delete servers on assigned agent)
+   - User requested NULL system role option (users without default access)
+
+2. **Finalized Architectural Decisions**
+   - Q1: Role model → 4 roles (admin/agent-admin/operator/viewer) with NULL option
+   - Q2: Permission hierarchy → Implement (operator ⊃ viewer, agent-admin ⊃ operator)
+   - Q3: Agent-level assignments → Yes (with server-level override)
+   - Q4: Server creation → agent-admin role can create on their agent
+   - Q5: RCON permission → operator role required
+
+3. **Updated Planning Files**
+   - Updated findings.md with "FINAL ARCHITECTURAL DECISION" section
+   - Updated task_plan.md with Phase 0 complete, new Phase 1 (Database Migration)
+   - Redefined phases to match role-based implementation
+
+### Final Role Model
+
+**4 Roles:**
+1. **admin** - System role (global, bypasses all checks)
+2. **agent-admin** - Assignment role (agent-scope, full control of agent)
+3. **operator** - Assignment role (multi-scope, control + RCON)
+4. **viewer** - Assignment role (multi-scope, read-only)
+
+**NULL System Role:**
+- Users can exist without any system role
+- Must be assigned roles at agent/server level to access resources
+
+**Multi-Scope Assignments:**
+- **global**: Role applies to all agents/servers
+- **agent**: Role applies to all servers on that agent (inheritance)
+- **server**: Role applies to specific server only (override)
+
+**Example (Alice):**
+- System role: NULL
+- Assigned: viewer on agent-1, agent-2
+- Assigned: operator on server-X (in agent-1)
+- Result: Viewer on all servers in agent-1/agent-2, except server-X (operator)
+
+### Database Schema
+
+New `role_assignments` table replaces old `permissions` table:
+```sql
+CREATE TABLE role_assignments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('agent-admin', 'operator', 'viewer')),
+  scope TEXT NOT NULL CHECK (scope IN ('global', 'agent', 'server')),
+  resource_id TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CHECK (role != 'agent-admin' OR scope = 'agent'),
+  UNIQUE (user_id, scope, resource_id, role)
+);
+```
+
+### Next Actions
+
+**Phase 1: Database Migration** 🔜 Starting Now
+1. Create migration 0009_role_based_rbac.sql
+2. Update TypeScript interfaces
+3. Test migration locally
+
+---
+
+## Pending Implementation
+
+Ready to begin Phase 1 (Database Migration). All architectural decisions finalized.

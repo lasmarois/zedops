@@ -421,14 +421,112 @@ const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${enco
 
 ---
 
+## FINAL ARCHITECTURAL DECISION (User Confirmed)
+
+After discussion with user and review of ARCHITECTURE.md original design, implementing:
+
+### 4-Role Model with Multi-Scope Assignments
+
+**Roles:**
+1. **admin** - System role (global only, bypasses all checks)
+   - Full system access
+   - Invite users, manage all agents/servers
+   - View all audit logs
+
+2. **agent-admin** - Assignment role (agent-scope only)
+   - Full control of assigned agent
+   - Can create/delete servers on that agent
+   - All operator capabilities for servers on that agent
+   - Can manage agent settings
+
+3. **operator** - Assignment role (global, agent, or server scope)
+   - Start/stop/restart servers
+   - Change server config
+   - Use RCON console
+   - View logs
+
+4. **viewer** - Assignment role (global, agent, or server scope)
+   - View server status
+   - View logs (read-only)
+   - No control operations
+
+**NULL System Role:**
+- Users can be created WITHOUT any system role
+- These users see "Please ask an admin for access" until assigned roles
+- Access granted via role_assignments table
+
+**Role Assignment Scopes:**
+- **global**: Role applies to all agents/servers (rare, mainly for shared users)
+- **agent**: Role applies to all servers on that agent (inheritance)
+- **server**: Role applies to specific server only (override)
+
+**Inheritance & Override:**
+```
+User Alice (no system role):
+1. Assigned viewer on agent-1, agent-2
+   → Can view ALL servers on those 2 agents
+
+2. Then assigned operator on server-X (in agent-1)
+   → Now has operator on server-X, viewer on other agent-1 servers
+
+3. Then assigned operator on server-Y (in agent-2)
+   → Now has operator on server-Y, viewer on other agent-2 servers
+
+4. Agents 3-4: No access (no assignment)
+```
+
+**Permission Hierarchy (Capability Levels):**
+```
+admin > agent-admin > operator > viewer
+
+Within scope:
+- agent-admin includes all operator capabilities for their agent
+- operator implies viewer (can view what they control)
+- viewer is standalone (read-only)
+```
+
+**Database Schema Changes:**
+```sql
+-- Users table: role can be NULL or 'admin'
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT CHECK (role IN ('admin') OR role IS NULL),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- Role assignments for non-admin users
+CREATE TABLE role_assignments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('agent-admin', 'operator', 'viewer')),
+  scope TEXT NOT NULL CHECK (scope IN ('global', 'agent', 'server')),
+  resource_id TEXT, -- NULL for global, agent_id or server_id
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CHECK (role != 'agent-admin' OR scope = 'agent'),
+  UNIQUE (user_id, scope, resource_id, role)
+);
+```
+
+**Migration Path:**
+1. Drop old `permissions` table
+2. Create new `role_assignments` table
+3. Migrate existing user roles to system admin or NULL
+4. No data migration for permissions (fresh start)
+
+---
+
 ## Open Questions for User
 
 Before proceeding with implementation, user must decide:
 
-1. ✅ Role model: 2 roles (recommended) or 4 roles?
-2. ✅ Permission hierarchy: Implement (recommended) or keep independent?
-3. ✅ Agent-level permissions UI: Add (recommended) or skip?
-4. ✅ Server creation: Admin-only (recommended) or add permission?
-5. ✅ RCON permission: Use 'control' (recommended) or separate?
+1. ✅ Role model: **4 roles (admin/agent-admin/operator/viewer) with NULL option**
+2. ✅ Permission hierarchy: **Implement (operator ⊃ viewer)**
+3. ✅ Agent-level permissions UI: **Add UI for role assignments**
+4. ✅ Server creation: **Agent-admin can create, others admin-only**
+5. ✅ RCON permission: **Use operator role**
 
 User answers will determine which phases to implement.
