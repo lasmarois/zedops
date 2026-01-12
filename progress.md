@@ -195,13 +195,54 @@ CREATE TABLE role_assignments (
 
 ### Next Actions
 
-**Phase 1: Database Migration** 🔜 Starting Now
-1. Create migration 0009_role_based_rbac.sql
-2. Update TypeScript interfaces
-3. Test migration locally
+**Phase 1: Database Migration** 🚧 In Progress
+1. ✅ Create migration 0009_role_based_rbac.sql
+2. ⏳ Update TypeScript interfaces
+3. ⏳ Test migration locally
+
+---
+
+## Session 3: Phase 1 - Database Migration 🚧 In Progress
+
+**Date:** 2026-01-12 (continued)
+**Status:** In Progress
+**Goal:** Create and test database migration for role-based RBAC
+
+### Actions Taken
+
+1. **Created Migration 0009** ✅
+   - File: `manager/migrations/0009_role_based_rbac.sql`
+   - Updates users table: role can be 'admin' or NULL
+   - Drops old permissions table
+   - Creates new role_assignments table with multi-scope support
+   - Updates invitations table to support new roles
+   - Migrates existing 'user' role to NULL
+   - Adds indexes for performance
+
+**Migration Schema:**
+```sql
+-- users: role TEXT CHECK (role IN ('admin') OR role IS NULL)
+-- role_assignments: (user_id, role, scope, resource_id, created_at)
+--   - role: 'agent-admin', 'operator', 'viewer'
+--   - scope: 'global', 'agent', 'server'
+--   - Constraint: agent-admin only at agent scope
+--   - Unique: (user_id, scope, resource_id, role)
+```
+
+### Next Steps
+
+2. **Update TypeScript Interfaces** ⏳ Next
+   - Update AuthUser interface (middleware/auth.ts)
+   - Add RoleAssignment interface
+   - Update users.ts route handlers
+   - Update invitations.ts route handlers
+
+3. **Test Migration** ⏳ Pending
+   - Validate SQL syntax
+   - Document testing steps
 
 ---
 
 ## Pending Implementation
 
-Ready to begin Phase 1 (Database Migration). All architectural decisions finalized.
+Phase 1 in progress. Migration file created, TypeScript updates next.
