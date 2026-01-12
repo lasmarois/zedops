@@ -14,7 +14,16 @@ import { verifySessionToken, hashToken } from '../lib/auth';
 export interface AuthUser {
   id: string;
   email: string;
-  role: string;
+  role: 'admin' | null; // System role: 'admin' or NULL (no default access)
+}
+
+export interface RoleAssignment {
+  id: string;
+  user_id: string;
+  role: 'agent-admin' | 'operator' | 'viewer';
+  scope: 'global' | 'agent' | 'server';
+  resource_id: string | null; // NULL for global, agent_id or server_id
+  created_at: number;
 }
 
 type Bindings = {

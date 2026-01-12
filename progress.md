@@ -229,17 +229,28 @@ CREATE TABLE role_assignments (
 --   - Unique: (user_id, scope, resource_id, role)
 ```
 
+2. **Updated TypeScript Interfaces** ✅
+   - Updated AuthUser interface: role is now 'admin' | null
+   - Added RoleAssignment interface with scope support
+   - Updated users.ts:
+     * POST /api/users: Accepts admin or null role
+     * GET /api/users/:id: Returns roleAssignments instead of permissions
+     * PATCH /api/users/:id/role: Supports admin or null role
+   - Updated invitations.ts:
+     * POST /api/users/invite: Supports all 4 roles
+     * POST /api/invite/:token/accept: Creates admin users with admin role, others with NULL role
+
+**Key Implementation Notes:**
+- Invitation flow: Non-admin invitations create NULL role users (admin assigns access separately)
+- Role assignments will be managed through new endpoints (Phase 2)
+- Permissions table replaced by role_assignments table
+
 ### Next Steps
 
-2. **Update TypeScript Interfaces** ⏳ Next
-   - Update AuthUser interface (middleware/auth.ts)
-   - Add RoleAssignment interface
-   - Update users.ts route handlers
-   - Update invitations.ts route handlers
-
-3. **Test Migration** ⏳ Pending
+3. **Test Migration** ⏳ Next
    - Validate SQL syntax
    - Document testing steps
+   - Verify schema changes work correctly
 
 ---
 

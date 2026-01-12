@@ -38,9 +38,9 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
       return c.json({ error: 'Email and role are required' }, 400);
     }
 
-    // Validate role
-    if (!['admin', 'user'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
+    // Validate role (invitation system does NOT support NULL role - must invite to specific role)
+    if (!['admin', 'agent-admin', 'operator', 'viewer'].includes(role)) {
+      return c.json({ error: 'Invalid role - must be admin, agent-admin, operator, or viewer' }, 400);
     }
 
     // Check if user already exists
@@ -338,10 +338,13 @@ invitations.post('/accept/:token', async (c) => {
     const userId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
 
+    // Determine system role: only 'admin' gets system admin role, others get NULL
+    const systemRole = invitation.role === 'admin' ? 'admin' : null;
+
     await c.env.DB.prepare(
       'INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
     )
-      .bind(userId, invitation.email, passwordHash, invitation.role, now, now)
+      .bind(userId, invitation.email, passwordHash, systemRole, now, now)
       .run();
 
     // Mark invitation as used
@@ -352,20 +355,34 @@ invitations.post('/accept/:token', async (c) => {
     // Log invitation acceptance
     await logInvitationAccepted(c.env.DB, c, invitation.id as string, userId, invitation.email as string);
 
+    // Prepare response message based on role
+    const instructions = systemRole === 'admin'
+      ? [
+          'Your admin account has been created successfully!',
+          `Email: ${invitation.email}`,
+          '',
+          'You can now login with your email and password. You have full system access.',
+        ]
+      : [
+          'Your account has been created successfully!',
+          `Email: ${invitation.email}`,
+          '',
+          'You can now login with your email and password.',
+          `Your invitation role was "${invitation.role}".`,
+          'An administrator needs to assign you access to specific agents or servers.',
+          'Until then, you will see a message asking you to contact your admin.',
+        ];
+
     return c.json(
       {
         message: 'Account created successfully',
         user: {
           id: userId,
           email: invitation.email,
-          role: invitation.role,
+          systemRole,
+          invitationRole: invitation.role,
         },
-        instructions: [
-          'Your account has been created successfully!',
-          `Email: ${invitation.email}`,
-          '',
-          'You can now login with your email and the password you just set.',
-        ],
+        instructions,
       },
       201
     );

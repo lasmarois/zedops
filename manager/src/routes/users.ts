@@ -64,9 +64,9 @@ users.get('/:id', async (c) => {
       return c.json({ error: 'User not found' }, 404);
     }
 
-    // Get user's permissions
-    const permissions = await c.env.DB.prepare(
-      'SELECT id, resource_type, resource_id, permission, created_at FROM permissions WHERE user_id = ?'
+    // Get user's role assignments
+    const roleAssignments = await c.env.DB.prepare(
+      'SELECT id, role, scope, resource_id, created_at FROM role_assignments WHERE user_id = ? ORDER BY created_at DESC'
     )
       .bind(userId)
       .all();
@@ -80,7 +80,7 @@ users.get('/:id', async (c) => {
 
     return c.json({
       user,
-      permissions: permissions.results || [],
+      roleAssignments: roleAssignments.results || [],
       activeSessions: sessions.results || [],
     });
   } catch (error) {
@@ -100,14 +100,17 @@ users.post('/', async (c) => {
     const { email, password, role } = body;
 
     // Validate input
-    if (!email || !password || !role) {
-      return c.json({ error: 'Email, password, and role are required' }, 400);
+    if (!email || !password) {
+      return c.json({ error: 'Email and password are required' }, 400);
     }
 
-    // Validate role
-    if (!['admin', 'user'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
+    // Validate role (can be 'admin' or null/undefined for no default access)
+    if (role !== undefined && role !== null && role !== 'admin') {
+      return c.json({ error: 'Invalid role - must be admin or null' }, 400);
     }
+
+    // Normalize role: undefined → null, 'admin' → 'admin'
+    const normalizedRole = role === 'admin' ? 'admin' : null;
 
     // Validate password strength
     const passwordValidation = validatePasswordStrength(password);
@@ -132,12 +135,12 @@ users.post('/', async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
     )
-      .bind(userId, email, passwordHash, role, now, now)
+      .bind(userId, email, passwordHash, normalizedRole, now, now)
       .run();
 
     // Log user creation
     const currentUser = c.get('user');
-    await logUserCreated(c.env.DB, c, currentUser.id, userId, email, role);
+    await logUserCreated(c.env.DB, c, currentUser.id, userId, email, normalizedRole || 'no role');
 
     // Return user info (without password hash)
     return c.json(
@@ -146,7 +149,7 @@ users.post('/', async (c) => {
         user: {
           id: userId,
           email,
-          role,
+          role: normalizedRole,
           created_at: now,
         },
       },
@@ -169,10 +172,13 @@ users.patch('/:id/role', async (c) => {
     const body = await c.req.json();
     const { role } = body;
 
-    // Validate role
-    if (!['admin', 'user'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
+    // Validate role (can be 'admin' or null/undefined)
+    if (role !== undefined && role !== null && role !== 'admin') {
+      return c.json({ error: 'Invalid role - must be admin or null' }, 400);
     }
+
+    // Normalize role
+    const normalizedRole = role === 'admin' ? 'admin' : null;
 
     // Check if user exists
     const user = await c.env.DB.prepare('SELECT id, role FROM users WHERE id = ?')
@@ -186,19 +192,21 @@ users.patch('/:id/role', async (c) => {
     // Update role
     const now = Date.now();
     await c.env.DB.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?')
-      .bind(role, now, userId)
+      .bind(normalizedRole, now, userId)
       .run();
 
     // Log role change
     const currentUser = c.get('user');
-    await logUserRoleChanged(c.env.DB, c, currentUser.id, userId, user.role as string, role);
+    const previousRole = user.role || 'no role';
+    const newRole = normalizedRole || 'no role';
+    await logUserRoleChanged(c.env.DB, c, currentUser.id, userId, previousRole, newRole);
 
     return c.json({
       message: 'User role updated successfully',
       user: {
         id: userId,
         previousRole: user.role,
-        newRole: role,
+        newRole: normalizedRole,
       },
     });
   } catch (error) {
