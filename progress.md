@@ -631,21 +631,154 @@ POST /api/permissions/user-789/viewer/server-456
 
 ---
 
-## Next Session: Phase 5 - Audit Logging
+## Session 6: Phase 5 - Audit Logging ✅ Complete
+
+**Date:** 2026-01-12
+**Duration:** ~30 minutes
+**Goal:** Implement comprehensive audit logging for all sensitive operations
+
+### Actions Taken
+
+1. **Created Audit Logging Library** (`manager/src/lib/audit.ts`)
+   - Core `logAudit()` function with automatic context extraction
+   - IP address extraction (CF-Connecting-IP, X-Forwarded-For, X-Real-IP)
+   - User-agent extraction from request headers
+   - 20+ event-specific logging functions for different operations
+   - Non-blocking writes (errors logged but don't fail requests)
+   - Details stored as JSON for flexible querying
+
+2. **Added Auth Event Logging** (`manager/src/routes/auth.ts`)
+   - **Login success:** `user.login` with userId and email
+   - **Login failure:** `user.login_failed` with attempted email (no userId if user not found)
+   - **Logout:** `user.logout` with userId
+
+3. **Added User Management Logging** (`manager/src/routes/users.ts`)
+   - **User creation:** `user.created` with email and role
+   - **User deletion:** `user.deleted` with email
+   - **Role change:** `user.role_changed` with previous/new role
+   - **Password change:** `user.password_changed` (no password details logged)
+
+4. **Added Invitation Logging** (`manager/src/routes/invitations.ts`)
+   - **Invitation created:** `invitation.created` with email and role
+   - **Invitation accepted:** `invitation.accepted` with new userId and email
+
+5. **Added Permission Logging** (`manager/src/routes/permissions.ts`)
+   - **Permission granted:** `permission.granted` with targetUserId, resourceType, resourceId, permission
+   - **Permission revoked:** `permission.revoked` with permissionId and targetUserId
+
+6. **Committed and Pushed**
+   - Committed: `51e26d8` - "Implement Phase 5: Audit Logging"
+   - 5 files changed: 1 new file (audit.ts), 4 modified routes
+   - Total: 453 lines added
+
+### Implementation Details
+
+**Audit Log Entry Structure:**
+```typescript
+{
+  id: uuid,
+  user_id: string | null,        // Null for failed logins
+  action: AuditAction,             // e.g., 'user.login', 'server.started'
+  resource_type: ResourceType,     // 'user', 'server', 'permission', etc.
+  resource_id: string | null,      // Target resource ID
+  details: JSON | null,            // Action-specific metadata
+  ip_address: string | null,       // Client IP (Cloudflare-aware)
+  user_agent: string | null,       // Browser/client info
+  timestamp: integer               // Unix epoch milliseconds
+}
+```
+
+**IP Address Extraction Priority:**
+1. `CF-Connecting-IP` (Cloudflare)
+2. `X-Forwarded-For` (first IP in list)
+3. `X-Real-IP` (fallback)
+
+**Event Types Implemented (20+):**
+- **Auth:** login, logout, login_failed
+- **Users:** created, deleted, role_changed, password_changed, sessions_invalidated
+- **Invitations:** created, accepted, cancelled
+- **Permissions:** granted, revoked
+- **Servers:** created, started, stopped, restarted, deleted, purged, restored, rebuilt
+- **Agents:** registered, deleted
+- **RCON:** command
+
+**Security Considerations:**
+- Passwords never logged (only password hashes created)
+- RCON command logged but not full response (could contain sensitive data)
+- Failed login attempts tracked with attempted email
+- IP address and user-agent captured for security analysis
+
+**Example Audit Log:**
+```json
+{
+  "id": "uuid-123",
+  "user_id": "user-456",
+  "action": "user.role_changed",
+  "resource_type": "user",
+  "resource_id": "user-789",
+  "details": {
+    "previousRole": "viewer",
+    "newRole": "operator"
+  },
+  "ip_address": "192.168.1.100",
+  "user_agent": "Mozilla/5.0...",
+  "timestamp": 1673456789000
+}
+```
+
+### Next Actions
+
+**Backend Complete!** All 5 backend phases done. Next: Frontend implementation
+
+**Phase 6: Frontend Auth UI** ⏳ Next
+
+1. Create Login.tsx component (email/password form)
+2. Create UserContext.tsx (global user state)
+3. Update App.tsx to use JWT tokens (replace ADMIN_PASSWORD)
+4. Add logout button and user menu
+5. Handle 401 errors → redirect to login
+
+### Time Tracking
+
+- **Session 1:** ~30 minutes (Planning & Research)
+- **Session 2:** ~15 minutes (Phase 1 - Database Migrations)
+- **Session 3:** ~30 minutes (Phase 2 - Backend Auth System)
+- **Session 4:** ~30 minutes (Phase 3 - User Management API)
+- **Session 5:** ~45 minutes (Phase 4 - Permission System)
+- **Session 6:** ~30 minutes (Phase 5 - Audit Logging)
+- **Total:** ~3 hours
+
+### Status
+
+- ✅ Phase 0: Research & Database Design - Complete
+- ✅ Phase 1: Database Migrations - Complete
+- ✅ Phase 2: Backend Auth System - Complete
+- ✅ Phase 3: User Management API - Complete
+- ✅ Phase 4: Permission System - Complete
+- ✅ Phase 5: Audit Logging - Complete
+- ⏳ Phase 6: Frontend Auth UI - Next
+- ⏳ Phase 7: User Management UI - Planned
+- ⏳ Phase 8: Audit Log Viewer - Planned
+- ⏳ Phase 9: Testing & Migration - Planned
+
+---
+
+## Next Session: Phase 6 - Frontend Auth UI
 
 **Goals:**
-- Create audit logging library
-- Add logging to all sensitive operations
-- Capture user context (IP, user-agent, timestamp)
-- Log all CRUD operations and auth events
+- Replace password-based auth with JWT tokens
+- Create login form component
+- Implement user context for global state
+- Add logout functionality
+- Handle authentication errors
 
-**Estimated Duration:** ~1 hour
+**Estimated Duration:** ~1.5 hours
 
 **Files to Create:**
-- `manager/src/lib/audit.ts`
+- `frontend/src/components/Login.tsx`
+- `frontend/src/contexts/UserContext.tsx`
+- `frontend/src/lib/auth.ts` (client-side auth helpers)
 
 **Files to Modify:**
-- `manager/src/routes/auth.ts` (log login/logout)
-- `manager/src/routes/users.ts` (log user management)
-- `manager/src/routes/permissions.ts` (log permission changes)
-- `manager/src/routes/agents.ts` (log server operations)
+- `frontend/src/App.tsx` (use UserContext, add routing)
+- `frontend/src/lib/api.ts` (replace password with token)
