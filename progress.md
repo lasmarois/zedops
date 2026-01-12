@@ -509,4 +509,70 @@ cat TEST-PLAN-phase3-backend.md
 
 ## Pending Implementation
 
-Phase 3 in progress - 10 endpoints migrated, ~4 remaining.
+Phases 0-4 complete. Ready to start Phase 5 (Frontend Updates).
+
+---
+
+## Session 6: Phase 5 - Frontend Updates 🚧 In Progress
+
+**Date:** 2026-01-12 (continued)
+**Status:** In Progress
+**Goal:** Update frontend to use new role-based permission system
+
+### Phase 5 Plan
+
+**Priority 1: Role Assignment Management** (Critical - enables testing)
+1. Update PermissionsManager component to use role-based system
+2. Replace permission types (view/control/delete) with roles (agent-admin/operator/viewer)
+3. Support multi-scope assignments (global/agent/server)
+4. Update API hooks to use new role assignment endpoints
+
+**Priority 2: Frontend Authentication Updates**
+1. Update WebSocket connections to use JWT tokens
+2. Remove ADMIN_PASSWORD prompts
+3. Update useLogStream hook
+4. Update useRcon hook (if exists)
+
+**Priority 3: NULL Role User Experience**
+1. Handle users with NULL system role
+2. Show appropriate messaging when user has no access
+3. Update UserList to show system role + assignment count
+
+### Actions Taken
+
+**Priority 1: Role Assignment Management - Backend**
+
+1. ✅ **Created role-assignments.ts routes** (manager/src/routes/role-assignments.ts)
+   - Replaces old permissions.ts with role-based system
+   - Implements all CRUD operations for role assignments:
+     * GET /api/users/:userId/role-assignments - List user's assignments
+     * POST /api/users/:userId/role-assignments - Grant role assignment
+     * DELETE /api/role-assignments/:assignmentId - Revoke assignment
+     * DELETE /api/users/:userId/role-assignments/:scope/:resourceId - Revoke all on resource
+     * GET /api/role-assignments/:scope/:resourceId - List assignments for resource
+   - Validates role constraints (agent-admin only at agent scope)
+   - Validates scope constraints (global cannot have resource_id)
+   - Checks resource existence (agents, servers)
+   - Admin-only endpoints (requireAuth + requireRole)
+
+2. ✅ **Registered new routes** (manager/src/index.ts)
+   - Mounted at /api/role-assignments
+   - Old /api/permissions routes kept for backward compatibility (deprecated)
+
+**API Endpoints Summary:**
+```typescript
+// Grant assignment
+POST /api/users/{userId}/role-assignments
+Body: { role: 'agent-admin'|'operator'|'viewer', scope: 'global'|'agent'|'server', resourceId?: string }
+
+// List user assignments
+GET /api/users/{userId}/role-assignments
+
+// Revoke assignment
+DELETE /api/role-assignments/{assignmentId}
+
+// List resource assignments
+GET /api/role-assignments/{scope}/{resourceId}
+```
+
+**Next: Update frontend to use new API**

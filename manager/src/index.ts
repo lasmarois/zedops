@@ -16,6 +16,7 @@ import { auth } from './routes/auth';
 import { users } from './routes/users';
 import { invitations } from './routes/invitations';
 import { permissions } from './routes/permissions';
+import { roleAssignments } from './routes/role-assignments';
 import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
@@ -37,7 +38,8 @@ app.route('/api/auth', auth);
 app.route('/api/users', users);
 app.route('/api/users/invite', invitations);
 app.route('/api/invite', invitations); // Public invitation endpoints
-app.route('/api/permissions', permissions);
+app.route('/api/permissions', permissions); // Legacy - deprecated, use role-assignments instead
+app.route('/api/role-assignments', roleAssignments); // New role-based system
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 
