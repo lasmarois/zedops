@@ -982,15 +982,41 @@ terminal.scrollToBottom();  // Ensure prompt is visible
 - Terminal UX polished
 - Comprehensive test suite deferred (can be run later)
 
+### Issues Discovered During User Testing
+
+**Issue 1: Redundant Window Scrollbars** 🐛 Open
+- **Symptom:** Window has both vertical and horizontal scrollbars (redundant)
+- **Root Cause:** Changed `overflow: 'hidden'` to `overflow: 'auto'` on wrapper div
+- **Analysis:** xterm.js has built-in scrolling - wrapper scrollbars are unnecessary
+- **Impact:** UI clutter, confusing UX (which scrollbar to use?)
+- **Proper Fix:** Revert to `overflow: 'hidden'`, rely on xterm.js scrolling + scrollToBottom()
+
+**Issue 2: Command History Not Working** 🐛 Open
+- **Symptom:** Up arrow does nothing, no command history navigation
+- **Root Cause:** Closure problem - `navigateHistory` captured initial empty state
+- **Analysis:** `onData` handler set in initial useEffect captures first render's state
+  - `commandHistory` is empty array in closure
+  - Line 231 check: `if (commandHistory.length === 0) return;` always true
+  - State updates don't affect captured closure
+- **Impact:** Phase 4 feature (command history) broken
+- **Proper Fix:** Use refs for commandHistory or recreate onData handler when history changes
+
 ### Next Actions
+
+**Immediate Fixes Required:**
+1. [ ] Fix scrollbar issue - revert to `overflow: 'hidden'`
+2. [ ] Fix command history - use refs or update onData handler
+3. [ ] Test both fixes together
+4. [ ] Commit and push fixes
 
 **Milestone Completion:**
 1. [x] Fix all RCON bugs
 2. [x] Test basic RCON functionality
 3. [x] Commit and push changes
 4. [x] Update planning files
-5. [ ] Archive milestone to planning-history/ (optional)
-6. [ ] Update CHANGELOG.md (for next release)
+5. [ ] Fix user-reported issues (scrollbars, command history)
+6. [ ] Archive milestone to planning-history/ (optional)
+7. [ ] Update CHANGELOG.md (for next release)
 
 ---
 
