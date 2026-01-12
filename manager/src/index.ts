@@ -16,6 +16,7 @@ import { agents } from './routes/agents';
 import { auth } from './routes/auth';
 import { users } from './routes/users';
 import { invitations } from './routes/invitations';
+import { permissions } from './routes/permissions';
 import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
@@ -37,6 +38,7 @@ app.route('/api/auth', auth);
 app.route('/api/users', users);
 app.route('/api/users/invite', invitations);
 app.route('/api/invite', invitations); // Public invitation endpoints
+app.route('/api/permissions', permissions);
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 

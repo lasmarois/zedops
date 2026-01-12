@@ -1,37 +1,45 @@
 /**
  * Agent management API endpoints
  *
- * Public endpoints for querying agent status.
- * Protected by admin authentication (MVP).
+ * All endpoints require authentication.
+ * Permission checks applied per-endpoint based on operation type.
  */
 
 import { Hono } from 'hono';
 import { CreateServerRequest, DeleteServerRequest } from '../types/Server';
+import { requireAuth } from '../middleware/auth';
+import {
+  canViewServer,
+  canControlServer,
+  canDeleteServer,
+  getUserVisibleServers,
+} from '../lib/permissions';
 
 type Bindings = {
   DB: D1Database;
   ADMIN_PASSWORD: string;
   AGENT_CONNECTION: DurableObjectNamespace;
+  TOKEN_SECRET: string;
 };
 
 const agents = new Hono<{ Bindings: Bindings }>();
+
+// All routes require authentication
+agents.use('*', requireAuth());
 
 /**
  * GET /api/agents
  * List all registered agents with their status
  *
  * Returns: Array of agents with status information
+ * Permission: Admin only (agents list is global view)
  */
 agents.get('/', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
+  const user = c.get('user');
 
-  const providedPassword = authHeader.substring(7); // Remove "Bearer "
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
+  // Only admins can list all agents
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
   }
 
   // Query all agents from D1
@@ -65,20 +73,16 @@ agents.get('/', async (c) => {
  * Get details for a specific agent
  *
  * Returns: Agent details with status information
+ * Permission: Admin only
  */
 agents.get('/:id', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
-
-  const providedPassword = authHeader.substring(7); // Remove "Bearer "
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
-  }
-
+  const user = c.get('user');
   const agentId = c.req.param('id');
+
+  // Only admins can view agent details (for now)
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  }
 
   // Query agent from D1
   try {
@@ -801,17 +805,7 @@ agents.post('/:id/servers', async (c) => {
  * Returns: Array of servers
  */
 agents.get('/:id/servers', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
-
-  const providedPassword = authHeader.substring(7);
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
-  }
-
+  const user = c.get('user');
   const agentId = c.req.param('id');
 
   try {
@@ -833,7 +827,16 @@ agents.get('/:id/servers', async (c) => {
       .bind(agentId)
       .all();
 
-    const servers = result.results.map((row: any) => ({
+    // Filter servers based on user permissions
+    let serverRows = result.results || [];
+
+    if (user.role !== 'admin') {
+      // Non-admins only see servers they have permission to view
+      const visibleServerIds = await getUserVisibleServers(c.env.DB, user.id, user.role);
+      serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
+    }
+
+    const servers = serverRows.map((row: any) => ({
       id: row.id,
       agent_id: row.agent_id,
       name: row.name,
@@ -932,21 +935,16 @@ agents.post('/:id/servers/sync', async (c) => {
  * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "start" as a full serverId
  */
 agents.post('/:id/servers/:serverId/start', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
-
-  const providedPassword = authHeader.substring(7);
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
-  }
-
+  const user = c.get('user');
   const agentId = c.req.param('id');
   const serverId = c.req.param('serverId');
 
   try {
+    // Check permission to control server
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden - you do not have permission to control this server' }, 403);
+    }
     // Verify agent exists
     const agent = await c.env.DB.prepare(
       `SELECT id, name, steam_zomboid_registry, server_data_path FROM agents WHERE id = ?`
@@ -1104,21 +1102,16 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
  * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "stop" as a full serverId
  */
 agents.post('/:id/servers/:serverId/stop', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
-
-  const providedPassword = authHeader.substring(7);
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
-  }
-
+  const user = c.get('user');
   const agentId = c.req.param('id');
   const serverId = c.req.param('serverId');
 
   try {
+    // Check permission to control server
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden - you do not have permission to control this server' }, 403);
+    }
     // Verify agent exists
     const agent = await c.env.DB.prepare(
       `SELECT id, name FROM agents WHERE id = ?`
@@ -1307,21 +1300,16 @@ agents.delete('/:id/servers/failed', async (c) => {
  * Returns: Success message with deletedAt timestamp
  */
 agents.delete('/:id/servers/:serverId', async (c) => {
-  // Check admin password
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Missing or invalid Authorization header' }, 401);
-  }
-
-  const providedPassword = authHeader.substring(7);
-  if (providedPassword !== c.env.ADMIN_PASSWORD) {
-    return c.json({ error: 'Invalid admin password' }, 401);
-  }
-
+  const user = c.get('user');
   const agentId = c.req.param('id');
   const serverId = c.req.param('serverId');
 
   try {
+    // Check permission to delete server
+    const hasPermission = await canDeleteServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden - you do not have permission to delete this server' }, 403);
+    }
     // Verify server exists and belongs to agent
     const server = await c.env.DB.prepare(
       `SELECT id, container_id, status FROM servers WHERE id = ? AND agent_id = ?`
