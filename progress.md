@@ -455,9 +455,55 @@ Verified via grep: Only remaining reference is type definition (line 22), which 
    - Both have identical logic
    - Recommendation: Remove duplicate at line 1677
 
+### Testing Approach
+
+Created comprehensive test plan for verifying backend changes:
+
+**Test Files Created:**
+1. **TEST-PLAN-phase3-backend.md** - Complete test plan with:
+   - Setup instructions (create test users, get tokens)
+   - Test scenarios for all endpoint types
+   - Expected results and verification steps
+   - Edge case testing
+   - Cleanup procedures
+
+2. **test-backend-auth.sh** - Quick smoke test script:
+   - Tests JWT authentication works
+   - Verifies endpoints reject invalid tokens
+   - Confirms admin can access endpoints
+   - Tests WebSocket JWT authentication
+   - ~2 minutes to run
+
+**Testing Strategy:**
+- Quick smoke test: Verify JWT auth basics work
+- Full test plan: Comprehensive permission testing (requires Phase 5 for role assignments)
+- Automated tests: Phase 7 (Testing & Verification)
+
+**Limitations:**
+- Cannot fully test permission-based endpoints until Phase 5 (role assignment UI)
+- WebSocket testing with curl is limited (full test in Phase 7)
+- Manual testing only at this stage
+
 ### Next Steps
 
-**Phase 3 Complete!** ✅ Ready to proceed to Phase 4: WebSocket Auth Migration
+**Option 1: Run Backend Tests First**
+```bash
+# Set admin password
+export ADMIN_PASSWORD='your-admin-password'
+
+# Run quick smoke test
+bash test-backend-auth.sh
+
+# Review full test plan
+cat TEST-PLAN-phase3-backend.md
+```
+
+**Option 2: Proceed to Phase 5**
+- Build role assignment management UI
+- Then do comprehensive permission testing
+- This is recommended as it enables full testing
+
+**Phase 3 Complete!** ✅ Ready for testing or Phase 5
 
 ---
 
