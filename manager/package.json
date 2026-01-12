@@ -10,11 +10,13 @@
 		"cf-typegen": "wrangler types"
 	},
 	"dependencies": {
+		"bcryptjs": "^3.0.3",
 		"hono": "^4.0.0",
 		"jose": "^5.0.0"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.19",
+		"@types/bcryptjs": "^2.4.6",
 		"typescript": "^5.5.2",
 		"vitest": "~3.2.0",
 		"wrangler": "^4.58.0"

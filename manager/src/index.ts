@@ -9,9 +9,12 @@
  */
 
 import { Hono } from 'hono';
+import { v4 as uuidv4 } from 'uuid';
 import { AgentConnection } from './durable-objects/AgentConnection';
 import { admin } from './routes/admin';
 import { agents } from './routes/agents';
+import { auth } from './routes/auth';
+import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
 export { AgentConnection };
@@ -28,6 +31,7 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Mount API routes
+app.route('/api/auth', auth);
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 
@@ -52,6 +56,74 @@ app.get('/ws', async (c) => {
 
   // Forward request to Durable Object
   return stub.fetch(c.req.raw);
+});
+
+/**
+ * Bootstrap endpoint - Create initial admin user
+ *
+ * This endpoint should be called once after deployment to create the
+ * bootstrap admin user. It checks if the users table is empty and creates
+ * a default admin account using the ADMIN_PASSWORD environment variable.
+ *
+ * Call with: POST /api/bootstrap
+ * Protected by ADMIN_PASSWORD (same as current auth mechanism)
+ */
+app.post('/api/bootstrap', async (c) => {
+  try {
+    // Verify ADMIN_PASSWORD to protect this endpoint
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ error: 'Missing or invalid Authorization header' }, 401);
+    }
+
+    const providedPassword = authHeader.substring(7);
+    if (providedPassword !== c.env.ADMIN_PASSWORD) {
+      return c.json({ error: 'Invalid admin password' }, 401);
+    }
+
+    // Check if users table is empty
+    const existingUsers = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
+
+    if (existingUsers && (existingUsers.count as number) > 0) {
+      return c.json({
+        message: 'Bootstrap already completed - users table is not empty',
+        userCount: existingUsers.count,
+      });
+    }
+
+    // Create bootstrap admin user
+    const userId = uuidv4();
+    const email = 'admin@zedops.local';
+    const passwordHash = await hashPassword(c.env.ADMIN_PASSWORD);
+    const now = Date.now();
+
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(userId, email, passwordHash, 'admin', now, now)
+      .run();
+
+    return c.json({
+      message: 'Bootstrap admin user created successfully',
+      user: {
+        id: userId,
+        email,
+        role: 'admin',
+      },
+      instructions: [
+        'You can now login with:',
+        `  Email: ${email}`,
+        `  Password: <value of ADMIN_PASSWORD>`,
+        '',
+        'After logging in, you should:',
+        '1. Create a new admin user with your email',
+        '2. Delete or change the password for admin@zedops.local',
+      ],
+    });
+  } catch (error) {
+    console.error('Bootstrap error:', error);
+    return c.json({ error: 'Internal server error', details: (error as Error).message }, 500);
+  }
 });
 
 /**
