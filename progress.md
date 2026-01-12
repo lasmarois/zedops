@@ -984,14 +984,14 @@ terminal.scrollToBottom();  // Ensure prompt is visible
 
 ### Issues Discovered During User Testing
 
-**Issue 1: Redundant Window Scrollbars** 🐛 Open
+**Issue 1: Redundant Window Scrollbars** ✅ Fixed
 - **Symptom:** Window has both vertical and horizontal scrollbars (redundant)
 - **Root Cause:** Changed `overflow: 'hidden'` to `overflow: 'auto'` on wrapper div
 - **Analysis:** xterm.js has built-in scrolling - wrapper scrollbars are unnecessary
 - **Impact:** UI clutter, confusing UX (which scrollbar to use?)
-- **Proper Fix:** Revert to `overflow: 'hidden'`, rely on xterm.js scrolling + scrollToBottom()
+- **Fix:** Reverted to `overflow: 'hidden'`, rely on xterm.js scrolling only
 
-**Issue 2: Command History Not Working** 🐛 Open
+**Issue 2: Command History Not Working** ✅ Fixed
 - **Symptom:** Up arrow does nothing, no command history navigation
 - **Root Cause:** Closure problem - `navigateHistory` captured initial empty state
 - **Analysis:** `onData` handler set in initial useEffect captures first render's state
@@ -999,25 +999,73 @@ terminal.scrollToBottom();  // Ensure prompt is visible
   - Line 231 check: `if (commandHistory.length === 0) return;` always true
   - State updates don't affect captured closure
 - **Impact:** Phase 4 feature (command history) broken
-- **Proper Fix:** Use refs for commandHistory or recreate onData handler when history changes
+- **Fix:** Added `commandHistoryRef` and `historyIndexRef`, keep in sync with state via useEffect, navigateHistory reads from refs
+
+**Issue 3: Prompt Hidden by Footer (After Fix #1)** ✅ Fixed
+- **Symptom:** Prompt at bottom cut off by footer when output fills screen
+- **Root Cause:** xterm.js `fit()` calculates full container height, last line at absolute bottom
+- **Analysis:** scrollToBottom() puts cursor at very last pixel, footer overlaps it
+- **Impact:** User can't see prompt until scrolling or pressing Enter
+- **Fix:** After `fit()`, reduce rows by 2: `terminal.resize(cols, rows - 2)`
+  - Applied to: initial setup, window resize, command execution, connection
+  - Leaves visible space at bottom so prompt stays above footer
+
+### Session 8: User Testing & Final Fixes (2026-01-12)
+
+**Duration:** ~45 minutes
+**Goal:** Fix user-reported UX issues
+**Status:** ✅ Complete
+
+### Actions Taken
+
+1. **Tracked Issues in Planning Files** ✅
+   - Added issues to progress.md and task_plan.md
+   - Documented root causes and analysis
+   - Created todo list for fixes
+
+2. **Fixed Issue #1: Redundant Scrollbars** ✅
+   - Reverted `overflow: 'auto'` back to `overflow: 'hidden'`
+   - Tested: No wrapper scrollbars, xterm.js handles scrolling
+
+3. **Fixed Issue #2: Command History** ✅
+   - Added refs: `commandHistoryRef`, `historyIndexRef`
+   - Added useEffect to sync refs with state
+   - Updated `navigateHistory` to read from refs
+   - Tested: Up/down arrows now work correctly
+
+4. **Fixed Issue #3: Prompt Hidden by Footer** ✅
+   - After `fit()`, reduce rows by 2: `terminal.resize(cols, rows - 2)`
+   - Applied consistently in 4 places
+   - Tested: Prompt always visible with long output
+
+5. **Build and Deploy** ✅
+   - Frontend: Built successfully (632.51 kB)
+   - Manager: Deployed (Version ID: 95091489-1599-4ddd-809b-d823eb94f71b)
+   - User confirmed all issues fixed
+
+6. **Committed and Pushed** ✅
+   - Commit: "Fix RCON terminal UX issues (scrollbars and command history)"
+   - Pushed to main
+
+### Testing Results
+
+**All Issues Resolved:**
+- ✅ No window scrollbars (xterm.js internal scrolling only)
+- ✅ Command history works (↑↓ navigation)
+- ✅ Prompt fully visible after help command
+- ✅ Terminal scrolls correctly with long output
 
 ### Next Actions
-
-**Immediate Fixes Required:**
-1. [ ] Fix scrollbar issue - revert to `overflow: 'hidden'`
-2. [ ] Fix command history - use refs or update onData handler
-3. [ ] Test both fixes together
-4. [ ] Commit and push fixes
 
 **Milestone Completion:**
 1. [x] Fix all RCON bugs
 2. [x] Test basic RCON functionality
 3. [x] Commit and push changes
 4. [x] Update planning files
-5. [ ] Fix user-reported issues (scrollbars, command history)
+5. [x] Fix user-reported issues (scrollbars, command history, prompt visibility)
 6. [ ] Archive milestone to planning-history/ (optional)
 7. [ ] Update CHANGELOG.md (for next release)
 
 ---
 
-**Total time with Sessions 1-7:** ~8.75 hours
+**Total time with Sessions 1-8:** ~9.5 hours

@@ -467,9 +467,10 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 | Containers missing RCON_PORT environment variable | Phase 5.5 | 4 | Added RCON_PORT to container config in manager on create and restart |
 | Commands not sent (empty string) | Phase 5.5 | 5 | Switched from useState to useRef for synchronous command tracking |
 | "RCON not connected" error after successful connection | Phase 5.5 | 6 | Added sessionIdRef for synchronous session tracking, stabilized callbacks |
-| Terminal prompt hidden by footer on long output | Phase 6 | 7 | Changed overflow to auto, added minHeight: 0, scrollback: 5000, scrollToBottom() |
-| **Redundant window scrollbars (xterm.js has built-in scrolling)** | Phase 6 | 8 | **Open - Need to revert overflow: 'auto' back to 'hidden'** |
-| **Command history not working (up arrow does nothing)** | Phase 6 | 9 | **Open - Closure bug: navigateHistory captures empty state, need refs** |
+| Terminal prompt hidden by footer on long output | Phase 6 | 7 | Changed overflow to auto (initial bad fix, see #8) |
+| Redundant window scrollbars (xterm.js has built-in scrolling) | Phase 6 | 8 | Reverted overflow: 'auto' back to 'hidden' |
+| Command history not working (up arrow does nothing) | Phase 6 | 9 | Added commandHistoryRef + historyIndexRef, navigateHistory reads from refs |
+| Prompt still hidden by footer after fix #8 | Phase 6 | 10 | After fit(), reduce rows by 2: terminal.resize(cols, rows - 2) |
 
 ---
 
