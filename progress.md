@@ -469,21 +469,183 @@ curl -X POST https://zedops.example.com/api/bootstrap \
 
 ---
 
-## Next Session: Phase 4 - Permission System
+## Session 5: Phase 4 - Permission System ✅ Complete
+
+**Date:** 2026-01-12
+**Duration:** ~45 minutes
+**Goal:** Implement complete permission system with RBAC enforcement
+
+### Actions Taken
+
+1. **Created Permission Library** (`manager/src/lib/permissions.ts`)
+   - **Core Functions:**
+     - `checkPermission()` - Central permission checking logic
+     - `canViewServer()`, `canControlServer()`, `canDeleteServer()` - Convenience wrappers
+     - `getUserVisibleServers()` - Get all servers user can access
+     - `getUserPermissions()` - List all permissions for a user
+   - **Permission Management:**
+     - `grantPermission()` - Grant permission to user (idempotent)
+     - `revokePermission()` - Remove specific permission
+     - `revokeAllPermissionsForResource()` - Remove all permissions for a resource
+   - **Role Presets:**
+     - `grantOperatorPermissions()` - Grant view + control
+     - `grantViewerPermissions()` - Grant view only
+
+2. **Created Permission API Routes** (`manager/src/routes/permissions.ts`)
+   - **GET /api/permissions/:userId** - List all permissions for a user
+   - **POST /api/permissions/:userId** - Grant permission (with resource validation)
+   - **POST /api/permissions/:userId/operator/:serverId** - Grant operator access to server
+   - **POST /api/permissions/:userId/viewer/:serverId** - Grant viewer access to server
+   - **DELETE /api/permissions/:permissionId** - Revoke specific permission
+   - **DELETE /api/permissions/:userId/:resourceType/:resourceId** - Revoke all for resource
+   - All routes protected with `requireAuth()` and `requireRole('admin')`
+
+3. **Updated Main Entry Point** (`manager/src/index.ts`)
+   - Imported permission routes
+   - Mounted at `/api/permissions`
+
+4. **Added RBAC Enforcement to Agent Routes** (`manager/src/routes/agents.ts`)
+   - Added `requireAuth()` middleware to all routes (global authentication)
+   - Replaced hardcoded ADMIN_PASSWORD checks with user context
+   - **Updated Endpoints:**
+     - GET /api/agents - Admin only (global view)
+     - GET /api/agents/:id - Admin only
+     - GET /api/agents/:id/servers - Permission-filtered (users only see allowed servers)
+     - POST /:id/servers/:serverId/start - Requires `control` permission
+     - POST /:id/servers/:serverId/stop - Requires `control` permission
+     - DELETE /:id/servers/:serverId - Requires `delete` permission
+
+5. **Committed and Pushed**
+   - Committed: `8a979cd` - "Implement Phase 4: Permission System"
+   - 4 files changed: 2 new files (permissions.ts lib + routes), 2 modified (index.ts, agents.ts)
+   - Total: 704 lines added, 65 lines removed
+
+### Implementation Details
+
+**Permission Model:**
+```typescript
+// Admin: Global access (bypasses all checks)
+if (userRole === 'admin') return true;
+
+// Non-admins: Check database for explicit permission grant
+SELECT * FROM permissions
+WHERE user_id = ? AND resource_type = 'server'
+AND resource_id = ? AND permission = 'control'
+```
+
+**Permission Types:**
+- `view` - Can view server status and logs
+- `control` - Can start, stop, restart server
+- `delete` - Can delete server (soft delete)
+- `manage_users` - Can manage users (admin only, not used yet)
+
+**Server Filtering:**
+```typescript
+// GET /api/agents/:id/servers
+// Admins see all servers for agent
+// Operators/Viewers see only permitted servers
+if (user.role !== 'admin') {
+  const visibleServerIds = await getUserVisibleServers(db, userId, userRole);
+  servers = servers.filter(s => visibleServerIds.includes(s.id));
+}
+```
+
+**Grant Operator Permissions:**
+```bash
+# Admin grants operator access to server:
+POST /api/permissions/user-123/operator/server-456
+
+# Creates two permissions:
+- { user_id: user-123, resource_type: 'server', resource_id: 'server-456', permission: 'view' }
+- { user_id: user-123, resource_type: 'server', resource_id: 'server-456', permission: 'control' }
+```
+
+**Grant Viewer Permissions:**
+```bash
+# Admin grants viewer access to server:
+POST /api/permissions/user-789/viewer/server-456
+
+# Creates one permission:
+- { user_id: user-789, resource_type: 'server', resource_id: 'server-456', permission: 'view' }
+```
+
+**Permission Check Flow:**
+```
+1. User calls: POST /api/agents/:id/servers/:serverId/start
+2. requireAuth() middleware: Verifies JWT, loads user into context
+3. canControlServer() check: Queries permissions table
+4. If admin → return true (bypass)
+5. If non-admin → return true only if permission exists
+6. If no permission → 403 Forbidden
+```
+
+**API Endpoint Summary:**
+
+| Endpoint | Method | Auth | Permission | Description |
+|----------|--------|------|------------|-------------|
+| /api/permissions/:userId | GET | Admin | - | List user permissions |
+| /api/permissions/:userId | POST | Admin | - | Grant permission |
+| /api/permissions/:userId/operator/:serverId | POST | Admin | - | Grant operator access |
+| /api/permissions/:userId/viewer/:serverId | POST | Admin | - | Grant viewer access |
+| /api/permissions/:permissionId | DELETE | Admin | - | Revoke permission |
+| /api/agents | GET | Required | Admin only | List agents |
+| /api/agents/:id/servers | GET | Required | Filtered | List servers |
+| POST /:id/servers/:serverId/start | POST | Required | control | Start server |
+| POST /:id/servers/:serverId/stop | POST | Required | control | Stop server |
+| DELETE /:id/servers/:serverId | DELETE | Required | delete | Delete server |
+
+### Next Actions
+
+**Phase 5: Audit Logging** ⏳ Next
+
+1. Create `manager/src/lib/audit.ts` (audit logging functions)
+2. Add audit logging to all user actions:
+   - User management (create, delete, role change)
+   - Permission changes (grant, revoke)
+   - Server operations (start, stop, delete, create)
+   - Auth events (login, logout)
+3. Extract IP address and user-agent from requests
+4. Store audit logs in database with user attribution
+
+### Time Tracking
+
+- **Session 1:** ~30 minutes (Planning & Research)
+- **Session 2:** ~15 minutes (Phase 1 - Database Migrations)
+- **Session 3:** ~30 minutes (Phase 2 - Backend Auth System)
+- **Session 4:** ~30 minutes (Phase 3 - User Management API)
+- **Session 5:** ~45 minutes (Phase 4 - Permission System)
+- **Total:** ~2 hours 30 minutes
+
+### Status
+
+- ✅ Phase 0: Research & Database Design - Complete
+- ✅ Phase 1: Database Migrations - Complete
+- ✅ Phase 2: Backend Auth System - Complete
+- ✅ Phase 3: User Management API - Complete
+- ✅ Phase 4: Permission System - Complete
+- ⏳ Phase 5: Audit Logging - Next
+- ⏳ Phase 6: Frontend Auth UI - Planned
+- ⏳ Phase 7: User Management UI - Planned
+- ⏳ Phase 8: Audit Log Viewer - Planned
+- ⏳ Phase 9: Testing & Migration - Planned
+
+---
+
+## Next Session: Phase 5 - Audit Logging
 
 **Goals:**
-- Create permission checking library
-- Add RBAC enforcement to all endpoints
-- Implement per-server permissions for operators/viewers
-- Build permission grant/revoke API
+- Create audit logging library
+- Add logging to all sensitive operations
+- Capture user context (IP, user-agent, timestamp)
+- Log all CRUD operations and auth events
 
-**Estimated Duration:** ~2 hours
+**Estimated Duration:** ~1 hour
 
 **Files to Create:**
-- `manager/src/lib/permissions.ts`
-- `manager/src/routes/permissions.ts`
+- `manager/src/lib/audit.ts`
 
 **Files to Modify:**
-- `manager/src/routes/agents.ts` (add permission checks)
-- `manager/src/durable-objects/AgentConnection.ts` (add permission checks)
-- `manager/src/index.ts` (mount permission routes)
+- `manager/src/routes/auth.ts` (log login/logout)
+- `manager/src/routes/users.ts` (log user management)
+- `manager/src/routes/permissions.ts` (log permission changes)
+- `manager/src/routes/agents.ts` (log server operations)
