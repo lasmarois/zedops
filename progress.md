@@ -193,21 +193,161 @@ users           ← NEW
 
 ---
 
-## Next Session: Phase 2 - Backend Auth System
+## Session 3: Phase 2 - Backend Auth System ✅ Complete
+
+**Date:** 2026-01-12
+**Duration:** ~30 minutes
+**Goal:** Implement complete backend authentication system with JWT and bcrypt
+
+### Actions Taken
+
+1. **Installed Dependencies**
+   - Package: `bcryptjs` (password hashing for Cloudflare Workers)
+   - Package: `@types/bcryptjs` (TypeScript definitions)
+   - Both installed successfully with no vulnerabilities
+
+2. **Created Authentication Library** (`manager/src/lib/auth.ts`)
+   - **Password Hashing:**
+     - `hashPassword()` - bcrypt with 10 rounds (~100ms per hash)
+     - `verifyPassword()` - compare plain-text to hash
+   - **Password Validation:**
+     - `validatePasswordStrength()` - enforces 8+ chars, 1 upper, 1 lower, 1 number
+     - Returns detailed error messages for user feedback
+   - **JWT Session Tokens:**
+     - `generateSessionToken()` - creates JWT with 7-day expiry
+     - `verifySessionToken()` - verifies and decodes JWT
+     - Payload includes: userId, email, role, type='user_session'
+   - **Token Hashing:**
+     - `hashToken()` - SHA-256 for storing tokens in database
+
+3. **Created Authentication Middleware** (`manager/src/middleware/auth.ts`)
+   - **requireAuth():**
+     - Extracts JWT from Authorization header
+     - Verifies token signature and expiry
+     - Checks session exists in database and not expired
+     - Loads user into context for downstream handlers
+     - Updates last_login timestamp (non-blocking)
+   - **requireRole():**
+     - Enforces role-based access (admin always passes)
+     - Returns 403 if user lacks required role
+   - **optionalAuth():**
+     - Loads user if token present, continues without user if not
+     - Useful for endpoints that work with or without authentication
+
+4. **Created Authentication Routes** (`manager/src/routes/auth.ts`)
+   - **POST /api/auth/login:**
+     - Accepts email and password
+     - Verifies password with bcrypt.compare()
+     - Generates 7-day JWT session token
+     - Stores session in database (hashed token)
+     - Returns token and user info
+   - **POST /api/auth/logout:**
+     - Requires authentication (requireAuth middleware)
+     - Invalidates session by deleting from database
+   - **GET /api/auth/me:**
+     - Requires authentication
+     - Returns current user details from database
+   - **POST /api/auth/refresh:**
+     - Requires authentication
+     - Generates new token with extended expiry
+     - Updates session in database
+
+5. **Updated Main Entry Point** (`manager/src/index.ts`)
+   - Mounted new auth routes: `app.route('/api/auth', auth)`
+   - **Added Bootstrap Endpoint** (`POST /api/bootstrap`):
+     - Protected by ADMIN_PASSWORD (same as current mechanism)
+     - Checks if users table is empty
+     - Creates default admin: `admin@zedops.local` with ADMIN_PASSWORD
+     - Returns instructions for first login
+     - Idempotent (safe to call multiple times)
+
+6. **Committed Changes**
+   - Committed: `5b8264f` - "Implement Phase 2: Backend Auth System"
+   - 8 files changed: 3 new files, 2 modified files, package.json updated
+   - Pushed to origin/main
+
+### Implementation Details
+
+**Password Security:**
+- bcrypt 10 rounds (2^10 iterations = ~100ms per hash)
+- Secure against brute force attacks
+- Automatic salt generation and management
+
+**Session Management:**
+- JWT tokens with 7-day expiry
+- Tokens stored as SHA-256 hashes in database
+- Session validation on every authenticated request
+- last_login timestamp updated automatically
+
+**Bootstrap Process:**
+```bash
+# After deployment, call bootstrap endpoint:
+curl -X POST https://zedops.example.com/api/bootstrap \
+  -H "Authorization: Bearer <ADMIN_PASSWORD>"
+
+# Then login with:
+{
+  "email": "admin@zedops.local",
+  "password": "<ADMIN_PASSWORD>"
+}
+```
+
+**API Authentication Flow:**
+```
+1. User calls POST /api/auth/login with email+password
+2. Server verifies password, generates JWT (7d expiry)
+3. Server stores session in DB (token hash + expiry)
+4. Client receives JWT token
+5. Client includes token in Authorization header for all requests
+6. requireAuth() middleware verifies token and loads user
+7. User can call POST /api/auth/logout to invalidate session
+```
+
+### Next Actions
+
+**Phase 3: User Management API** ⏳ Next
+
+1. Create `manager/src/routes/users.ts` (user CRUD operations)
+2. Create `manager/src/routes/invitations.ts` (invitation flow)
+3. Implement user invitation with 24h token expiry
+4. Add role change and user deletion endpoints
+5. Protect all endpoints with requireAuth() and requireRole('admin')
+
+### Time Tracking
+
+- **Session 1:** ~30 minutes (Planning & Research)
+- **Session 2:** ~15 minutes (Phase 1 - Database Migrations)
+- **Session 3:** ~30 minutes (Phase 2 - Backend Auth System)
+- **Total:** ~1 hour 15 minutes
+
+### Status
+
+- ✅ Phase 0: Research & Database Design - Complete
+- ✅ Phase 1: Database Migrations - Complete
+- ✅ Phase 2: Backend Auth System - Complete
+- ⏳ Phase 3: User Management API - Next
+- ⏳ Phase 4: Permission System - Planned
+- ⏳ Phase 5: Audit Logging - Planned
+- ⏳ Phase 6: Frontend Auth UI - Planned
+- ⏳ Phase 7: User Management UI - Planned
+- ⏳ Phase 8: Audit Log Viewer - Planned
+- ⏳ Phase 9: Testing & Migration - Planned
+
+---
+
+## Next Session: Phase 3 - User Management API
 
 **Goals:**
-- Set up password hashing with bcryptjs
-- Create authentication middleware
-- Build login/logout API endpoints
-- Implement bootstrap admin creation
+- Create user management routes (invite, list, delete, role change)
+- Implement invitation flow with 24h token expiry
+- Build invitation acceptance endpoint
+- Protect all endpoints with admin role requirement
 
 **Estimated Duration:** ~2 hours
 
 **Files to Create:**
-- `manager/src/lib/auth.ts`
-- `manager/src/middleware/auth.ts`
-- `manager/src/routes/auth.ts`
+- `manager/src/routes/users.ts`
+- `manager/src/routes/invitations.ts`
 
 **Files to Modify:**
-- `manager/src/index.ts` (bootstrap admin, mount auth routes)
-- `manager/package.json` (add bcryptjs dependency)
+- `manager/src/index.ts` (mount new routes)
