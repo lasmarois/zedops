@@ -11,9 +11,9 @@
 - Command history navigable with arrow keys
 - Real-time command responses displayed in terminal
 
-**Status:** ⏳ Planning
+**Status:** ✅ Complete
 **Started:** 2026-01-11
-**Completed:** TBD
+**Completed:** 2026-01-12
 
 ---
 
@@ -27,8 +27,8 @@
 | 3. Frontend Terminal UI | ✅ complete | xterm.js integration, command input, response display |
 | 4. Command History & Autocomplete | ✅ complete | Store history, arrow key navigation, command suggestions |
 | 5. Quick Actions | ✅ complete | Player list, kick/ban buttons, broadcast message |
-| 5.5. Secure RCON Network Access | ⏳ in progress | Agent accesses RCON via Docker network (no host exposure) |
-| 6. Testing & Verification | ⏸️ blocked | End-to-end testing, edge cases |
+| 5.5. Secure RCON Network Access | ✅ complete | Agent accesses RCON via Docker network (no host exposure) |
+| 6. Testing & Verification | ✅ complete | Basic testing complete, comprehensive suite deferred |
 
 ---
 
@@ -385,9 +385,9 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 ---
 
-## Phase 6: Testing & Verification ✅ Complete (Basic Testing)
+## Phase 6: Testing & Verification ✅ Complete
 
-**Status:** ✅ basic testing complete, comprehensive testing deferred
+**Status:** ✅ complete (basic testing completed, comprehensive testing deferred)
 
 **Goals:**
 - End-to-end testing of RCON flow
@@ -421,15 +421,17 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 21. **Keyboard Shortcuts** - Ctrl+C, Ctrl+L, arrows
 22. **UI/UX** - Visual design verification
 
-**Verification Checklist:**
-- [ ] RCON connection established successfully
-- [ ] Commands execute and responses return
-- [ ] Command history works (up/down arrows)
-- [ ] Quick actions execute correctly
-- [ ] Player list updates correctly
-- [ ] Errors handled gracefully
-- [ ] Session cleanup on disconnect
-- [ ] No memory leaks in terminal
+**Verification Checklist (Basic Testing Complete):**
+- [x] RCON connection established successfully
+- [x] Commands execute and responses return (help, players, save, servermsg tested)
+- [x] Command history works (up/down arrows)
+- [x] Quick actions execute correctly (refresh, kick, ban, broadcast, save)
+- [x] Player list updates correctly
+- [x] Errors handled gracefully
+- [x] Session cleanup on disconnect
+- [x] Terminal scrolling works correctly (no hidden prompt)
+- [ ] Comprehensive test suite (22 scenarios) - deferred
+- [ ] Edge cases and performance testing - deferred
 
 ---
 
@@ -459,7 +461,13 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 |-------|-------|---------|------------|
 | RCON port not bound to host in agent/server.go | Phase 6 Testing | 1 | Discovered during test prep - agent cannot reach container RCON ports |
 | ServerForm.tsx missing RCON_PASSWORD ENV | Phase 6 Testing | 1 | Added RCON_PASSWORD=ADMIN_PASSWORD in config (line 71) |
-| Existing servers have empty RCONPassword in INI | Phase 6 Testing | 1 | Manually updated build42-testing and jeanguy INI files |
+| Existing servers have empty RCONPassword in INI | Phase 6 Testing | 1 | Manually updated build42-testing and jeanguy INI files with correct ports/passwords |
+| WebSocket routing not forwarding RCON messages | Phase 5.5 | 2 | Added RCON message cases to handleUIMessage() and created handleUIRCONMessage() |
+| WebSocket authentication failing (wrong password) | Phase 5.5 | 3 | Separated adminPassword (WebSocket auth) from rconPassword (RCON connection) |
+| Containers missing RCON_PORT environment variable | Phase 5.5 | 4 | Added RCON_PORT to container config in manager on create and restart |
+| Commands not sent (empty string) | Phase 5.5 | 5 | Switched from useState to useRef for synchronous command tracking |
+| "RCON not connected" error after successful connection | Phase 5.5 | 6 | Added sessionIdRef for synchronous session tracking, stabilized callbacks |
+| Terminal prompt hidden by footer on long output | Phase 6 | 7 | Changed overflow to auto, added minHeight: 0, scrollback: 5000, scrollToBottom() |
 
 ---
 
@@ -482,6 +490,8 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 - xterm.js is the de facto standard for web terminals (used by VS Code, Hyper, etc.)
 - Session management needed to avoid reconnecting on every command
 - Consider rate limiting (avoid command spam)
+- Terminal scroll fix required minHeight: 0 on flex child for proper overflow behavior
+- React refs used for synchronous state tracking to prevent stale closures
 
 ---
 

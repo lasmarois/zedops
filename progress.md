@@ -900,3 +900,98 @@ dist/assets/index-rYQwDTX1.js   631.48 kB
 ---
 
 **Total time with Sessions 1-6:** ~8.5 hours
+
+---
+
+## Session 7: Terminal Scroll Fix (2026-01-12)
+
+**Duration:** ~15 minutes
+**Goal:** Fix terminal scrolling issue - prompt hidden when output exceeds viewport
+**Status:** ✅ Complete
+
+### Actions Taken
+
+1. **Terminal Scroll Overflow Fix** ✅ Complete
+   - **Problem:** Terminal prompt hidden by footer when output fills screen (after help command)
+   - **Root Cause:** Terminal wrapper had overflow: hidden preventing scrolling
+   - **Solution:** Changed overflow to auto, added proper flex child scrolling
+   - **Files Modified:**
+     - RconTerminal.tsx: Changed overflow from 'hidden' to 'auto' (line 592)
+     - RconTerminal.tsx: Added minHeight: 0 for proper flex child scrolling (line 593)
+     - RconTerminal.tsx: Added scrollback: 5000 to terminal config (line 65)
+     - RconTerminal.tsx: Added convertEol: true to terminal config (line 66)
+     - RconTerminal.tsx: Added terminal.scrollToBottom() after command output (line 227)
+   - **Built:** ✅ Frontend (631.95 kB bundle)
+   - **Deployed:** ✅ Version ID f5946930-c6cf-4e91-9182-933b3b72c506
+   - **Committed:** ✅ "Fix RCON terminal scroll overflow issue"
+   - **Pushed:** ✅ Pushed to origin/main
+
+### Testing Results
+
+**Terminal UX Testing:** ✅ Complete
+- ✅ Terminal scrolls correctly when output exceeds viewport
+- ✅ Prompt always visible after command execution
+- ✅ 5000 lines of scrollback history preserved
+- ✅ Newline characters converted properly (convertEol: true)
+- ✅ Auto-scroll to bottom after each command
+
+### Implementation Details
+
+**Scroll Fix:**
+```typescript
+// Terminal wrapper (line 590-594)
+<div
+  ref={terminalRef}
+  style={{
+    flex: 1,
+    padding: '1rem',
+    overflow: 'auto',       // Changed from 'hidden'
+    minHeight: 0,           // Required for flex child scrolling
+  }}
+/>
+
+// Terminal config (lines 65-66)
+const terminal = new Terminal({
+  cursorBlink: true,
+  cursorStyle: 'block',
+  fontSize: 14,
+  fontFamily: '"Cascadia Code", "Courier New", monospace',
+  scrollback: 5000,         // Keep 5000 lines of history
+  convertEol: true,         // Convert \n to \r\n
+  theme: { /* ... */ },
+});
+
+// Auto-scroll after command (line 227)
+terminal.writeln('');
+currentCommandRef.current = '';
+showPrompt(terminal);
+terminal.scrollToBottom();  // Ensure prompt is visible
+```
+
+### Milestone Status
+
+**Phase 5.5 (Secure RCON Network Access):** ✅ Complete
+- All security issues resolved
+- Docker network access working
+- All existing servers fixed
+
+**Phase 6 (Testing & Verification):** ✅ Basic testing complete
+- End-to-end RCON flow working
+- All commands tested (help, players, save, servermsg, kick, ban)
+- Quick actions verified
+- Terminal UX polished
+- Comprehensive test suite deferred (can be run later)
+
+### Next Actions
+
+**Milestone Completion:**
+1. [x] Fix all RCON bugs
+2. [x] Test basic RCON functionality
+3. [x] Commit and push changes
+4. [x] Update planning files
+5. [ ] Archive milestone to planning-history/ (optional)
+6. [ ] Update CHANGELOG.md (for next release)
+
+---
+
+**Total time with Sessions 1-7:** ~8.75 hours
