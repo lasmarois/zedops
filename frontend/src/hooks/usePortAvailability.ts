@@ -4,7 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { checkPortAvailability } from '../lib/api';
-import { useAuthStore } from '../stores/authStore';
+import { useUser } from '../contexts/UserContext';
 
 /**
  * Hook to check port availability for a specific agent
@@ -18,12 +18,12 @@ export function usePortAvailability(
   count: number = 3,
   enabled: boolean = false
 ) {
-  const password = useAuthStore((state) => state.password);
+  const { isAuthenticated } = useUser();
 
   return useQuery({
     queryKey: ['portAvailability', agentId, count],
-    queryFn: () => checkPortAvailability(agentId!, count, password!),
-    enabled: !!password && !!agentId && enabled,
+    queryFn: () => checkPortAvailability(agentId!, count),
+    enabled: isAuthenticated && !!agentId && enabled,
     staleTime: 30000, // Consider data stale after 30 seconds
     gcTime: 60000, // Keep in cache for 1 minute
   });

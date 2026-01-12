@@ -9,7 +9,6 @@
  */
 
 import { Hono } from 'hono';
-import { v4 as uuidv4 } from 'uuid';
 import { AgentConnection } from './durable-objects/AgentConnection';
 import { admin } from './routes/admin';
 import { agents } from './routes/agents';
@@ -99,7 +98,7 @@ app.post('/api/bootstrap', async (c) => {
     }
 
     // Create bootstrap admin user
-    const userId = uuidv4();
+    const userId = crypto.randomUUID();
     const email = 'admin@zedops.local';
     const passwordHash = await hashPassword(c.env.ADMIN_PASSWORD);
     const now = Date.now();
@@ -140,11 +139,34 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: Date.now() });
 });
 
-/**
- * Root endpoint (will serve static frontend in production)
- */
-app.get('/', (c) => {
-  return c.text('ZedOps Manager - Use /health for health check, /ws for WebSocket connection');
+// Read index.html content (must match dist/index.html exactly)
+const indexHtmlContent = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>frontend</title>
+    <script type="module" crossorigin src="/assets/index-ri63bDOb.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-WvvdXZei.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>`;
+
+// Catch-all route for SPA - serve index.html for non-API/ws routes
+// Only match paths that don't start with /api/, /ws, or /health
+app.get('*', (c) => {
+  const path = new URL(c.req.url).pathname;
+
+  // If it's an API route, return 404 (don't serve HTML)
+  if (path.startsWith('/api/') || path === '/ws' || path === '/health') {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  // For all other routes, serve the React SPA
+  return c.html(indexHtmlContent);
 });
 
 export default app;

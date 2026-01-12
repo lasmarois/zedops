@@ -211,8 +211,7 @@ export async function grantPermission(
   }
 
   // Create new permission
-  const { v4: uuidv4 } = await import('uuid');
-  const permissionId = uuidv4();
+  const permissionId = crypto.randomUUID();
   const now = Date.now();
 
   await db

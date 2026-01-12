@@ -6,7 +6,7 @@
  */
 
 import { Context } from 'hono';
-import { v4 as uuidv4 } from 'uuid';
+// Using crypto.randomUUID() for ID generation
 
 // ============================================================================
 // Types
@@ -108,7 +108,7 @@ export async function logAudit(
   entry: AuditLogEntry
 ): Promise<void> {
   try {
-    const id = uuidv4();
+    const id = crypto.randomUUID();
     const timestamp = Date.now();
     const ipAddress = extractIpAddress(c);
     const userAgent = extractUserAgent(c);

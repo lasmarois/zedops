@@ -4,15 +4,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchAgents } from '../lib/api';
-import { useAuthStore } from '../stores/authStore';
+import { useUser } from '../contexts/UserContext';
 
 export function useAgents() {
-  const password = useAuthStore((state) => state.password);
+  const { isAuthenticated } = useUser();
 
   return useQuery({
     queryKey: ['agents'],
-    queryFn: () => fetchAgents(password!),
-    enabled: !!password,
+    queryFn: () => fetchAgents(),
+    enabled: isAuthenticated,
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 }

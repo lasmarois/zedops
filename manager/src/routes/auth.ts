@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { v4 as uuidv4 } from 'uuid';
+// Using crypto.randomUUID() for ID generation
 import {
   verifyPassword,
   generateSessionToken,
@@ -65,7 +65,7 @@ auth.post('/login', async (c) => {
     );
 
     // Store session in database
-    const sessionId = uuidv4();
+    const sessionId = crypto.randomUUID();
     const tokenHash = await hashToken(token);
     const now = Date.now();
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 days

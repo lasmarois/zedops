@@ -16,18 +16,18 @@ import {
   syncServers,
   type CreateServerRequest,
 } from '../lib/api';
-import { useAuthStore } from '../stores/authStore';
+import { useUser } from '../contexts/UserContext';
 
 /**
  * Hook to fetch servers for a specific agent
  */
 export function useServers(agentId: string | null) {
-  const password = useAuthStore((state) => state.password);
+  const { isAuthenticated } = useUser();
 
   return useQuery({
     queryKey: ['servers', agentId],
-    queryFn: () => fetchServers(agentId!, password!),
-    enabled: !!password && !!agentId,
+    queryFn: () => fetchServers(agentId!),
+    enabled: isAuthenticated && !!agentId,
     refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
   });
 }
@@ -36,7 +36,6 @@ export function useServers(agentId: string | null) {
  * Hook to create a server
  */
 export function useCreateServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -46,7 +45,7 @@ export function useCreateServer() {
     }: {
       agentId: string;
       request: CreateServerRequest;
-    }) => createServer(agentId, request, password!),
+    }) => createServer(agentId, request),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -63,7 +62,6 @@ export function useCreateServer() {
  * Hook to delete a server
  */
 export function useDeleteServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -75,7 +73,7 @@ export function useDeleteServer() {
       agentId: string;
       serverId: string;
       removeVolumes: boolean;
-    }) => deleteServer(agentId, serverId, removeVolumes, password!),
+    }) => deleteServer(agentId, serverId, removeVolumes),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -92,7 +90,6 @@ export function useDeleteServer() {
  * Hook to rebuild a server (pull latest image, recreate container)
  */
 export function useRebuildServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -102,7 +99,7 @@ export function useRebuildServer() {
     }: {
       agentId: string;
       serverId: string;
-    }) => rebuildServer(agentId, serverId, password!),
+    }) => rebuildServer(agentId, serverId),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -119,7 +116,6 @@ export function useRebuildServer() {
  * Hook to cleanup all failed servers for an agent
  */
 export function useCleanupFailedServers() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -129,7 +125,7 @@ export function useCleanupFailedServers() {
     }: {
       agentId: string;
       removeVolumes: boolean;
-    }) => cleanupFailedServers(agentId, removeVolumes, password!),
+    }) => cleanupFailedServers(agentId, removeVolumes),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -146,7 +142,6 @@ export function useCleanupFailedServers() {
  * Hook to start a server (with container recreation if missing)
  */
 export function useStartServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -156,7 +151,7 @@ export function useStartServer() {
     }: {
       agentId: string;
       serverId: string;
-    }) => startServer(agentId, serverId, password!),
+    }) => startServer(agentId, serverId),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -173,7 +168,6 @@ export function useStartServer() {
  * Hook to stop a server
  */
 export function useStopServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -183,7 +177,7 @@ export function useStopServer() {
     }: {
       agentId: string;
       serverId: string;
-    }) => stopServer(agentId, serverId, password!),
+    }) => stopServer(agentId, serverId),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -200,7 +194,6 @@ export function useStopServer() {
  * Hook to purge a server (hard delete)
  */
 export function usePurgeServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -212,7 +205,7 @@ export function usePurgeServer() {
       agentId: string;
       serverId: string;
       removeData: boolean;
-    }) => purgeServer(agentId, serverId, removeData, password!),
+    }) => purgeServer(agentId, serverId, removeData),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -229,7 +222,6 @@ export function usePurgeServer() {
  * Hook to restore a soft-deleted server
  */
 export function useRestoreServer() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -239,7 +231,7 @@ export function useRestoreServer() {
     }: {
       agentId: string;
       serverId: string;
-    }) => restoreServer(agentId, serverId, password!),
+    }) => restoreServer(agentId, serverId),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({
@@ -256,11 +248,10 @@ export function useRestoreServer() {
  * Hook to sync server statuses with agent
  */
 export function useSyncServers() {
-  const password = useAuthStore((state) => state.password);
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ agentId }: { agentId: string }) => syncServers(agentId, password!),
+    mutationFn: ({ agentId }: { agentId: string }) => syncServers(agentId),
     onSuccess: (_, variables) => {
       // Invalidate both servers and containers queries to refetch
       queryClient.invalidateQueries({

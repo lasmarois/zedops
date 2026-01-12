@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import { v4 as uuidv4 } from 'uuid';
+// Using crypto.randomUUID() for ID generation
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength } from '../lib/auth';
 import {
@@ -105,8 +105,8 @@ users.post('/', async (c) => {
     }
 
     // Validate role
-    if (!['admin', 'operator', 'viewer'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin, operator, or viewer' }, 400);
+    if (!['admin', 'user'].includes(role)) {
+      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
     }
 
     // Validate password strength
@@ -125,7 +125,7 @@ users.post('/', async (c) => {
     }
 
     // Create user
-    const userId = uuidv4();
+    const userId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
     const now = Date.now();
 
@@ -170,8 +170,8 @@ users.patch('/:id/role', async (c) => {
     const { role } = body;
 
     // Validate role
-    if (!['admin', 'operator', 'viewer'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin, operator, or viewer' }, 400);
+    if (!['admin', 'user'].includes(role)) {
+      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
     }
 
     // Check if user exists
@@ -284,7 +284,6 @@ users.delete('/:id', async (c) => {
     await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
 
     // Log user deletion
-    const currentUser = c.get('user');
     await logUserDeleted(c.env.DB, c, currentUser.id, userId, user.email as string);
 
     return c.json({

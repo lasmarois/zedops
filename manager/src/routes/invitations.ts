@@ -8,7 +8,7 @@
  */
 
 import { Hono } from 'hono';
-import { v4 as uuidv4 } from 'uuid';
+// Using crypto.randomUUID() for ID generation
 import * as jose from 'jose';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength, hashToken } from '../lib/auth';
@@ -39,8 +39,8 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
     }
 
     // Validate role
-    if (!['admin', 'operator', 'viewer'].includes(role)) {
-      return c.json({ error: 'Invalid role - must be admin, operator, or viewer' }, 400);
+    if (!['admin', 'user'].includes(role)) {
+      return c.json({ error: 'Invalid role - must be admin or user' }, 400);
     }
 
     // Check if user already exists
@@ -78,7 +78,7 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
       .sign(secretKey);
 
     // Store invitation in database
-    const invitationId = uuidv4();
+    const invitationId = crypto.randomUUID();
     const tokenHash = await hashToken(token);
     const now = Date.now();
     const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
@@ -92,17 +92,19 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
     // Log invitation creation
     await logInvitationCreated(c.env.DB, c, currentUser.id, invitationId, email, role);
 
-    // Generate invitation URL (frontend will handle the /invite/:token route)
+    // Generate invitation URL (frontend will handle the /register?token= route)
     const baseUrl = new URL(c.req.url).origin;
-    const invitationUrl = `${baseUrl}/invite/${token}`;
+    const invitationUrl = `${baseUrl}/register?token=${token}`;
 
     return c.json(
       {
+        success: true,
         message: 'Invitation created successfully',
         invitation: {
           id: invitationId,
           email,
           role,
+          token,  // Include token so frontend can construct URL
           expiresAt,
         },
         invitationUrl,
@@ -333,7 +335,7 @@ invitations.post('/accept/:token', async (c) => {
     }
 
     // Create user account
-    const userId = uuidv4();
+    const userId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
 
     await c.env.DB.prepare(

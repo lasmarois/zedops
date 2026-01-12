@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { getToken } from '../lib/auth';
 
 interface RconMessage {
   subject: string;
@@ -16,7 +17,6 @@ export interface UseRconOptions {
   serverId: string;
   containerID: string;
   port: number;
-  adminPassword: string;  // Manager's ADMIN_PASSWORD for WebSocket authentication
   rconPassword: string;   // Server's RCON_PASSWORD for RCON connection
   enabled?: boolean;
 }
@@ -34,7 +34,6 @@ export function useRcon({
   serverId,
   containerID,
   port,
-  adminPassword,
   rconPassword,
   enabled = true,
 }: UseRconOptions): UseRconReturn {
@@ -62,10 +61,15 @@ export function useRcon({
     }
 
     try {
-      // Build WebSocket URL - use adminPassword for manager authentication
+      // Build WebSocket URL - use JWT token for manager authentication
+      const token = getToken();
+      if (!token) {
+        throw new Error('Not authenticated - no JWT token');
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = window.location.host;
-      const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?password=${encodeURIComponent(adminPassword)}`;
+      const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${encodeURIComponent(token)}`;
 
       console.log(`[RCON] Connecting to ${wsUrl}`);
 
@@ -140,7 +144,7 @@ export function useRcon({
       console.error('[RCON] Failed to create WebSocket:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect');
     }
-  }, [enabled, agentId, serverId, containerID, port, adminPassword, rconPassword]);
+  }, [enabled, agentId, serverId, containerID, port, rconPassword]);
 
   const sendCommand = useCallback(async (command: string): Promise<string> => {
     if (!wsRef.current || !sessionIdRef.current) {

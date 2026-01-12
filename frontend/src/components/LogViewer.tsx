@@ -9,7 +9,6 @@ interface LogViewerProps {
   agentId: string;
   containerId: string;
   containerName: string;
-  password: string;
   onBack: () => void;
 }
 
@@ -17,13 +16,11 @@ export function LogViewer({
   agentId,
   containerId,
   containerName,
-  password,
   onBack,
 }: LogViewerProps) {
   const { logs, isConnected, error, clearLogs } = useLogStream({
     agentId,
     containerId,
-    password,
   });
 
   const [autoScroll, setAutoScroll] = useState(true);

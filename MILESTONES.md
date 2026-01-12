@@ -264,28 +264,102 @@
 
 ---
 
-## Milestone 7: RBAC & Audit Logs ⏳ Planned
+## Milestone 7: RBAC & Audit Logs 🚧 In Progress
 
 **Goal:** Role-based access control and audit logging
 
-**Duration:** 2 weeks
+**Duration:** 2 phases (2026-01-12)
+
+### Phase 1: Initial Implementation ✅ Complete
+
+**Completed:** 2026-01-12 (12 hours)
 
 **Deliverables:**
-- User management (email/password, replace hardcoded admin)
-- Roles: Admin (global), Operator (per-server), Viewer (per-server)
-- Audit log (all actions logged: who, what, when, target)
-- Audit log viewer in UI
-- User invitation flow
+- ✅ User management (email/password, replace hardcoded admin)
+- ✅ Roles: Admin, User (with granular permissions)
+- ✅ Audit log (all actions logged: who, what, when, target)
+- ✅ Audit log viewer in UI
+- ✅ User invitation flow
+- ✅ JWT-based authentication (secure, stateless)
+- ✅ Permission system (per-agent, per-server, global)
+- ✅ Core permission enforcement (start/stop/delete operations)
 
-**Success Criteria:**
-- Admin can invite users with specific roles
-- Operator can control server but not delete
-- Viewer can view logs but not control server
-- All actions logged in D1 with timestamps
+**Implementation Highlights:**
+- **Backend**: JWT tokens with jose library, bcrypt password hashing
+- **Database**: 4 new tables (users, permissions, invitations, audit_logs)
+- **Frontend**: React Context API for auth state, UserList, PermissionsManager, AuditLogViewer components
+- **Security**: Authorization middleware on protected endpoints, token expiration, secure password hashing
 
-**Dependencies:** Milestone 6 (RCON Integration)
+**Test Results:**
+- ✅ Login works with default admin credentials (admin@zedops.local)
+- ✅ Unauthenticated requests blocked (401)
+- ✅ Authenticated requests work with JWT tokens
+- ✅ User management API fully functional
+- ✅ Deployed to production: https://zedops.mail-bcf.workers.dev
+- ✅ Registration page working (invitation token verification)
+- ✅ Permission management functional (grant/revoke)
+- ✅ User invitations with "user" role working
 
-**Planning:** *(not started)*
+**Post-Deployment Fixes:**
+- Fixed SPA routing (inlined index.html with catch-all route)
+- Fixed API endpoint mismatches (permissions endpoints)
+- Fixed role validation (operator/viewer → user)
+- Created migration 0008 to update database constraints
+
+**Migrations:**
+- 0006: Create RBAC tables
+- 0007: Insert default admin user
+- 0008: Update role constraint (admin/user)
+
+**Planning (Archived):**
+- [planning-history/milestone-7-rbac-initial-implementation/](planning-history/milestone-7-rbac-initial-implementation/)
+
+---
+
+### Phase 2: Auth Migration & Refinement 🚧 In Progress
+
+**Started:** 2026-01-12
+
+**Goal:** Complete RBAC implementation with consistent JWT authentication across all endpoints
+
+**Issue:** [ISSUE-rbac-auth-migration.md](ISSUE-rbac-auth-migration.md)
+
+**Remaining Work:**
+- ⏳ Migrate remaining endpoints from ADMIN_PASSWORD to JWT auth
+  - Container operations (`/containers`, `/ports/*`)
+  - Server operations (restart, rebuild, sync)
+  - Log streaming WebSocket (`/logs/ws`)
+  - RCON WebSocket (implement permission checking)
+- ⏳ Complete permission enforcement
+  - Add permission checks to all container operations
+  - Implement RCON permission checking
+- ⏳ Architectural decisions
+  - Role model: Keep 2 roles or expand to 4?
+  - Permission hierarchy: Should control → view?
+  - Agent-level permission UI
+  - Server creation permissions
+- ⏳ Comprehensive testing
+  - Test all permission scenarios (view, control, delete)
+  - Test with multiple non-admin users
+  - Verify audit logs capture all operations
+- ⏳ Documentation updates
+  - Update API documentation
+  - Document final permission model
+
+**Estimated Time:** 4-6 hours
+
+**Current Status:** Architectural decisions pending
+
+**Total M7 Time:**
+- Phase 1: 12 hours ✅
+- Phase 2: 4-6 hours (estimated) ⏳
+- **Total: 16-18 hours (estimated)**
+
+**Dependencies:** Milestone 6 (RCON Integration), Phase 1 Complete
+
+**Deployment Guides:**
+- [QUICK-START-RBAC.md](QUICK-START-RBAC.md) - 10-minute TL;DR guide
+- [DEPLOYMENT-RBAC.md](DEPLOYMENT-RBAC.md) - Comprehensive deployment guide
 
 ---
 
@@ -409,13 +483,13 @@ Deferred until after core product features are complete and UI is styled. Agent 
 | M4: Server Management | 2-3 weeks | 2 days | ✅ Complete |
 | M5: Host Metrics Display | 4-6 hours | 4 hours | ✅ Complete |
 | M6: RCON Integration | 1-2 weeks | 9.5 hours | ✅ Complete |
-| M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
+| M7: RBAC & Audit Logs | 2 weeks | 16-18 hours (est) | 🚧 In Progress (Phase 1 ✅, Phase 2 ⏳) |
 | M7.5: UI Styling & Design System | 1-2 weeks | TBD | ⏳ Planned |
 | M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 
-**Progress:** 6/9 core milestones complete (67%) in 2.5 days 🎉
+**Progress:** 6.5/9 core milestones complete (72%) - M7 Phase 1 done, Phase 2 in progress 🎉
 
-**Next Focus:** M7 (RBAC) → M7.5 (UI Styling) → M8 (Deployment Polish)
+**Next Focus:** M7.5 (UI Styling) → M8 (Deployment Polish)
 
 **Total to MVP:** ~12 weeks estimated → ~2-3 weeks actual (at current pace)
 
@@ -425,7 +499,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 
 ## Current Status
 
-**Active Milestone:** Ready for Milestone 7 (RBAC & Audit Logs) 🎯
+**Active Milestone:** Milestone 7 Phase 2 (RBAC Auth Migration & Refinement) 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -434,15 +508,18 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - ✅ Milestone 4 - Server Management (2026-01-10 to 2026-01-11)
 - ✅ Milestone 5 - Host Metrics Display (2026-01-11)
 - ✅ Milestone 6 - RCON Integration (2026-01-11 to 2026-01-12)
+- ✅ Milestone 7 Phase 1 - RBAC Initial Implementation (2026-01-12)
+
+**In Progress:**
+- 🚧 **Milestone 7 Phase 2** - RBAC Auth Migration & Refinement (architectural decisions needed)
 
 **Next Up:**
-- **Milestone 7** - RBAC & Audit Logs (multi-user support)
-- **Milestone 7.5** - UI Styling & Design System (comprehensive shadcn/ui styling)
+- **Milestone 7.5** - UI Styling & Design System (after M7 Phase 2 complete)
 
 **Deferred:**
-- **Milestone 8** - Agent Deployment & Polish (installation automation, deferred until after UI styling)
+- **Milestone 8** - Agent Deployment & Polish (installation automation)
 
-**Current Planning:** Milestone 6 archived, ready to start M7
+**Current Planning:** M7 Phase 1 complete and deployed. Phase 2 requires architectural decisions before proceeding.
 
 **Backlog:** See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
 

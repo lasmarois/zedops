@@ -15,7 +15,6 @@ interface RconTerminalProps {
   serverName: string;
   containerID: string;
   rconPort: number;
-  adminPassword: string;  // Manager's ADMIN_PASSWORD for WebSocket auth
   rconPassword: string;   // Server's RCON_PASSWORD for RCON connection
   onClose: () => void;
 }
@@ -26,7 +25,6 @@ export function RconTerminal({
   serverName,
   containerID,
   rconPort,
-  adminPassword,
   rconPassword,
   onClose,
 }: RconTerminalProps) {
@@ -47,7 +45,6 @@ export function RconTerminal({
     serverId,
     containerID,
     port: rconPort,  // Use the RCON port from DB (container listens on this port internally)
-    adminPassword,
     rconPassword,
     enabled: true,
   });

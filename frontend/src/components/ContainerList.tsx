@@ -17,12 +17,11 @@ import type { Container, CreateServerRequest, Server } from '../lib/api';
 interface ContainerListProps {
   agentId: string;
   agentName: string;
-  password: string;  // Manager's ADMIN_PASSWORD
   onBack: () => void;
   onViewLogs: (containerId: string, containerName: string) => void;
 }
 
-export function ContainerList({ agentId, agentName, password, onBack, onViewLogs }: ContainerListProps) {
+export function ContainerList({ agentId, agentName, onBack, onViewLogs }: ContainerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
   const { data: serversData } = useServers(agentId);
   const startMutation = useStartContainer();
@@ -1322,7 +1321,6 @@ export function ContainerList({ agentId, agentName, password, onBack, onViewLogs
             serverName={rconServer.name}
             containerID={rconServer.container_id || ''}
             rconPort={rconServer.rcon_port}
-            adminPassword={password}
             rconPassword={rconPassword}
             onClose={() => setRconServer(null)}
           />

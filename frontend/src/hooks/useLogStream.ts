@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { getToken } from '../lib/auth';
 
 export interface LogLine {
   containerId: string;
@@ -20,7 +21,6 @@ interface LogMessage {
 export interface UseLogStreamOptions {
   agentId: string;
   containerId: string;
-  password: string;
   enabled?: boolean;
 }
 
@@ -34,7 +34,6 @@ export interface UseLogStreamReturn {
 export function useLogStream({
   agentId,
   containerId,
-  password,
   enabled = true,
 }: UseLogStreamOptions): UseLogStreamReturn {
   const [logs, setLogs] = useState<LogLine[]>([]);
@@ -53,13 +52,19 @@ export function useLogStream({
       return;
     }
 
+    const token = getToken();
+    if (!token) {
+      setError('Not authenticated');
+      return;
+    }
+
     try {
-      // Build WebSocket URL
+      // Build WebSocket URL with JWT token
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/api/agents/${agentId}/logs/ws?password=${encodeURIComponent(password)}`;
+      const wsUrl = `${protocol}//${host}/api/agents/${agentId}/logs/ws?token=${encodeURIComponent(token)}`;
 
-      console.log(`[LogStream] Connecting to ${wsUrl}`);
+      console.log(`[LogStream] Connecting to WebSocket`);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -149,7 +154,7 @@ export function useLogStream({
       console.error('[LogStream] Failed to create WebSocket:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect');
     }
-  }, [enabled, agentId, containerId, password]);
+  }, [enabled, agentId, containerId]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {

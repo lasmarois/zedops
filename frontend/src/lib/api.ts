@@ -5,7 +5,34 @@
  * and authentication.
  */
 
+import { getToken } from './auth';
+
 const API_BASE = window.location.origin;
+
+/**
+ * Get authentication headers with JWT token
+ */
+function getAuthHeaders(): HeadersInit {
+  const token = getToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
+}
+
+/**
+ * Handle authentication errors
+ */
+function handleAuthError(response: Response): void {
+  if (response.status === 401) {
+    // Clear invalid token and reload to show login
+    localStorage.removeItem('zedops_token');
+    localStorage.removeItem('zedops_user');
+    window.location.href = '/';
+  }
+}
 
 export interface HostMetrics {
   cpuPercent: number;
@@ -36,17 +63,13 @@ export interface AgentsResponse {
 /**
  * Fetch all agents
  */
-export async function fetchAgents(password: string): Promise<AgentsResponse> {
+export async function fetchAgents(): Promise<AgentsResponse> {
   const response = await fetch(`${API_BASE}/api/agents`, {
-    headers: {
-      'Authorization': `Bearer ${password}`,
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     throw new Error('Failed to fetch agents');
   }
 
@@ -56,17 +79,13 @@ export async function fetchAgents(password: string): Promise<AgentsResponse> {
 /**
  * Fetch single agent by ID
  */
-export async function fetchAgent(id: string, password: string): Promise<Agent> {
+export async function fetchAgent(id: string): Promise<Agent> {
   const response = await fetch(`${API_BASE}/api/agents/${id}`, {
-    headers: {
-      'Authorization': `Bearer ${password}`,
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -80,22 +99,19 @@ export async function fetchAgent(id: string, password: string): Promise<Agent> {
  * Generate ephemeral token for agent registration
  */
 export async function generateEphemeralToken(
-  agentName: string,
-  password: string
+  agentName: string
 ): Promise<{ token: string; expiresIn: string; agentName: string }> {
   const response = await fetch(`${API_BASE}/api/admin/tokens`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${password}`,
+      ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ agentName }),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     throw new Error('Failed to generate token');
   }
 
@@ -138,19 +154,14 @@ export interface ContainerOperationResponse {
  * Fetch containers for a specific agent
  */
 export async function fetchContainers(
-  agentId: string,
-  password: string
+  agentId: string
 ): Promise<ContainersResponse> {
   const response = await fetch(`${API_BASE}/api/agents/${agentId}/containers`, {
-    headers: {
-      'Authorization': `Bearer ${password}`,
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -168,23 +179,18 @@ export async function fetchContainers(
  */
 export async function startContainer(
   agentId: string,
-  containerId: string,
-  password: string
+  containerId: string
 ): Promise<ContainerOperationResponse> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/containers/${containerId}/start`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 503) {
       throw new Error('Agent not connected');
     }
@@ -201,23 +207,18 @@ export async function startContainer(
  */
 export async function stopContainer(
   agentId: string,
-  containerId: string,
-  password: string
+  containerId: string
 ): Promise<ContainerOperationResponse> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/containers/${containerId}/stop`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 503) {
       throw new Error('Agent not connected');
     }
@@ -233,23 +234,18 @@ export async function stopContainer(
  */
 export async function restartContainer(
   agentId: string,
-  containerId: string,
-  password: string
+  containerId: string
 ): Promise<ContainerOperationResponse> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/containers/${containerId}/restart`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 503) {
       throw new Error('Agent not connected');
     }
@@ -314,19 +310,14 @@ export interface DeleteServerResponse {
  * Fetch servers for a specific agent
  */
 export async function fetchServers(
-  agentId: string,
-  password: string
+  agentId: string
 ): Promise<ServersResponse> {
   const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers`, {
-    headers: {
-      'Authorization': `Bearer ${password}`,
-    },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -341,22 +332,19 @@ export async function fetchServers(
  */
 export async function createServer(
   agentId: string,
-  request: CreateServerRequest,
-  password: string
+  request: CreateServerRequest
 ): Promise<CreateServerResponse> {
   const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${password}`,
+      ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(request),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -377,22 +365,19 @@ export async function createServer(
 export async function deleteServer(
   agentId: string,
   serverId: string,
-  removeVolumes: boolean,
-  password: string
+  removeVolumes: boolean
 ): Promise<DeleteServerResponse> {
   const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers/${serverId}`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${password}`,
+      ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ removeVolumes }),
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -408,21 +393,18 @@ export async function deleteServer(
  */
 export async function rebuildServer(
   agentId: string,
-  serverId: string,
-  password: string
+  serverId: string
 ): Promise<{ success: boolean; message: string; server: Server }> {
   const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers/${serverId}/rebuild`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${password}`,
+      ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -466,22 +448,17 @@ export interface PortAvailabilityResponse {
  */
 export async function checkPortAvailability(
   agentId: string,
-  count: number,
-  password: string
+  count: number
 ): Promise<PortAvailabilityResponse> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/ports/availability?count=${count}`,
     {
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -499,23 +476,18 @@ export async function checkPortAvailability(
  */
 export async function cleanupFailedServers(
   agentId: string,
-  removeVolumes: boolean,
-  password: string
+  removeVolumes: boolean
 ): Promise<{ success: boolean; message: string; deletedCount: number; errors?: string[] }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/failed?removeVolumes=${removeVolumes}`,
     {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
@@ -530,23 +502,18 @@ export async function cleanupFailedServers(
  */
 export async function startServer(
   agentId: string,
-  serverId: string,
-  password: string
+  serverId: string
 ): Promise<{ success: boolean; message: string; serverId: string; containerId: string; recovered?: boolean }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/start`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -562,23 +529,18 @@ export async function startServer(
  */
 export async function stopServer(
   agentId: string,
-  serverId: string,
-  password: string
+  serverId: string
 ): Promise<{ success: boolean; message: string; serverId: string; containerId: string }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/stop`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -595,15 +557,14 @@ export async function stopServer(
 export async function purgeServer(
   agentId: string,
   serverId: string,
-  removeData: boolean,
-  password: string
+  removeData: boolean
 ): Promise<{ success: boolean; message: string; serverId: string; serverName: string }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/purge`,
     {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${password}`,
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ removeData }),
@@ -611,9 +572,7 @@ export async function purgeServer(
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -629,23 +588,18 @@ export async function purgeServer(
  */
 export async function restoreServer(
   agentId: string,
-  serverId: string,
-  password: string
+  serverId: string
 ): Promise<{ success: boolean; message: string; serverId: string; serverName: string }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/restore`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Server not found');
     }
@@ -660,28 +614,314 @@ export async function restoreServer(
  * Sync server statuses with agent
  */
 export async function syncServers(
-  agentId: string,
-  password: string
+  agentId: string
 ): Promise<{ success: boolean; servers: Server[]; synced: number }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/sync`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${password}`,
-      },
+      headers: getAuthHeaders(),
     }
   );
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid admin password');
-    }
+    handleAuthError(response);
     if (response.status === 404) {
       throw new Error('Agent not found');
     }
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to sync servers');
+  }
+
+  return response.json();
+}
+
+// ============================================================================
+// User Management
+// ============================================================================
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  role: 'admin' | 'user';
+  created_at: number;
+}
+
+export interface UsersResponse {
+  users: UserAccount[];
+}
+
+export interface InviteUserRequest {
+  email: string;
+  role: 'admin' | 'user';
+}
+
+export interface InviteUserResponse {
+  success: boolean;
+  invitation?: {
+    id: string;
+    email: string;
+    role: string;
+    token: string;
+    expiresAt: number;
+  };
+  error?: string;
+}
+
+export interface Permission {
+  id: string;
+  user_id: string;
+  resource_type: 'agent' | 'server' | 'global';
+  resource_id: string | null;
+  permission: 'view' | 'control' | 'delete' | 'manage_users';
+  created_at: number;
+}
+
+export interface UserPermissionsResponse {
+  user: UserAccount;
+  permissions: Permission[];
+}
+
+/**
+ * Fetch all users
+ */
+export async function fetchUsers(): Promise<UsersResponse> {
+  const response = await fetch(`${API_BASE}/api/users`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch users');
+  }
+
+  return response.json();
+}
+
+/**
+ * Invite a new user
+ */
+export async function inviteUser(request: InviteUserRequest): Promise<InviteUserResponse> {
+  const response = await fetch(`${API_BASE}/api/users/invite`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to invite user');
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a user
+ */
+export async function deleteUser(userId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/api/users/${userId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to delete user');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get user permissions
+ */
+export async function fetchUserPermissions(userId: string): Promise<UserPermissionsResponse> {
+  const response = await fetch(`${API_BASE}/api/permissions/${userId}`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch user permissions');
+  }
+
+  return response.json();
+}
+
+/**
+ * Grant a permission to a user
+ */
+export async function grantPermission(
+  userId: string,
+  resourceType: 'agent' | 'server' | 'global',
+  resourceId: string | null,
+  permission: 'view' | 'control' | 'delete' | 'manage_users'
+): Promise<{ success: boolean; permission: Permission }> {
+  const response = await fetch(`${API_BASE}/api/permissions/${userId}`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ resourceType, resourceId, permission }),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to grant permission');
+  }
+
+  return response.json();
+}
+
+/**
+ * Revoke a permission
+ */
+export async function revokePermission(permissionId: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/api/permissions/${permissionId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to revoke permission');
+  }
+
+  return response.json();
+}
+
+// ============================================================================
+// Audit Logs
+// ============================================================================
+
+export interface AuditLog {
+  id: string;
+  user_id: string;
+  user_email: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  details: string | null;
+  ip_address: string;
+  user_agent: string;
+  timestamp: number;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AuditLogsQuery {
+  page?: number;
+  pageSize?: number;
+  userId?: string;
+  action?: string;
+  targetType?: string;
+  startDate?: number;
+  endDate?: number;
+}
+
+/**
+ * Fetch audit logs with optional filters
+ */
+export async function fetchAuditLogs(query?: AuditLogsQuery): Promise<AuditLogsResponse> {
+  const params = new URLSearchParams();
+
+  if (query?.page) params.append('page', query.page.toString());
+  if (query?.pageSize) params.append('pageSize', query.pageSize.toString());
+  if (query?.userId) params.append('userId', query.userId);
+  if (query?.action) params.append('action', query.action);
+  if (query?.targetType) params.append('targetType', query.targetType);
+  if (query?.startDate) params.append('startDate', query.startDate.toString());
+  if (query?.endDate) params.append('endDate', query.endDate.toString());
+
+  const queryString = params.toString();
+  const url = `${API_BASE}/api/audit${queryString ? `?${queryString}` : ''}`;
+
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch audit logs');
+  }
+
+  return response.json();
+}
+
+// ============================================================================
+// Invitation Acceptance API
+// ============================================================================
+
+export interface VerifyInvitationResponse {
+  valid: boolean;
+  invitation?: {
+    email: string;
+    role: string;
+    expiresAt: number;
+  };
+  error?: string;
+}
+
+export interface AcceptInvitationRequest {
+  password: string;
+}
+
+export interface AcceptInvitationResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+  error?: string;
+}
+
+/**
+ * Verify an invitation token
+ */
+export async function verifyInvitationToken(token: string): Promise<VerifyInvitationResponse> {
+  const response = await fetch(`${API_BASE}/api/invite/verify/${token}`);
+
+  if (!response.ok) {
+    const data = await response.json();
+    return {
+      valid: false,
+      error: data.error || 'Invalid or expired invitation',
+    };
+  }
+
+  return response.json();
+}
+
+/**
+ * Accept an invitation and create account
+ */
+export async function acceptInvitation(token: string, password: string): Promise<AcceptInvitationResponse> {
+  const response = await fetch(`${API_BASE}/api/invite/accept/${token}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to accept invitation');
   }
 
   return response.json();

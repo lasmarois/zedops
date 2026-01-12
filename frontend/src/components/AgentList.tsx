@@ -3,11 +3,13 @@
  */
 
 import { useAgents } from '../hooks/useAgents';
-import { useAuthStore } from '../stores/authStore';
+import { useUser } from '../contexts/UserContext';
 import type { Agent } from '../lib/api';
 
 interface AgentListProps {
   onSelectAgent: (agent: Agent) => void;
+  onViewUsers: () => void;
+  onViewAuditLogs: () => void;
 }
 
 function getMetricColor(value: number, thresholds: [number, number]): string {
@@ -51,9 +53,14 @@ function MetricBadge({ label, value, unit = '%', thresholds = [70, 85] }: {
   );
 }
 
-export function AgentList({ onSelectAgent }: AgentListProps) {
+export function AgentList({ onSelectAgent, onViewUsers, onViewAuditLogs }: AgentListProps) {
   const { data, isLoading, error } = useAgents();
-  const clearPassword = useAuthStore((state) => state.clearPassword);
+  const { user, logout } = useUser();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/';
+  };
 
   if (isLoading) {
     return <div style={{ padding: '2rem' }}>Loading agents...</div>;
@@ -65,7 +72,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
         Error: {error.message}
         <br />
         <button
-          onClick={() => clearPassword()}
+          onClick={handleLogout}
           style={{
             marginTop: '1rem',
             padding: '0.5rem 1rem',
@@ -90,20 +97,57 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
         alignItems: 'center',
         marginBottom: '2rem',
       }}>
-        <h1>ZedOps Agents</h1>
-        <button
-          onClick={() => clearPassword()}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          Logout
-        </button>
+        <div>
+          <h1>ZedOps Agents</h1>
+          <p style={{ color: '#888', fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>
+            Logged in as: {user?.email} ({user?.role})
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {user?.role === 'admin' && (
+            <>
+              <button
+                onClick={onViewUsers}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Manage Users
+              </button>
+              <button
+                onClick={onViewAuditLogs}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#17a2b8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Audit Logs
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
