@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as jose from 'jose';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength, hashToken } from '../lib/auth';
+import { logInvitationCreated, logInvitationAccepted } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -87,6 +88,9 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
     )
       .bind(invitationId, email, role, tokenHash, currentUser.id, now, expiresAt)
       .run();
+
+    // Log invitation creation
+    await logInvitationCreated(c.env.DB, c, currentUser.id, invitationId, email, role);
 
     // Generate invitation URL (frontend will handle the /invite/:token route)
     const baseUrl = new URL(c.req.url).origin;
@@ -342,6 +346,9 @@ invitations.post('/accept/:token', async (c) => {
     await c.env.DB.prepare('UPDATE invitations SET used_at = ? WHERE id = ?')
       .bind(now, invitation.id)
       .run();
+
+    // Log invitation acceptance
+    await logInvitationAccepted(c.env.DB, c, invitation.id as string, userId, invitation.email as string);
 
     return c.json(
       {

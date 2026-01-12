@@ -12,6 +12,7 @@ import {
   hashToken,
 } from '../lib/auth';
 import { requireAuth } from '../middleware/auth';
+import { logUserLogin, logUserLogout } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -42,12 +43,16 @@ auth.post('/login', async (c) => {
       .first();
 
     if (!user) {
+      // Log failed login attempt
+      await logUserLogin(c.env.DB, c, '', email, false);
       return c.json({ error: 'Invalid email or password' }, 401);
     }
 
     // Verify password
     const passwordValid = await verifyPassword(password, user.password_hash as string);
     if (!passwordValid) {
+      // Log failed login attempt
+      await logUserLogin(c.env.DB, c, user.id as string, email, false);
       return c.json({ error: 'Invalid email or password' }, 401);
     }
 
@@ -78,6 +83,9 @@ auth.post('/login', async (c) => {
         .run()
     );
 
+    // Log successful login
+    await logUserLogin(c.env.DB, c, user.id as string, email, true);
+
     // Return token and user info
     return c.json({
       token,
@@ -101,6 +109,7 @@ auth.post('/login', async (c) => {
 
 auth.post('/logout', requireAuth(), async (c) => {
   try {
+    const user = c.get('user');
     const authHeader = c.req.header('Authorization');
     const token = authHeader!.substring(7); // Remove "Bearer "
 
@@ -111,6 +120,9 @@ auth.post('/logout', requireAuth(), async (c) => {
     await c.env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?')
       .bind(tokenHash)
       .run();
+
+    // Log logout
+    await logUserLogout(c.env.DB, c, user.id);
 
     return c.json({ message: 'Logged out successfully' });
   } catch (error) {

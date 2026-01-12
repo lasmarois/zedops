@@ -17,6 +17,7 @@ import {
   ResourceType,
   Permission,
 } from '../lib/permissions';
+import { logPermissionGranted, logPermissionRevoked } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -134,6 +135,20 @@ permissions.post('/:userId', async (c) => {
       resourceId || null,
       permission as Permission
     );
+
+    // Log permission grant (only if newly created)
+    if (result.created) {
+      const currentUser = c.get('user');
+      await logPermissionGranted(
+        c.env.DB,
+        c,
+        currentUser.id,
+        userId,
+        resourceType,
+        resourceId || null,
+        permission
+      );
+    }
 
     return c.json(
       {
@@ -279,6 +294,16 @@ permissions.delete('/:permissionId', async (c) => {
     if (!revoked) {
       return c.json({ error: 'Failed to revoke permission' }, 500);
     }
+
+    // Log permission revocation
+    const currentUser = c.get('user');
+    await logPermissionRevoked(
+      c.env.DB,
+      c,
+      currentUser.id,
+      permissionId,
+      permission.user_id as string
+    );
 
     return c.json({
       message: 'Permission revoked successfully',

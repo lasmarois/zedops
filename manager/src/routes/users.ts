@@ -9,6 +9,12 @@ import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength } from '../lib/auth';
+import {
+  logUserCreated,
+  logUserDeleted,
+  logUserRoleChanged,
+  logUserPasswordChanged,
+} from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -129,6 +135,10 @@ users.post('/', async (c) => {
       .bind(userId, email, passwordHash, role, now, now)
       .run();
 
+    // Log user creation
+    const currentUser = c.get('user');
+    await logUserCreated(c.env.DB, c, currentUser.id, userId, email, role);
+
     // Return user info (without password hash)
     return c.json(
       {
@@ -178,6 +188,10 @@ users.patch('/:id/role', async (c) => {
     await c.env.DB.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?')
       .bind(role, now, userId)
       .run();
+
+    // Log role change
+    const currentUser = c.get('user');
+    await logUserRoleChanged(c.env.DB, c, currentUser.id, userId, user.role as string, role);
 
     return c.json({
       message: 'User role updated successfully',
@@ -229,6 +243,10 @@ users.patch('/:id/password', async (c) => {
     // Invalidate all existing sessions for this user (force re-login)
     await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
 
+    // Log password change
+    const currentUser = c.get('user');
+    await logUserPasswordChanged(c.env.DB, c, currentUser.id, userId);
+
     return c.json({
       message: 'Password updated successfully - all sessions invalidated',
     });
@@ -264,6 +282,10 @@ users.delete('/:id', async (c) => {
 
     // Delete user (cascade will delete sessions and permissions via foreign keys)
     await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+
+    // Log user deletion
+    const currentUser = c.get('user');
+    await logUserDeleted(c.env.DB, c, currentUser.id, userId, user.email as string);
 
     return c.json({
       message: 'User deleted successfully',
