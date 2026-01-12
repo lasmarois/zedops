@@ -1,0 +1,369 @@
+/**
+ * User Invitation API Routes
+ *
+ * Handles user invitation flow:
+ * 1. Admin invites user (creates invitation with 24h token)
+ * 2. User accepts invitation (creates account with password)
+ * 3. Invitation marked as used
+ */
+
+import { Hono } from 'hono';
+import { v4 as uuidv4 } from 'uuid';
+import * as jose from 'jose';
+import { requireAuth, requireRole } from '../middleware/auth';
+import { hashPassword, validatePasswordStrength, hashToken } from '../lib/auth';
+
+type Bindings = {
+  DB: D1Database;
+  TOKEN_SECRET: string;
+  ADMIN_PASSWORD: string;
+};
+
+const invitations = new Hono<{ Bindings: Bindings }>();
+
+// ============================================================================
+// POST /api/users/invite
+// Create a new user invitation (admin only)
+// ============================================================================
+
+invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, role } = body;
+    const currentUser = c.get('user');
+
+    // Validate input
+    if (!email || !role) {
+      return c.json({ error: 'Email and role are required' }, 400);
+    }
+
+    // Validate role
+    if (!['admin', 'operator', 'viewer'].includes(role)) {
+      return c.json({ error: 'Invalid role - must be admin, operator, or viewer' }, 400);
+    }
+
+    // Check if user already exists
+    const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+      .bind(email)
+      .first();
+
+    if (existingUser) {
+      return c.json({ error: 'User with this email already exists' }, 409);
+    }
+
+    // Check for pending invitation
+    const pendingInvitation = await c.env.DB.prepare(
+      'SELECT id FROM invitations WHERE email = ? AND used_at IS NULL AND expires_at > ?'
+    )
+      .bind(email, Date.now())
+      .first();
+
+    if (pendingInvitation) {
+      return c.json({ error: 'A pending invitation for this email already exists' }, 409);
+    }
+
+    // Generate invitation token (24h expiry)
+    const encoder = new TextEncoder();
+    const secretKey = encoder.encode(c.env.TOKEN_SECRET);
+
+    const token = await new jose.SignJWT({
+      type: 'user_invitation',
+      email,
+      role,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('24h')
+      .sign(secretKey);
+
+    // Store invitation in database
+    const invitationId = uuidv4();
+    const tokenHash = await hashToken(token);
+    const now = Date.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+
+    await c.env.DB.prepare(
+      'INSERT INTO invitations (id, email, role, token_hash, invited_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )
+      .bind(invitationId, email, role, tokenHash, currentUser.id, now, expiresAt)
+      .run();
+
+    // Generate invitation URL (frontend will handle the /invite/:token route)
+    const baseUrl = new URL(c.req.url).origin;
+    const invitationUrl = `${baseUrl}/invite/${token}`;
+
+    return c.json(
+      {
+        message: 'Invitation created successfully',
+        invitation: {
+          id: invitationId,
+          email,
+          role,
+          expiresAt,
+        },
+        invitationUrl,
+        instructions: [
+          'Share this invitation URL with the user:',
+          invitationUrl,
+          '',
+          'The invitation expires in 24 hours.',
+          'The user will be prompted to create a password when accepting the invitation.',
+        ],
+      },
+      201
+    );
+  } catch (error) {
+    console.error('Create invitation error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// GET /api/users/invitations
+// List all invitations (admin only)
+// ============================================================================
+
+invitations.get('/', requireAuth(), requireRole('admin'), async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT
+        i.id,
+        i.email,
+        i.role,
+        i.created_at,
+        i.expires_at,
+        i.used_at,
+        u.email as invited_by_email
+      FROM invitations i
+      JOIN users u ON i.invited_by = u.id
+      ORDER BY i.created_at DESC
+    `).all();
+
+    // Categorize invitations
+    const now = Date.now();
+    const invitations = (result.results || []).map((inv: any) => ({
+      ...inv,
+      status: inv.used_at
+        ? 'accepted'
+        : inv.expires_at < now
+        ? 'expired'
+        : 'pending',
+    }));
+
+    return c.json({ invitations });
+  } catch (error) {
+    console.error('List invitations error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// DELETE /api/users/invitations/:id
+// Cancel an invitation (admin only)
+// ============================================================================
+
+invitations.delete('/:id', requireAuth(), requireRole('admin'), async (c) => {
+  try {
+    const invitationId = c.req.param('id');
+
+    // Check if invitation exists and is not used
+    const invitation = await c.env.DB.prepare(
+      'SELECT id, email, used_at FROM invitations WHERE id = ?'
+    )
+      .bind(invitationId)
+      .first();
+
+    if (!invitation) {
+      return c.json({ error: 'Invitation not found' }, 404);
+    }
+
+    if (invitation.used_at) {
+      return c.json({ error: 'Cannot cancel an already-accepted invitation' }, 400);
+    }
+
+    // Delete invitation
+    await c.env.DB.prepare('DELETE FROM invitations WHERE id = ?').bind(invitationId).run();
+
+    return c.json({
+      message: 'Invitation cancelled successfully',
+      invitation: {
+        id: invitationId,
+        email: invitation.email,
+      },
+    });
+  } catch (error) {
+    console.error('Cancel invitation error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// GET /api/invite/:token
+// Verify invitation token (public endpoint)
+// ============================================================================
+
+invitations.get('/verify/:token', async (c) => {
+  try {
+    const token = c.req.param('token');
+
+    // Verify JWT token
+    const encoder = new TextEncoder();
+    const secretKey = encoder.encode(c.env.TOKEN_SECRET);
+
+    let payload;
+    try {
+      const { payload: decoded } = await jose.jwtVerify(token, secretKey);
+      payload = decoded;
+    } catch (error) {
+      return c.json({ error: 'Invalid or expired invitation token' }, 401);
+    }
+
+    // Validate token type
+    if (payload.type !== 'user_invitation') {
+      return c.json({ error: 'Invalid token type' }, 401);
+    }
+
+    // Check if invitation exists in database and is not used
+    const tokenHash = await hashToken(token);
+    const now = Date.now();
+
+    const invitation = await c.env.DB.prepare(
+      'SELECT id, email, role, expires_at, used_at FROM invitations WHERE token_hash = ?'
+    )
+      .bind(tokenHash)
+      .first();
+
+    if (!invitation) {
+      return c.json({ error: 'Invitation not found' }, 404);
+    }
+
+    if (invitation.used_at) {
+      return c.json({ error: 'This invitation has already been used' }, 400);
+    }
+
+    if ((invitation.expires_at as number) < now) {
+      return c.json({ error: 'This invitation has expired' }, 400);
+    }
+
+    // Return invitation details (for UI to display)
+    return c.json({
+      valid: true,
+      invitation: {
+        email: invitation.email,
+        role: invitation.role,
+        expiresAt: invitation.expires_at,
+      },
+    });
+  } catch (error) {
+    console.error('Verify invitation error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// POST /api/invite/:token/accept
+// Accept invitation and create user account (public endpoint)
+// ============================================================================
+
+invitations.post('/accept/:token', async (c) => {
+  try {
+    const token = c.req.param('token');
+    const body = await c.req.json();
+    const { password } = body;
+
+    // Validate password
+    if (!password) {
+      return c.json({ error: 'Password is required' }, 400);
+    }
+
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return c.json({ error: 'Password validation failed', errors: passwordValidation.errors }, 400);
+    }
+
+    // Verify JWT token
+    const encoder = new TextEncoder();
+    const secretKey = encoder.encode(c.env.TOKEN_SECRET);
+
+    let payload;
+    try {
+      const { payload: decoded } = await jose.jwtVerify(token, secretKey);
+      payload = decoded;
+    } catch (error) {
+      return c.json({ error: 'Invalid or expired invitation token' }, 401);
+    }
+
+    if (payload.type !== 'user_invitation') {
+      return c.json({ error: 'Invalid token type' }, 401);
+    }
+
+    // Check invitation in database
+    const tokenHash = await hashToken(token);
+    const now = Date.now();
+
+    const invitation = await c.env.DB.prepare(
+      'SELECT id, email, role, expires_at, used_at FROM invitations WHERE token_hash = ?'
+    )
+      .bind(tokenHash)
+      .first();
+
+    if (!invitation) {
+      return c.json({ error: 'Invitation not found' }, 404);
+    }
+
+    if (invitation.used_at) {
+      return c.json({ error: 'This invitation has already been used' }, 400);
+    }
+
+    if ((invitation.expires_at as number) < now) {
+      return c.json({ error: 'This invitation has expired' }, 400);
+    }
+
+    // Check if user already exists (edge case - created between invitation and acceptance)
+    const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+      .bind(invitation.email)
+      .first();
+
+    if (existingUser) {
+      return c.json({ error: 'User with this email already exists' }, 409);
+    }
+
+    // Create user account
+    const userId = uuidv4();
+    const passwordHash = await hashPassword(password);
+
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(userId, invitation.email, passwordHash, invitation.role, now, now)
+      .run();
+
+    // Mark invitation as used
+    await c.env.DB.prepare('UPDATE invitations SET used_at = ? WHERE id = ?')
+      .bind(now, invitation.id)
+      .run();
+
+    return c.json(
+      {
+        message: 'Account created successfully',
+        user: {
+          id: userId,
+          email: invitation.email,
+          role: invitation.role,
+        },
+        instructions: [
+          'Your account has been created successfully!',
+          `Email: ${invitation.email}`,
+          '',
+          'You can now login with your email and the password you just set.',
+        ],
+      },
+      201
+    );
+  } catch (error) {
+    console.error('Accept invitation error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+export { invitations };

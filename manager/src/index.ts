@@ -14,6 +14,8 @@ import { AgentConnection } from './durable-objects/AgentConnection';
 import { admin } from './routes/admin';
 import { agents } from './routes/agents';
 import { auth } from './routes/auth';
+import { users } from './routes/users';
+import { invitations } from './routes/invitations';
 import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
@@ -32,6 +34,9 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // Mount API routes
 app.route('/api/auth', auth);
+app.route('/api/users', users);
+app.route('/api/users/invite', invitations);
+app.route('/api/invite', invitations); // Public invitation endpoints
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 
