@@ -67,11 +67,17 @@ export function useRcon({
         throw new Error('Not authenticated - no JWT token');
       }
 
+      console.log('[RCON] JWT token found:', token ? `${token.substring(0, 20)}...` : 'null');
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = window.location.host;
       const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${encodeURIComponent(token)}`;
 
-      console.log(`[RCON] Connecting to ${wsUrl}`);
+      console.log(`[RCON] Connecting to WebSocket...`);
+      console.log(`[RCON] - Protocol: ${protocol}`);
+      console.log(`[RCON] - Host: ${wsHost}`);
+      console.log(`[RCON] - Agent ID: ${agentId}`);
+      console.log(`[RCON] - Full URL: ${wsUrl.split('?')[0]}?token=<redacted>`);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -135,7 +141,18 @@ export function useRcon({
       };
 
       ws.onclose = (event) => {
-        console.log(`[RCON] WebSocket closed (code: ${event.code})`);
+        console.log(`[RCON] WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
+
+        // Provide more specific error messages based on close code
+        if (event.code === 1008) {
+          setError('Authentication failed - please try logging in again');
+        } else if (event.code === 1003) {
+          setError('Unsupported WebSocket message');
+        } else if (event.code !== 1000 && event.code !== 1006) {
+          // 1000 = normal close, 1006 = abnormal close (connection lost)
+          setError(`Connection closed with code ${event.code}: ${event.reason || 'Unknown reason'}`);
+        }
+
         setIsConnected(false);
         setSessionId(null);
         wsRef.current = null;

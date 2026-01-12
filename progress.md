@@ -2,7 +2,114 @@
 
 **Milestone:** M7 Phase 2 - RBAC Auth Migration & Refinement
 **Started:** 2026-01-12
-**Status:** Planning Complete, Awaiting Architectural Decisions
+**Status:** 🔥 Critical Bug - RCON Console Broken After RBAC Migration
+
+---
+
+## Current Session: RCON WebSocket Connection Failure ⚠️
+
+**Date:** 2026-01-12 (continued session)
+**Duration:** In progress
+**Goal:** Diagnose and fix broken RCON console after RBAC migration
+
+### Problem Statement
+
+**User Report:**
+```
+╔════════════════════════════════════════════════════════╗
+║         ZedOps RCON Console                         ║
+╚════════════════════════════════════════════════════════╝
+
+Server: build42-testing
+Port: 27027
+
+Connecting to RCON server...
+
+✗ Connection failed: WebSocket connection error
+```
+
+**Context:**
+- RCON was fully functional in Milestone 6 (completed 2026-01-12)
+- After RBAC migration (Phases 1-6), RCON console fails to connect
+- User can access other features (user management, etc.), indicating JWT auth is working elsewhere
+
+### Investigation Progress
+
+**Step 1: Identified WebSocket Auth Migration** ✅
+- **Finding:** WebSocket endpoint `/api/agents/:id/logs/ws` was migrated from password to JWT auth
+- **Before (M6):** `?password=<ADMIN_PASSWORD>`
+- **After (RBAC):** `?token=<JWT>`
+- **Files Changed:**
+  - `manager/src/routes/agents.ts` lines 594-664 (Phase 3 commit: 41db583)
+  - `frontend/src/hooks/useRcon.ts` (updated to use JWT token)
+
+**Step 2: Verified Durable Object Message Routing** ✅
+- **Finding:** RCON message handlers exist and are correct
+- **AgentConnection.ts** lines 991-996: Routes `rcon.connect/command/disconnect` to `handleUIRCONMessage()`
+- **AgentConnection.ts** lines 1011-1079: `handleUIRCONMessage()` forwards to agent correctly
+- **No permission checks** in Durable Object (comment says "checked per-server" but not implemented)
+
+**Step 3: Improved Error Logging** ✅
+- **Action:** Enhanced `useRcon.ts` WebSocket close handler (line 137-153)
+- **Added:** Specific error messages based on close codes:
+  - 1008: "Authentication failed - please try logging in again"
+  - 1003: "Unsupported WebSocket message"
+  - Others: Display code and reason
+- **Deployed:** Version ID fbdbb066-e2eb-468a-8341-cc0283840ee2
+
+**Step 5: Enhanced Connection Logging** ✅
+- **Action:** Added detailed logging throughout WebSocket connection process
+- **Added logs:**
+  - JWT token presence confirmation (first 20 chars)
+  - Protocol, host, agent ID details
+  - WebSocket URL construction (with redacted token)
+  - Connection state transitions
+- **Purpose:** Diagnose where exactly the connection is failing
+- **Files Modified:** `frontend/src/hooks/useRcon.ts` (lines 70-80)
+- **Deployed:** Version ID ab909a5c-b475-4fca-a28e-4a7aee49c575
+
+**Step 4: Hypothesis** 🔍
+Possible causes:
+1. JWT token not available in frontend context (but other features work, so unlikely)
+2. JWT verification failing on WebSocket endpoint for some reason
+3. Session check failing (token hash mismatch or expired session)
+4. Browser WebSocket error before upgrade completes
+5. Missing permission check that was added during RBAC migration
+
+### Files Modified
+
+- `frontend/src/hooks/useRcon.ts` - Improved error logging (lines 137-153)
+
+### Next Actions
+
+✅ **Enhanced logging deployed** - Version ID: ab909a5c-b475-4fca-a28e-4a7aee49c575
+
+**User should now test RCON console and check browser console for these logs:**
+
+Expected console output (if working):
+```
+[RCON] JWT token found: eyJhbGciOiJIUzI1NiIsI...
+[RCON] Connecting to WebSocket...
+[RCON] - Protocol: wss:
+[RCON] - Host: zedops.mail-bcf.workers.dev
+[RCON] - Agent ID: <agent-uuid>
+[RCON] - Full URL: wss://zedops.mail-bcf.workers.dev/api/agents/<agent-id>/logs/ws?token=<redacted>
+[RCON] ✓ WebSocket connection established (from onopen handler)
+[RCON] WebSocket closed (code: XXXX, reason: YYYY) (from onclose handler)
+```
+
+**Look for:**
+1. Does it show "JWT token found"? If not, auth is broken
+2. Does it reach "Connecting to WebSocket..."? If not, early failure
+3. What's the WebSocket close code and reason?
+   - 1000 = Normal close (shouldn't happen on connection)
+   - 1006 = Abnormal close (server rejected connection)
+   - 1008 = Policy violation (auth failed)
+   - 1003 = Unsupported data
+
+**Also test:**
+- Try viewing logs for a container (uses same WebSocket endpoint)
+- If logs work but RCON doesn't, the issue is in RCON message handling
 
 ---
 
@@ -627,9 +734,9 @@ Verified that WebSocket connections already use JWT tokens:
 
 ---
 
-## Phase 5 Summary
+## Phase 5 Summary (Core Complete with 1 Blocking Issue)
 
-**Status:** ✅ Complete (Core functionality)
+**Status:** ✅ Core Complete | 🚨 1 Critical Issue Found
 
 **Time:** ~2 hours
 
@@ -652,9 +759,257 @@ Verified that WebSocket connections already use JWT tokens:
    - App.tsx updated to use new component
    - WebSocket auth already using JWT (verified)
 
-**Optional Remaining:**
-- Update UserList to show system role + assignment count
-- Clean up legacy code (authStore.ts, PermissionsManager.tsx)
-- Audit logging for role assignments
+---
 
-**Phase 5 Core Complete!** ✅
+## ✅ Critical Issue RESOLVED: Agent List Filtering
+
+**Problem:** GET /api/agents endpoint was admin-only (blocked all non-admin users)
+
+**Solution Implemented:** Modified GET /api/agents to filter agents by user role assignments
+
+**Changes Made:**
+1. **Added import** (line 18):
+   - Imported `getUserRoleAssignments` from permissions.ts
+
+2. **Replaced admin-only check** (lines 42-118):
+   - Admin users: See all agents (unchanged)
+   - Users with global assignments: See all agents
+   - Users with agent-scope assignments: See only those agents
+   - Users with server-scope assignments: See agents containing those servers
+   - Users with no assignments: See empty list (no error)
+
+**Logic:**
+```typescript
+// For non-admin users
+1. Fetch all role assignments for user
+2. If any assignment has scope='global' → return all agents
+3. If scope='agent' → add agent_id to accessible set
+4. If scope='server' → lookup server's agent_id, add to set
+5. Return agents WHERE id IN (accessible set)
+```
+
+**Files Modified:**
+- `manager/src/routes/agents.ts` (lines 11-119)
+
+**Testing Required:**
+- [ ] Admin user can see all agents (existing behavior)
+- [ ] User with global assignment sees all agents
+- [ ] User with agent-scope assignment sees only that agent
+- [ ] User with server-scope assignment sees agent containing that server
+- [ ] User with no assignments sees empty list (no error)
+- [ ] User can navigate to servers after seeing agent list
+
+**Status:** ✅ Implemented and Deployed
+
+**Deployment Completed:** 2026-01-12
+
+1. **Database Migration** ✅
+   - Ran migration 0009_role_based_rbac.sql on production database
+   - 18 queries executed, 813 rows read, 92 rows written
+   - Database size: 0.19 MB
+
+2. **Backend Deployment** ✅
+   - Deployed to: https://zedops.mail-bcf.workers.dev
+   - Version: df3dc846-2025-47a8-b932-4d5be874aec7
+   - Removed legacy /api/permissions routes (incompatible with role-based system)
+   - New /api/role-assignments routes active
+
+3. **Frontend Deployment** ✅
+   - Built frontend with latest changes (RoleAssignmentsManager)
+   - Uploaded new assets (index-CcHvJKhv.js)
+   - Updated index.html reference in backend
+
+---
+
+## Optional Remaining:
+- Update UserList to show system role + assignment count
+- Clean up legacy code (authStore.ts, PermissionsManager.tsx, permissions.ts routes)
+- Audit logging for role assignments
+- Test agent list filtering with real users
+
+---
+
+## API Route Mismatch Fix ✅
+
+**Issue Found:** Frontend was calling `/api/users/:userId/role-assignments` but backend routes were mounted at `/api/role-assignments/:userId`
+
+**Fix Applied:**
+- Updated `frontend/src/lib/api.ts`:
+  - `fetchUserRoleAssignments()` → `/api/role-assignments/${userId}` (line 828)
+  - `grantRoleAssignment()` → `/api/role-assignments/${userId}` (line 849)
+  - `revokeRoleAssignment()` → Already correct at `/api/role-assignments/${assignmentId}`
+
+**Redeployed:**
+- Version: 5ad7c759-142d-4f9e-9ec2-1bd57799fe04
+- New assets: index-IyT7y6Ek.js
+
+**Status:** ✅ Fixed and deployed
+
+---
+
+---
+
+## Containers Endpoint Permission Fix ✅
+
+**Issue Found:** User with global viewer role got 403 when clicking on agent to view servers
+
+**Root Cause:** GET /api/agents/:id/containers was still admin-only from Phase 3
+
+**Fix Applied:**
+- Updated `manager/src/routes/agents.ts` (lines 173-232)
+- Added import for `getEffectiveRoleForAgent`
+- New permission logic:
+  1. Admin → full access (unchanged)
+  2. Non-admin → Check if user has agent-level or global role
+  3. If no agent-level role → Check if user has any server-level access on this agent
+  4. If yes to either → allow containers list
+  5. If no → 403 Forbidden
+
+**Logic:** Users with any role assignment on an agent (global, agent-scope, or server-scope) can list containers. The actual server access is filtered separately in the servers endpoint.
+
+**Deployed:**
+- Version: cce09606-998c-4d19-ac9d-11a3cfce1344
+
+**Status:** ✅ Fixed and deployed
+
+---
+
+---
+
+## Future Improvements Identified
+
+**Server Scope Dropdown:**
+- When granting role assignments at "server" scope, users currently must manually type the server ID
+- Should add a dropdown with available servers (similar to agent scope dropdown)
+- **Priority:** Low (UX improvement, not blocking)
+- **Location:** `frontend/src/components/RoleAssignmentsManager.tsx` (line ~360)
+- **Implementation:** Fetch servers list for selected agent, populate dropdown
+
+---
+
+**Phase 5 Status:** ✅ Complete and Deployed - Tested with real user!
+
+---
+
+## Session 7: Phase 6 - Audit Logging Completion ✅ Complete
+
+**Date:** 2026-01-12 (continued)
+**Duration:** ~20 minutes
+**Goal:** Add audit logging for role assignment operations
+
+### Actions Taken
+
+1. **Updated Audit Types** (manager/src/lib/audit.ts)
+   - Added `role_assignment.granted` and `role_assignment.revoked` actions
+   - Added `role_assignment` resource type
+   - Lines 34-35, 55
+
+2. **Created Audit Logging Functions** (manager/src/lib/audit.ts)
+   - Added `logRoleAssignmentGranted()` (lines 399-424)
+   - Added `logRoleAssignmentRevoked()` (lines 426-451)
+   - Both functions log user ID, assignment ID, target user, role, scope, and resource
+
+3. **Integrated Audit Logging** (manager/src/routes/role-assignments.ts)
+   - Added imports (line 21)
+   - Grant endpoint: Logs after successful assignment (lines 150-161)
+   - Revoke endpoint: Logs after successful revocation (lines 216-227)
+   - Captures admin user ID who performed the operation
+
+**Audit Log Details Captured:**
+- Who performed the action (admin user ID)
+- What was done (granted/revoked)
+- Who was affected (target user ID)
+- What role (agent-admin/operator/viewer)
+- What scope (global/agent/server)
+- What resource (agent ID, server ID, or null for global)
+- When (timestamp)
+- From where (IP address)
+
+**Deployed:**
+- Version: 036bec01-d2a1-404b-90b5-36d9a50d8c36
+
+**Status:** ✅ Complete
+
+**Phase 6 Status:** ✅ Complete - All role assignment operations are now audit logged!
+
+---
+
+## Cleanup: Legacy Code Removal ✅ Complete
+
+**Date:** 2026-01-12 (continued after Phase 6)
+**Duration:** ~5 minutes
+**Goal:** Remove legacy permission-based code and unused files
+
+### Files Removed
+
+1. **Backend (Manager):**
+   - ✅ `manager/src/routes/permissions.ts` - Legacy permission routes (replaced by role-assignments.ts)
+     - Was already commented out in index.ts
+     - Used old permission-based functions that no longer exist
+     - 200+ lines removed
+
+2. **Frontend:**
+   - ✅ `frontend/src/components/PermissionsManager.tsx` - Legacy permission management UI (replaced by RoleAssignmentsManager.tsx)
+     - 13,000 bytes removed
+     - Not referenced anywhere in codebase
+
+   - ✅ `frontend/src/stores/authStore.ts` - Unused authentication store
+     - No references found in codebase
+     - Not used anywhere
+
+### Files Kept (Intentionally)
+
+- ❌ **Did NOT remove** legacy audit log functions (`logPermissionGranted/Revoked`)
+  - Marked as "legacy" in audit.ts
+  - Historical audit logs may reference these action types
+  - Safe to keep for backward compatibility
+
+- ❌ **Did NOT remove** old permission functions from permissions.ts library
+  - Not causing build issues
+  - May be used by database migration or historical code
+
+### Verification
+
+- ✅ Backend builds and deploys successfully
+- ✅ No references to removed files in codebase
+- ✅ Frontend not affected (files were unused)
+
+**Deployed:**
+- Version: 571aaefe-995c-4a7e-9a9e-2c9c54ce0621
+
+**Status:** ✅ Complete - Codebase is now cleaner!
+
+---
+
+## UX Fix: UserList Role Display ✅ Complete
+
+**Date:** 2026-01-12 (continued)
+**Issue:** Users with NULL system role (who get access via role assignments) showed empty badge in UserList
+
+**Root Cause:**
+- UserList displayed `{user.role}` directly
+- For non-admin users, `user.role` is NULL (they use role assignments)
+- NULL displays as empty string, showing blank badge
+
+**Fix Applied:**
+- Updated `frontend/src/components/UserList.tsx` (lines 335-358)
+- Admin users: Show "admin" badge (red)
+- Non-admin users: Show "user" badge (gray) + "(role assignments)" hint
+- Makes it clear these users get permissions via role assignments, not system role
+
+**UI Before:**
+```
+Email: test@example.com | Role: [    ] | Created: ...
+```
+
+**UI After:**
+```
+Email: test@example.com | Role: [user] (role assignments) | Created: ...
+```
+
+**Deployed:**
+- Version: 9d093039-d44b-4abe-a4cd-e7bb0f532701
+
+**Status:** ✅ Complete - UserList now shows meaningful role info!
+
+---
