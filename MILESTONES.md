@@ -220,28 +220,47 @@
 
 ---
 
-## Milestone 6: RCON Integration ⏳ Planned
+## Milestone 6: RCON Integration ✅ Complete
 
 **Goal:** Direct RCON connection and command execution
 
-**Duration:** 1-2 weeks
+**Duration:** ~9.5 hours (2026-01-11 to 2026-01-12)
 
 **Deliverables:**
-- Agent connects to server RCON port
-- Manager sends RCON commands via WebSocket
-- UI terminal (xterm.js) for RCON console
-- Command history and autocomplete
-- Quick actions (player list, kick, ban, broadcast)
+- ✅ Agent connects to server RCON port (via Docker network, secure)
+- ✅ Manager sends RCON commands via WebSocket
+- ✅ UI terminal (xterm.js) for RCON console
+- ✅ Command history and autocomplete (↑↓ arrow navigation)
+- ✅ Quick actions (player list, kick, ban, broadcast, save)
+- ✅ All UX issues resolved (scrollbars, command history, prompt visibility)
 
 **Success Criteria:**
-- User types RCON command in UI terminal → executes on server
-- Player list displayed in UI
-- Quick action buttons work (kick player, etc.)
-- Command history navigable with arrow keys
+- ✅ User types RCON command in UI terminal → executes on server
+- ✅ Player list displayed in UI with quick action buttons
+- ✅ Quick action buttons work (kick player, ban, broadcast, save)
+- ✅ Command history navigable with arrow keys
+- ✅ Real-time command responses displayed in terminal
+
+**Implementation Highlights:**
+- **Agent**: gorcon/rcon v1.3.5 with Docker network access (no host port exposure)
+- **Manager**: WebSocket routing with session management, RCON message handlers
+- **Frontend**: xterm.js with FitAddon, command history (localStorage), quick actions UI
+- **Security**: Docker network isolation, no RCON ports exposed on host
+- **Architecture**: Request/reply pattern with 30s timeouts, auto-reconnect on disconnect
+
+**Test Results:**
+- ✅ RCON connection via Docker network successful
+- ✅ Commands execute correctly (help, players, save, servermsg, kick, ban)
+- ✅ Terminal scrolling works correctly
+- ✅ Session persists across commands
+- ✅ Command history works with ↑↓ navigation
+- ✅ Tested on build42-testing and jeanguy servers
 
 **Dependencies:** Milestone 4 (Server Management)
 
-**Planning:** *(not started)*
+**Planning:** [planning-history/milestone-6-rcon-integration/](planning-history/milestone-6-rcon-integration/)
+
+**Completed:** 2026-01-12 (commits: 82af871, 3158e7e, 9c4efb4, 7074cfd, 82533a9)
 
 ---
 
@@ -389,14 +408,14 @@ Deferred until after core product features are complete and UI is styled. Agent 
 | M3: Log Streaming | 1 week | 1 day | ✅ Complete |
 | M4: Server Management | 2-3 weeks | 2 days | ✅ Complete |
 | M5: Host Metrics Display | 4-6 hours | 4 hours | ✅ Complete |
-| M6: RCON Integration | 1-2 weeks | TBD | ⏳ Planned |
+| M6: RCON Integration | 1-2 weeks | 9.5 hours | ✅ Complete |
 | M7: RBAC & Audit Logs | 2 weeks | TBD | ⏳ Planned |
 | M7.5: UI Styling & Design System | 1-2 weeks | TBD | ⏳ Planned |
 | M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 
-**Progress:** 5/9 core milestones complete (56%) in 2 days 🎉
+**Progress:** 6/9 core milestones complete (67%) in 2.5 days 🎉
 
-**Next Focus:** M6 (RCON) → M7 (RBAC) → M7.5 (UI Styling) → M8 (Deployment Polish)
+**Next Focus:** M7 (RBAC) → M7.5 (UI Styling) → M8 (Deployment Polish)
 
 **Total to MVP:** ~12 weeks estimated → ~2-3 weeks actual (at current pace)
 
@@ -406,7 +425,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 
 ## Current Status
 
-**Active Milestone:** Ready for Milestone 6 (RCON Integration) 🎯
+**Active Milestone:** Ready for Milestone 7 (RBAC & Audit Logs) 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -414,16 +433,16 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - ✅ Milestone 3 - Log Streaming (2026-01-10)
 - ✅ Milestone 4 - Server Management (2026-01-10 to 2026-01-11)
 - ✅ Milestone 5 - Host Metrics Display (2026-01-11)
+- ✅ Milestone 6 - RCON Integration (2026-01-11 to 2026-01-12)
 
 **Next Up:**
-- **Milestone 6** - RCON Integration (server administration features)
 - **Milestone 7** - RBAC & Audit Logs (multi-user support)
 - **Milestone 7.5** - UI Styling & Design System (comprehensive shadcn/ui styling)
 
 **Deferred:**
 - **Milestone 8** - Agent Deployment & Polish (installation automation, deferred until after UI styling)
 
-**Current Planning:** Milestone 5 archived, ready to start M6
+**Current Planning:** Milestone 6 archived, ready to start M7
 
 **Backlog:** See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
 
