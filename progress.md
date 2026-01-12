@@ -266,10 +266,62 @@ CREATE TABLE role_assignments (
 
 **Phase 1 Complete!** ✅
 
-Ready to proceed to Phase 2: Permission Logic Rewrite
+---
+
+## Session 4: Phase 2 - Permission Logic Rewrite ✅ Complete
+
+**Date:** 2026-01-12 (continued)
+**Status:** Complete
+**Goal:** Rewrite permission checking from permission-based to role-based with inheritance/override
+
+### Actions Taken
+
+1. **Complete Rewrite of `manager/src/lib/permissions.ts`** ✅
+   - Replaced permission-based types with role-based types
+   - Implemented `getEffectiveRole()` function:
+     * Server-level assignment (overrides)
+     * Agent-level assignment (inheritance)
+     * Global assignment (applies to all)
+     * System admin role (bypasses all)
+   - Implemented `getEffectiveRoleForAgent()` for agent-level operations
+   - Created `roleHasCapability()` with capability hierarchy:
+     * admin: All capabilities (*)
+     * agent-admin: create_server, delete_server, control_server, use_rcon, view_server, view_logs
+     * operator: control_server, use_rcon, view_server, view_logs
+     * viewer: view_server, view_logs
+   - Updated all convenience functions:
+     * `canViewServer()` - role-based check
+     * `canControlServer()` - role-based check
+     * `canDeleteServer()` - role-based check
+     * `canUseRcon()` - NEW, checks use_rcon capability
+     * `canCreateServer()` - NEW, checks create_server capability
+   - Rewrote `getUserVisibleServers()`:
+     * Expands agent-level assignments to server IDs
+     * Expands global assignments to all servers
+     * Returns deduplicated list of accessible servers
+   - Replaced permission management functions:
+     * `grantRoleAssignment()` - replaces grantPermission()
+     * `revokeRoleAssignment()` - replaces revokePermission()
+     * `revokeAllRoleAssignmentsForResource()` - updated for roles
+     * `getUserRoleAssignments()` - replaces getUserPermissions()
+     * `getRoleAssignmentsForResource()` - NEW, shows who has access
+
+**Key Implementation Details:**
+- Inheritance: Agent-level assignment applies to ALL servers on that agent
+- Override: Server-level assignment overrides agent-level for that specific server
+- Capability hierarchy: Higher roles include lower role capabilities
+- NULL role users: No access until assigned a role
+
+**Phase 2 Status:** ✅ Complete
+
+### Next Steps
+
+**Phase 2 Complete!** ✅
+
+Ready to proceed to Phase 3: Backend Auth Migration (update all endpoints to use new permission logic)
 
 ---
 
 ## Pending Implementation
 
-Phase 1 complete. Ready to start Phase 2 (Permission Logic Rewrite).
+Phases 1-2 complete. Ready to start Phase 3 (Backend Auth Migration).

@@ -1,303 +1,445 @@
 /**
- * Permission System Library
+ * Role-Based Permission System Library
  *
- * Provides permission checking logic for role-based access control.
+ * Implements role-based access control with multi-scope assignments and inheritance.
  *
- * Permission Model:
- * - Admins: Have all permissions globally (bypass checks)
- * - Operators: Per-server permissions (view, control)
- * - Viewers: Per-server permissions (view only)
+ * Role Model:
+ * - admin (system role, global): Full system access, bypasses all checks
+ * - agent-admin (assignment role, agent-scope): Can create/delete servers on assigned agent
+ * - operator (assignment role, multi-scope): Control operations + RCON + view
+ * - viewer (assignment role, multi-scope): View-only access
+ *
+ * Scope Hierarchy (most specific wins):
+ * - server-level assignment (overrides agent-level)
+ * - agent-level assignment (applies to all servers on agent)
+ * - global assignment (applies to all agents/servers)
+ * - system role (admin only)
+ *
+ * Capability Hierarchy:
+ * - admin > agent-admin > operator > viewer
+ * - operator implies viewer (can view what they control)
+ * - agent-admin implies operator + viewer for their agent
  */
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ResourceType = 'agent' | 'server' | 'global';
-export type Permission = 'view' | 'control' | 'delete' | 'manage_users';
+export type SystemRole = 'admin' | null;
+export type AssignmentRole = 'agent-admin' | 'operator' | 'viewer';
+export type Role = 'admin' | 'agent-admin' | 'operator' | 'viewer';
+export type Scope = 'global' | 'agent' | 'server';
 
-export interface PermissionCheck {
-  userId: string;
-  userRole: string;
-  action: Permission;
-  resourceType: ResourceType;
-  resourceId?: string | null;
+export interface RoleAssignment {
+  id: string;
+  user_id: string;
+  role: AssignmentRole;
+  scope: Scope;
+  resource_id: string | null; // NULL for global, agent_id or server_id
+  created_at: number;
 }
 
 // ============================================================================
-// Permission Checking
+// Core Permission Logic
 // ============================================================================
 
 /**
- * Check if a user has permission to perform an action on a resource
+ * Get the effective role for a user on a specific server
  *
- * Logic:
- * 1. Admins always have permission (global access)
- * 2. Non-admins must have explicit permission grant in database
- * 3. Resource ID can be null for global permissions
+ * Logic (most specific to least specific):
+ * 1. If user.role === 'admin' → return 'admin' (bypasses everything)
+ * 2. Check server-level assignment → return if found
+ * 3. Check agent-level assignment → return if found
+ * 4. Check global assignment → return if found
+ * 5. Return null (no access)
  *
  * @param db - D1 Database instance
- * @param check - Permission check parameters
- * @returns Promise<boolean> - True if user has permission
+ * @param userId - User ID
+ * @param systemRole - User's system role ('admin' or null)
+ * @param serverId - Server ID to check access for
+ * @returns Promise<Role | null> - Effective role or null if no access
  */
-export async function checkPermission(
+export async function getEffectiveRole(
   db: D1Database,
-  check: PermissionCheck
-): Promise<boolean> {
-  const { userId, userRole, action, resourceType, resourceId } = check;
-
-  // Admins have all permissions globally
-  if (userRole === 'admin') {
-    return true;
+  userId: string,
+  systemRole: SystemRole,
+  serverId: string
+): Promise<Role | null> {
+  // Admin bypasses all checks
+  if (systemRole === 'admin') {
+    return 'admin';
   }
 
-  // Non-admins need explicit permission grant
-  // Query for permission in database
-  const permission = await db
-    .prepare(
-      `SELECT id FROM permissions
-       WHERE user_id = ?
-       AND resource_type = ?
-       AND (resource_id = ? OR resource_id IS NULL)
-       AND permission = ?`
-    )
-    .bind(userId, resourceType, resourceId || null, action)
-    .first();
+  // Get server's agent ID
+  const server = await db
+    .prepare('SELECT agent_id FROM servers WHERE id = ?')
+    .bind(serverId)
+    .first<{ agent_id: string }>();
 
-  return !!permission;
+  if (!server) {
+    return null; // Server doesn't exist
+  }
+
+  const agentId = server.agent_id;
+
+  // Query for role assignments (most specific to least specific)
+  const assignments = await db
+    .prepare(
+      `SELECT role, scope, resource_id FROM role_assignments
+       WHERE user_id = ?
+       AND (
+         (scope = 'server' AND resource_id = ?) OR
+         (scope = 'agent' AND resource_id = ?) OR
+         (scope = 'global' AND resource_id IS NULL)
+       )
+       ORDER BY
+         CASE scope
+           WHEN 'server' THEN 1  -- Most specific (overrides)
+           WHEN 'agent' THEN 2    -- Agent-level (inheritance)
+           WHEN 'global' THEN 3   -- Least specific
+         END
+       LIMIT 1`
+    )
+    .bind(userId, serverId, agentId)
+    .first<{ role: AssignmentRole; scope: Scope; resource_id: string | null }>();
+
+  return assignments ? assignments.role : null;
 }
 
 /**
- * Check if user has permission to view a server
+ * Get the effective role for a user on a specific agent
  *
- * Convenience function for common "view server" permission check
+ * Used for agent-level operations (like checking if user can create servers)
+ *
+ * @param db - D1 Database instance
+ * @param userId - User ID
+ * @param systemRole - User's system role ('admin' or null)
+ * @param agentId - Agent ID to check access for
+ * @returns Promise<Role | null> - Effective role or null if no access
+ */
+export async function getEffectiveRoleForAgent(
+  db: D1Database,
+  userId: string,
+  systemRole: SystemRole,
+  agentId: string
+): Promise<Role | null> {
+  // Admin bypasses all checks
+  if (systemRole === 'admin') {
+    return 'admin';
+  }
+
+  // Query for role assignments (agent or global)
+  const assignment = await db
+    .prepare(
+      `SELECT role FROM role_assignments
+       WHERE user_id = ?
+       AND (
+         (scope = 'agent' AND resource_id = ?) OR
+         (scope = 'global' AND resource_id IS NULL)
+       )
+       ORDER BY
+         CASE scope
+           WHEN 'agent' THEN 1
+           WHEN 'global' THEN 2
+         END
+       LIMIT 1`
+    )
+    .bind(userId, agentId)
+    .first<{ role: AssignmentRole }>();
+
+  return assignment ? assignment.role : null;
+}
+
+/**
+ * Check if a role has a specific capability
+ *
+ * Capability hierarchy:
+ * - admin: All capabilities
+ * - agent-admin: create_server + operator + viewer capabilities
+ * - operator: control_server + use_rcon + view capabilities
+ * - viewer: view capabilities only
+ */
+export function roleHasCapability(role: Role | null, capability: string): boolean {
+  if (!role) return false;
+
+  // Admin has all capabilities
+  if (role === 'admin') return true;
+
+  // Define capability hierarchy
+  const capabilities: Record<Role, string[]> = {
+    'admin': ['*'], // All capabilities
+    'agent-admin': ['create_server', 'delete_server', 'control_server', 'use_rcon', 'view_server', 'view_logs'],
+    'operator': ['control_server', 'use_rcon', 'view_server', 'view_logs'],
+    'viewer': ['view_server', 'view_logs'],
+  };
+
+  const roleCapabilities = capabilities[role] || [];
+  return roleCapabilities.includes('*') || roleCapabilities.includes(capability);
+}
+
+// ============================================================================
+// Convenience Functions for Common Checks
+// ============================================================================
+
+/**
+ * Check if user can view a server
  */
 export async function canViewServer(
   db: D1Database,
   userId: string,
-  userRole: string,
+  systemRole: SystemRole,
   serverId: string
 ): Promise<boolean> {
-  return checkPermission(db, {
-    userId,
-    userRole,
-    action: 'view',
-    resourceType: 'server',
-    resourceId: serverId,
-  });
+  const role = await getEffectiveRole(db, userId, systemRole, serverId);
+  return roleHasCapability(role, 'view_server');
 }
 
 /**
- * Check if user has permission to control a server (start, stop, restart)
- *
- * Convenience function for common "control server" permission check
+ * Check if user can control a server (start, stop, restart, rebuild)
  */
 export async function canControlServer(
   db: D1Database,
   userId: string,
-  userRole: string,
+  systemRole: SystemRole,
   serverId: string
 ): Promise<boolean> {
-  return checkPermission(db, {
-    userId,
-    userRole,
-    action: 'control',
-    resourceType: 'server',
-    resourceId: serverId,
-  });
+  const role = await getEffectiveRole(db, userId, systemRole, serverId);
+  return roleHasCapability(role, 'control_server');
 }
 
 /**
- * Check if user has permission to delete a server
- *
- * Convenience function for common "delete server" permission check
+ * Check if user can delete a server
  */
 export async function canDeleteServer(
   db: D1Database,
   userId: string,
-  userRole: string,
+  systemRole: SystemRole,
   serverId: string
 ): Promise<boolean> {
-  return checkPermission(db, {
-    userId,
-    userRole,
-    action: 'delete',
-    resourceType: 'server',
-    resourceId: serverId,
-  });
+  const role = await getEffectiveRole(db, userId, systemRole, serverId);
+  return roleHasCapability(role, 'delete_server');
+}
+
+/**
+ * Check if user can use RCON on a server
+ */
+export async function canUseRcon(
+  db: D1Database,
+  userId: string,
+  systemRole: SystemRole,
+  serverId: string
+): Promise<boolean> {
+  const role = await getEffectiveRole(db, userId, systemRole, serverId);
+  return roleHasCapability(role, 'use_rcon');
+}
+
+/**
+ * Check if user can create servers on an agent
+ */
+export async function canCreateServer(
+  db: D1Database,
+  userId: string,
+  systemRole: SystemRole,
+  agentId: string
+): Promise<boolean> {
+  const role = await getEffectiveRoleForAgent(db, userId, systemRole, agentId);
+  return roleHasCapability(role, 'create_server');
 }
 
 /**
  * Get all servers that a user has permission to view
  *
  * Returns list of server IDs that user can access
- * Admins get all servers, non-admins get filtered list
+ * Admins get all servers, non-admins get filtered list based on role assignments
  */
 export async function getUserVisibleServers(
   db: D1Database,
   userId: string,
-  userRole: string
+  systemRole: SystemRole
 ): Promise<string[]> {
   // Admins see all servers
-  if (userRole === 'admin') {
+  if (systemRole === 'admin') {
     const servers = await db.prepare('SELECT id FROM servers').all();
     return (servers.results || []).map((s: any) => s.id);
   }
 
-  // Non-admins see only servers with view permission
-  const permissions = await db
+  // Non-admins: get all servers they have access to via role assignments
+  // Need to expand agent-level and global assignments to server IDs
+
+  const assignments = await db
     .prepare(
-      `SELECT DISTINCT resource_id FROM permissions
-       WHERE user_id = ?
-       AND resource_type = 'server'
-       AND permission IN ('view', 'control', 'delete')
-       AND resource_id IS NOT NULL`
+      `SELECT role, scope, resource_id FROM role_assignments
+       WHERE user_id = ?`
     )
     .bind(userId)
-    .all();
+    .all<{ role: AssignmentRole; scope: Scope; resource_id: string | null }>();
 
-  return (permissions.results || []).map((p: any) => p.resource_id);
-}
-
-/**
- * Get all permissions for a user
- *
- * Returns detailed list of all permission grants
- */
-export async function getUserPermissions(
-  db: D1Database,
-  userId: string
-): Promise<any[]> {
-  const result = await db
-    .prepare(
-      `SELECT id, resource_type, resource_id, permission, created_at
-       FROM permissions
-       WHERE user_id = ?
-       ORDER BY created_at DESC`
-    )
-    .bind(userId)
-    .all();
-
-  return result.results || [];
-}
-
-/**
- * Grant permission to a user
- *
- * Creates a new permission grant in the database
- * Idempotent - won't create duplicate permissions
- */
-export async function grantPermission(
-  db: D1Database,
-  userId: string,
-  resourceType: ResourceType,
-  resourceId: string | null,
-  permission: Permission
-): Promise<{ id: string; created: boolean }> {
-  // Check if permission already exists
-  const existing = await db
-    .prepare(
-      `SELECT id FROM permissions
-       WHERE user_id = ?
-       AND resource_type = ?
-       AND (resource_id = ? OR (resource_id IS NULL AND ? IS NULL))
-       AND permission = ?`
-    )
-    .bind(userId, resourceType, resourceId, resourceId, permission)
-    .first();
-
-  if (existing) {
-    return { id: existing.id as string, created: false };
+  if (!assignments.results || assignments.results.length === 0) {
+    return []; // No assignments = no access
   }
 
-  // Create new permission
-  const permissionId = crypto.randomUUID();
+  const visibleServerIds = new Set<string>();
+
+  for (const assignment of assignments.results) {
+    if (assignment.scope === 'server' && assignment.resource_id) {
+      // Direct server access
+      visibleServerIds.add(assignment.resource_id);
+    } else if (assignment.scope === 'agent' && assignment.resource_id) {
+      // Agent-level access: get all servers on this agent
+      const agentServers = await db
+        .prepare('SELECT id FROM servers WHERE agent_id = ?')
+        .bind(assignment.resource_id)
+        .all<{ id: string }>();
+
+      for (const server of agentServers.results || []) {
+        visibleServerIds.add(server.id);
+      }
+    } else if (assignment.scope === 'global') {
+      // Global access: get all servers
+      const allServers = await db
+        .prepare('SELECT id FROM servers')
+        .all<{ id: string }>();
+
+      for (const server of allServers.results || []) {
+        visibleServerIds.add(server.id);
+      }
+    }
+  }
+
+  return Array.from(visibleServerIds);
+}
+
+// ============================================================================
+// Role Assignment Management
+// ============================================================================
+
+/**
+ * Grant a role assignment to a user
+ *
+ * Creates a new role assignment in the database
+ * Idempotent - won't create duplicate assignments
+ */
+export async function grantRoleAssignment(
+  db: D1Database,
+  userId: string,
+  role: AssignmentRole,
+  scope: Scope,
+  resourceId: string | null
+): Promise<{ id: string; created: boolean }> {
+  // Check if assignment already exists
+  const existing = await db
+    .prepare(
+      `SELECT id FROM role_assignments
+       WHERE user_id = ?
+       AND role = ?
+       AND scope = ?
+       AND (resource_id = ? OR (resource_id IS NULL AND ? IS NULL))`
+    )
+    .bind(userId, role, scope, resourceId, resourceId)
+    .first<{ id: string }>();
+
+  if (existing) {
+    return { id: existing.id, created: false };
+  }
+
+  // Create new assignment
+  const assignmentId = crypto.randomUUID();
   const now = Date.now();
 
   await db
     .prepare(
-      `INSERT INTO permissions (id, user_id, resource_type, resource_id, permission, created_at)
+      `INSERT INTO role_assignments (id, user_id, role, scope, resource_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .bind(permissionId, userId, resourceType, resourceId, permission, now)
+    .bind(assignmentId, userId, role, scope, resourceId, now)
     .run();
 
-  return { id: permissionId, created: true };
+  return { id: assignmentId, created: true };
 }
 
 /**
- * Revoke permission from a user
+ * Revoke a role assignment from a user
  *
- * Removes a permission grant from the database
+ * Removes a role assignment from the database
  */
-export async function revokePermission(
+export async function revokeRoleAssignment(
   db: D1Database,
-  permissionId: string
+  assignmentId: string
 ): Promise<boolean> {
   const result = await db
-    .prepare('DELETE FROM permissions WHERE id = ?')
-    .bind(permissionId)
+    .prepare('DELETE FROM role_assignments WHERE id = ?')
+    .bind(assignmentId)
     .run();
 
   return (result.meta?.changes || 0) > 0;
 }
 
 /**
- * Revoke all permissions for a user on a specific resource
+ * Revoke all role assignments for a user on a specific resource
  *
- * Useful when removing user access to a server
+ * Useful when removing user access to a server or agent
  */
-export async function revokeAllPermissionsForResource(
+export async function revokeAllRoleAssignmentsForResource(
   db: D1Database,
   userId: string,
-  resourceType: ResourceType,
+  scope: Scope,
   resourceId: string
 ): Promise<number> {
   const result = await db
     .prepare(
-      `DELETE FROM permissions
+      `DELETE FROM role_assignments
        WHERE user_id = ?
-       AND resource_type = ?
+       AND scope = ?
        AND resource_id = ?`
     )
-    .bind(userId, resourceType, resourceId)
+    .bind(userId, scope, resourceId)
     .run();
 
   return result.meta?.changes || 0;
 }
 
 /**
- * Grant standard operator permissions to a user for a server
+ * Get all role assignments for a user
  *
- * Operators get: view + control permissions
+ * Returns detailed list of all role assignments
  */
-export async function grantOperatorPermissions(
+export async function getUserRoleAssignments(
   db: D1Database,
-  userId: string,
-  serverId: string
-): Promise<{ view: string; control: string }> {
-  const viewPerm = await grantPermission(db, userId, 'server', serverId, 'view');
-  const controlPerm = await grantPermission(db, userId, 'server', serverId, 'control');
+  userId: string
+): Promise<RoleAssignment[]> {
+  const result = await db
+    .prepare(
+      `SELECT id, user_id, role, scope, resource_id, created_at
+       FROM role_assignments
+       WHERE user_id = ?
+       ORDER BY created_at DESC`
+    )
+    .bind(userId)
+    .all<RoleAssignment>();
 
-  return {
-    view: viewPerm.id,
-    control: controlPerm.id,
-  };
+  return result.results || [];
 }
 
 /**
- * Grant standard viewer permissions to a user for a server
+ * Get all role assignments for a specific resource
  *
- * Viewers get: view permission only
+ * Useful for showing "who has access to this server/agent"
  */
-export async function grantViewerPermissions(
+export async function getRoleAssignmentsForResource(
   db: D1Database,
-  userId: string,
-  serverId: string
-): Promise<{ view: string }> {
-  const viewPerm = await grantPermission(db, userId, 'server', serverId, 'view');
+  scope: Scope,
+  resourceId: string
+): Promise<Array<RoleAssignment & { email: string }>> {
+  const result = await db
+    .prepare(
+      `SELECT ra.id, ra.user_id, ra.role, ra.scope, ra.resource_id, ra.created_at, u.email
+       FROM role_assignments ra
+       JOIN users u ON ra.user_id = u.id
+       WHERE ra.scope = ? AND ra.resource_id = ?
+       ORDER BY ra.created_at DESC`
+    )
+    .bind(scope, resourceId)
+    .all<RoleAssignment & { email: string }>();
 
-  return {
-    view: viewPerm.id,
-  };
+  return result.results || [];
 }
