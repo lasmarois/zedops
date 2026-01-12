@@ -335,19 +335,155 @@ curl -X POST https://zedops.example.com/api/bootstrap \
 
 ---
 
-## Next Session: Phase 3 - User Management API
+## Session 4: Phase 3 - User Management API ✅ Complete
+
+**Date:** 2026-01-12
+**Duration:** ~30 minutes
+**Goal:** Implement complete user management and invitation system
+
+### Actions Taken
+
+1. **Created User Management Routes** (`manager/src/routes/users.ts`)
+   - **GET /api/users** - List all users with details
+   - **GET /api/users/:id** - Get user with permissions and active sessions
+   - **POST /api/users** - Create user directly (admin can bypass invitation)
+   - **PATCH /api/users/:id/role** - Change user role (admin/operator/viewer)
+   - **PATCH /api/users/:id/password** - Reset user password (invalidates all sessions)
+   - **DELETE /api/users/:id** - Delete user (with self-deletion protection)
+   - **DELETE /api/users/:id/sessions** - Force logout (invalidate all sessions)
+   - All routes protected with `requireAuth()` and `requireRole('admin')`
+
+2. **Created Invitation Routes** (`manager/src/routes/invitations.ts`)
+   - **Admin Endpoints:**
+     - POST /api/users/invite - Create invitation (24h JWT token)
+     - GET /api/users/invitations - List all invitations with status (pending/accepted/expired)
+     - DELETE /api/users/invitations/:id - Cancel pending invitation
+   - **Public Endpoints:**
+     - GET /api/invite/:token/verify - Verify invitation token validity
+     - POST /api/invite/:token/accept - Accept invitation and create account
+
+3. **Updated Main Entry Point** (`manager/src/index.ts`)
+   - Imported user and invitation routes
+   - Mounted routes:
+     - `/api/users` → user management
+     - `/api/users/invite` → invitation creation
+     - `/api/invite` → public invitation endpoints
+
+4. **Committed and Pushed**
+   - Committed: `8252817` - "Implement Phase 3: User Management API"
+   - 3 files changed: 2 new files (users.ts, invitations.ts), 1 modified (index.ts)
+   - Total: 689 lines of code added
+
+### Implementation Details
+
+**User Management Features:**
+- Complete CRUD operations for users
+- Role management (admin, operator, viewer)
+- Password reset capability (admin can reset any user)
+- Session management (force logout individual users)
+- Self-deletion protection (admin cannot delete themselves)
+- Duplicate email prevention
+- Cascading deletes (foreign keys remove sessions and permissions)
+
+**Invitation Flow:**
+```
+1. Admin: POST /api/users/invite { email, role }
+   → System generates 24h JWT token
+   → Returns invitation URL
+
+2. User clicks: https://zedops.example.com/invite/<token>
+   → Frontend calls: GET /api/invite/:token/verify
+   → Shows invitation details (email, role, expiry)
+
+3. User sets password:
+   → Frontend calls: POST /api/invite/:token/accept { password }
+   → System creates user account
+   → Marks invitation as used
+
+4. User logs in:
+   → POST /api/auth/login { email, password }
+   → Receives JWT session token
+```
+
+**Invitation Token Security:**
+- JWT signed with TOKEN_SECRET
+- 24-hour expiry (hard limit)
+- Stored as SHA-256 hash in database
+- One-time use (marked used_at after acceptance)
+- Token payload includes: email, role, type='user_invitation'
+
+**Password Validation:**
+- Minimum 8 characters
+- At least 1 uppercase letter
+- At least 1 lowercase letter
+- At least 1 number
+- Detailed error messages for user feedback
+
+**API Endpoint Summary:**
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| /api/users | GET | Admin | List all users |
+| /api/users/:id | GET | Admin | Get user details |
+| /api/users | POST | Admin | Create user directly |
+| /api/users/:id/role | PATCH | Admin | Change user role |
+| /api/users/:id/password | PATCH | Admin | Reset password |
+| /api/users/:id | DELETE | Admin | Delete user |
+| /api/users/:id/sessions | DELETE | Admin | Force logout |
+| /api/users/invite | POST | Admin | Create invitation |
+| /api/users/invitations | GET | Admin | List invitations |
+| /api/users/invitations/:id | DELETE | Admin | Cancel invitation |
+| /api/invite/:token/verify | GET | Public | Verify token |
+| /api/invite/:token/accept | POST | Public | Accept & create account |
+
+### Next Actions
+
+**Phase 4: Permission System** ⏳ Next
+
+1. Create `manager/src/lib/permissions.ts` (permission checking logic)
+2. Add permission checks to all agent/server endpoints
+3. Implement per-server permission enforcement
+4. Add permission grant/revoke endpoints
+5. Test operator and viewer role restrictions
+
+### Time Tracking
+
+- **Session 1:** ~30 minutes (Planning & Research)
+- **Session 2:** ~15 minutes (Phase 1 - Database Migrations)
+- **Session 3:** ~30 minutes (Phase 2 - Backend Auth System)
+- **Session 4:** ~30 minutes (Phase 3 - User Management API)
+- **Total:** ~1 hour 45 minutes
+
+### Status
+
+- ✅ Phase 0: Research & Database Design - Complete
+- ✅ Phase 1: Database Migrations - Complete
+- ✅ Phase 2: Backend Auth System - Complete
+- ✅ Phase 3: User Management API - Complete
+- ⏳ Phase 4: Permission System - Next
+- ⏳ Phase 5: Audit Logging - Planned
+- ⏳ Phase 6: Frontend Auth UI - Planned
+- ⏳ Phase 7: User Management UI - Planned
+- ⏳ Phase 8: Audit Log Viewer - Planned
+- ⏳ Phase 9: Testing & Migration - Planned
+
+---
+
+## Next Session: Phase 4 - Permission System
 
 **Goals:**
-- Create user management routes (invite, list, delete, role change)
-- Implement invitation flow with 24h token expiry
-- Build invitation acceptance endpoint
-- Protect all endpoints with admin role requirement
+- Create permission checking library
+- Add RBAC enforcement to all endpoints
+- Implement per-server permissions for operators/viewers
+- Build permission grant/revoke API
 
 **Estimated Duration:** ~2 hours
 
 **Files to Create:**
-- `manager/src/routes/users.ts`
-- `manager/src/routes/invitations.ts`
+- `manager/src/lib/permissions.ts`
+- `manager/src/routes/permissions.ts`
 
 **Files to Modify:**
-- `manager/src/index.ts` (mount new routes)
+- `manager/src/routes/agents.ts` (add permission checks)
+- `manager/src/durable-objects/AgentConnection.ts` (add permission checks)
+- `manager/src/index.ts` (mount permission routes)
