@@ -15,6 +15,8 @@ import {
   canCreateServer,
   canUseRcon,
   getUserVisibleServers,
+  getUserRoleAssignments,
+  getEffectiveRoleForAgent,
 } from '../lib/permissions';
 
 type Bindings = {
@@ -31,24 +33,71 @@ agents.use('*', requireAuth());
 
 /**
  * GET /api/agents
- * List all registered agents with their status
+ * List registered agents (filtered by user access)
  *
- * Returns: Array of agents with status information
- * Permission: Admin only (agents list is global view)
+ * Returns: Array of agents user has access to
+ * Permission:
+ *   - Admin: All agents
+ *   - Non-admin: Agents where user has role assignments (global/agent/server scope)
  */
 agents.get('/', async (c) => {
   const user = c.get('user');
 
-  // Only admins can list all agents
-  if (user.role !== 'admin') {
-    return c.json({ error: 'Forbidden - requires admin role' }, 403);
-  }
-
-  // Query all agents from D1
   try {
-    const result = await c.env.DB.prepare(
-      `SELECT id, name, status, last_seen, created_at, metadata FROM agents ORDER BY created_at DESC`
-    ).all();
+    let agentIds: Set<string> | null = null;
+
+    // Non-admin users: Filter agents by role assignments
+    if (user.role !== 'admin') {
+      const assignments = await getUserRoleAssignments(c.env.DB, user.id);
+      agentIds = new Set<string>();
+
+      for (const assignment of assignments) {
+        // Global scope: User has access to all agents
+        if (assignment.scope === 'global') {
+          agentIds = null; // Signal to fetch all agents
+          break;
+        }
+
+        // Agent scope: User has access to this specific agent
+        if (assignment.scope === 'agent' && assignment.resource_id) {
+          agentIds.add(assignment.resource_id);
+        }
+
+        // Server scope: Find which agent this server belongs to
+        if (assignment.scope === 'server' && assignment.resource_id) {
+          const server = await c.env.DB.prepare(
+            'SELECT agent_id FROM servers WHERE id = ?'
+          )
+            .bind(assignment.resource_id)
+            .first<{ agent_id: string }>();
+
+          if (server && server.agent_id) {
+            agentIds.add(server.agent_id);
+          }
+        }
+      }
+
+      // If user has no assignments and no global access, return empty list
+      if (agentIds && agentIds.size === 0) {
+        return c.json({ agents: [], count: 0 });
+      }
+    }
+
+    // Build query based on access level
+    let query: string;
+    let params: string[] = [];
+
+    if (agentIds === null) {
+      // Admin or global access: Fetch all agents
+      query = `SELECT id, name, status, last_seen, created_at, metadata FROM agents ORDER BY created_at DESC`;
+    } else {
+      // Specific agent access: Fetch only accessible agents
+      const placeholders = Array.from(agentIds).map(() => '?').join(',');
+      query = `SELECT id, name, status, last_seen, created_at, metadata FROM agents WHERE id IN (${placeholders}) ORDER BY created_at DESC`;
+      params = Array.from(agentIds);
+    }
+
+    const result = await c.env.DB.prepare(query).bind(...params).all();
 
     // Transform results
     const agents = result.results.map((row: any) => ({
@@ -119,21 +168,42 @@ agents.get('/:id', async (c) => {
  * List containers for a specific agent
  *
  * Returns: Array of containers with their status
+ * Permission: User must have any role assignment on this agent (global, agent, or server scope)
  */
 agents.get('/:id/containers', async (c) => {
   const user = c.get('user');
   const agentId = c.req.param('id');
 
-  // Only admins can list containers (administrative operation)
+  // Check if user has access to this agent
   if (user.role !== 'admin') {
-    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+    // Check for agent-level or global role assignment
+    const effectiveRole = await getEffectiveRoleForAgent(c.env.DB, user.id, user.role, agentId);
+
+    if (!effectiveRole) {
+      // No agent-level role, check if user has any server-level access on this agent
+      const visibleServerIds = await getUserVisibleServers(c.env.DB, user.id, user.role);
+
+      // Check if any visible server belongs to this agent
+      const serversOnAgent = await c.env.DB.prepare(
+        'SELECT COUNT(*) as count FROM servers WHERE agent_id = ? AND id IN (' +
+          visibleServerIds.map(() => '?').join(',') +
+          ')'
+      )
+        .bind(agentId, ...visibleServerIds)
+        .first<{ count: number }>();
+
+      if (!serversOnAgent || serversOnAgent.count === 0) {
+        return c.json(
+          { error: 'Forbidden - no access to this agent or any servers on it' },
+          403
+        );
+      }
+    }
   }
 
   // Verify agent exists
   try {
-    const agent = await c.env.DB.prepare(
-      `SELECT id, name, status FROM agents WHERE id = ?`
-    )
+    const agent = await c.env.DB.prepare(`SELECT id, name, status FROM agents WHERE id = ?`)
       .bind(agentId)
       .first();
 
@@ -583,10 +653,8 @@ agents.get('/:id/logs/ws', async (c) => {
     const stub = c.env.AGENT_CONNECTION.get(id);
 
     // Forward WebSocket upgrade request to Durable Object
-    return stub.fetch(`http://do/logs/ws`, {
-      method: 'GET',
-      headers: c.req.raw.headers,
-    });
+    // Use the original request to preserve WebSocket headers
+    return stub.fetch(c.req.raw);
   } catch (error) {
     console.error('[Agents API] Error establishing log WebSocket:', error);
     return c.json({ error: 'Failed to connect to agent' }, 500);

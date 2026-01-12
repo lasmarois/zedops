@@ -68,6 +68,18 @@ Connecting to RCON server...
 - **Files Modified:** `frontend/src/hooks/useRcon.ts` (lines 70-80)
 - **Deployed:** Version ID ab909a5c-b475-4fca-a28e-4a7aee49c575
 
+**Step 6: Analyzed Cloudflare Workers Logs** ✅
+- **Finding:** WebSocket request reached endpoint and passed JWT auth (status: "Ok")
+- **Problem:** No Durable Object connection logs (WebSocket upgrade failed silently)
+- **Root Cause:** `stub.fetch()` was creating new request with `http://do/logs/ws` URL and copying headers
+- **Issue:** Recreating request doesn't preserve WebSocket upgrade context
+
+**Step 7: Fixed WebSocket Forward to Durable Object** ✅
+- **Fix:** Pass original request directly: `stub.fetch(c.req.raw)` instead of creating new request
+- **Reason:** Durable Object needs the original request to properly handle WebSocket upgrade
+- **Files Modified:** `manager/src/routes/agents.ts` (lines 655-657)
+- **Deployed:** Version ID 2d3c64dc-bbae-4e67-ae3a-619c99d323b4
+
 **Step 4: Hypothesis** 🔍
 Possible causes:
 1. JWT token not available in frontend context (but other features work, so unlikely)
