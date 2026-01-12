@@ -1,0 +1,434 @@
+# Findings: M7 Phase 2 - RBAC Auth Migration & Refinement
+
+**Milestone:** M7 Phase 2 - RBAC Auth Migration & Refinement
+**Started:** 2026-01-12
+**Phase:** Research & Architectural Design
+
+---
+
+## Finding 1: Mixed Authentication State
+
+**Current Implementation:**
+
+### ✅ Endpoints Using JWT + Permissions (Working)
+```typescript
+// manager/src/routes/agents.ts
+GET  /api/agents                       - requireAuth() + requireRole('admin')
+GET  /api/agents/:id                   - requireAuth() + requireRole('admin')
+GET  /api/agents/:id/servers           - requireAuth() + filtered by getUserVisibleServers()
+POST /:id/servers/:serverId/start      - requireAuth() + canControlServer()
+POST /:id/servers/:serverId/stop       - requireAuth() + canControlServer()
+DELETE /:id/servers/:serverId          - requireAuth() + canDeleteServer()
+```
+
+### ⚠️ Endpoints Using ADMIN_PASSWORD (Need Migration)
+```typescript
+GET  /api/agents/:id/containers        - Line 123: authHeader !== ADMIN_PASSWORD
+POST /api/agents/:id/ports/check       - Line 176: authHeader !== ADMIN_PASSWORD
+GET  /api/agents/:id/ports/availability - Line 245: authHeader !== ADMIN_PASSWORD
+POST /api/agents/:id/servers           - Line 577: authHeader !== ADMIN_PASSWORD (create server)
+POST /api/agents/:id/servers/sync      - Line 877: authHeader !== ADMIN_PASSWORD
+POST /:id/servers/:serverId/restart    - No auth check (proxies to DO)
+POST /:id/servers/:serverId/rebuild    - No auth check (proxies to DO)
+GET  /api/agents/:id/logs/ws           - Line 532: query param 'password' === ADMIN_PASSWORD
+```
+
+**Impact:**
+- Non-admin users CANNOT view logs (even with 'view' permission)
+- Non-admin users CANNOT use RCON (even with 'control' permission)
+- Port checking bypasses audit logging
+- Container operations not tracked in audit logs
+- Inconsistent UX (some operations work with JWT, others don't)
+
+---
+
+## Finding 2: Permission Types & Hierarchy
+
+**Current Permission Types:**
+```typescript
+type Permission = 'view' | 'control' | 'delete' | 'manage_users';
+```
+
+**Current Behavior (No Hierarchy):**
+```
+User granted 'control' permission:
+  ✅ Can start/stop server
+  ❌ Cannot view logs (needs separate 'view' grant)
+
+User granted 'delete' permission:
+  ✅ Can delete server
+  ❌ Cannot control server (needs separate 'control' grant)
+  ❌ Cannot view logs (needs separate 'view' grant)
+```
+
+**Proposed Hierarchy:**
+```
+delete ⊃ control ⊃ view
+  └─ delete implies control and view
+  └─ control implies view
+  └─ view is standalone
+```
+
+**Implementation Impact:**
+- Would need to update `checkPermission()` in `manager/src/lib/permissions.ts`
+- Logic change:
+  ```typescript
+  // Current: exact match only
+  permission.permission === action
+
+  // Proposed: check hierarchy
+  if (action === 'view') {
+    return permission.permission IN ('view', 'control', 'delete');
+  }
+  if (action === 'control') {
+    return permission.permission IN ('control', 'delete');
+  }
+  if (action === 'delete') {
+    return permission.permission === 'delete';
+  }
+  ```
+
+**Pros:**
+- More intuitive (if you can delete, you can control)
+- Fewer permission grants needed
+- Matches user mental model
+
+**Cons:**
+- Breaking change if anyone uses non-hierarchical grants
+- Less flexible (can't grant delete without control)
+
+---
+
+## Finding 3: Role Model Options
+
+**Option A: Current (2 Roles + Flexible Permissions)**
+
+```
+Roles:
+- admin: Bypasses all permission checks (implicit full access)
+- user: Requires explicit permission grants per-resource
+
+Permissions:
+- Granted individually per-server (or per-agent, but UI doesn't expose this)
+- Preset functions exist: grantOperatorPermissions(), grantViewerPermissions()
+```
+
+**Pros:**
+- Maximum flexibility (mix and match permissions)
+- Fewer roles to manage
+- Can grant different permissions to different servers
+
+**Cons:**
+- More grants to manage (one per server per permission)
+- Preset functions don't map to roles (misleading names)
+
+---
+
+**Option B: 4 Roles with Predefined Permissions**
+
+```
+Roles:
+- admin: Full system access (bypasses all checks)
+- operator: control + view permissions on assigned resources
+- viewer: view permission only on assigned resources
+- user: No default permissions (must be granted explicitly)
+
+Permission Assignment:
+- Assigning 'operator' role → automatically has control + view on assigned servers
+- Assigning 'viewer' role → automatically has view on assigned servers
+- No explicit permission grants needed (role defines permissions)
+```
+
+**Database Changes Needed:**
+```sql
+-- Update role constraint
+CHECK (role IN ('admin', 'operator', 'viewer', 'user'))
+
+-- Migration: Convert existing 'user' role grants to appropriate role
+-- Users with control permissions → operator
+-- Users with view-only permissions → viewer
+-- Users with no permissions → user
+```
+
+**Pros:**
+- Simpler user management (assign role, done)
+- Clear role names match common patterns
+- Preset functions now match role names
+
+**Cons:**
+- Less flexible (can't mix permissions)
+- More roles to manage
+- Can't grant "control on server A, view on server B" to same user
+
+---
+
+**Recommendation:** Keep Option A (2 roles + flexible permissions) BUT:
+- Rename preset functions to avoid confusion:
+  - `grantOperatorPermissions()` → `grantControlAccess()`
+  - `grantViewerPermissions()` → `grantViewAccess()`
+- Update UI labels to clarify role vs permissions
+
+---
+
+## Finding 4: Agent-Level Permissions
+
+**Current Support (Exists but Not Used):**
+```typescript
+// Code supports this, but UI doesn't expose it
+{
+  resourceType: 'agent',
+  resourceId: 'agent-123',
+  permission: 'control'
+}
+// Would grant control to ALL servers on agent-123
+```
+
+**Permission Check Logic (Already Implemented):**
+```typescript
+// manager/src/lib/permissions.ts line 56-65
+SELECT id FROM permissions
+WHERE user_id = ?
+AND resource_type = ?
+AND (resource_id = ? OR resource_id IS NULL)  // NULL = wildcard (agent-level)
+AND permission = ?
+```
+
+**Use Cases:**
+1. "Grant Bob access to all servers on my home lab agent"
+2. "Grant monitoring team view access to all production servers"
+3. Simplify permission management for multi-server agents
+
+**Implementation Needed:**
+- Add agent-level grant option to PermissionsManager.tsx
+- UI selector: "Grant access to: [Server dropdown] or [All servers on this agent]"
+- Document behavior: Agent-level OR server-level grants access (additive)
+
+---
+
+## Finding 5: Server Creation Permission
+
+**Current:** Only admins can create servers (`POST /api/agents/:id/servers`)
+
+**Options:**
+
+**A. Keep Admin-Only (Recommended)**
+- Pros: Prevents resource exhaustion, maintains control
+- Cons: Less self-service for users
+- Use case: Small teams where admins provision servers
+
+**B. Add 'create' Permission**
+- New permission type: `'view' | 'control' | 'delete' | 'create' | 'manage_users'`
+- Grant 'create' permission on agent → user can create servers on that agent
+- Pros: More self-service, flexible
+- Cons: Requires migration, new permission type, need quotas to prevent abuse
+
+**C. Create Implies Control on Agent**
+- Users with 'control' permission on agent can create servers
+- Pros: Reuses existing permission
+- Cons: Conflates control (of existing servers) with create (new servers)
+
+**Recommendation:** Option A (admin-only) for MVP, add Option B (create permission) later when quotas/limits implemented
+
+---
+
+## Finding 6: RCON Permission Granularity
+
+**Current:** RCON endpoints use old password auth (not implemented)
+
+**Options:**
+
+**A. RCON Requires 'control' Permission (Recommended)**
+```typescript
+// RCON is operational control (kick, ban, save, broadcast)
+// Users who can start/stop should also be able to use RCON
+if (!await canControlServer(db, userId, userRole, serverId)) {
+  return c.json({ error: 'Forbidden' }, 403);
+}
+```
+- Pros: Intuitive (operational control includes RCON)
+- Cons: RCON is powerful (can kick players, ban, etc.)
+
+**B. RCON Requires Separate 'rcon' Permission**
+```typescript
+type Permission = 'view' | 'control' | 'delete' | 'rcon' | 'manage_users';
+```
+- Pros: More granular (can grant control without RCON)
+- Cons: Extra permission type, migration needed, more complexity
+- Use case: "User can restart servers but not kick players"
+
+**C. RCON Requires 'delete' Permission**
+- Pros: RCON treated as high-privilege operation
+- Cons: Doesn't match mental model (RCON isn't destructive like delete)
+
+**Recommendation:** Option A (use 'control' permission) for MVP, can add Option B later if needed
+
+---
+
+## Finding 7: WebSocket Authentication Challenge
+
+**Current:** WebSocket endpoints use query parameter for password
+```typescript
+// manager/src/routes/agents.ts line 532
+const password = c.req.query('password');
+if (!password || password !== c.env.ADMIN_PASSWORD) {
+  return c.json({ error: 'Invalid or missing password' }, 401);
+}
+```
+
+**Problem:** WebSocket upgrade requests don't support Authorization header in browser
+
+**Solutions:**
+
+**A. JWT in Query Parameter (Simplest)**
+```typescript
+GET /api/agents/:id/logs/ws?token=<jwt>
+
+// In handler:
+const token = c.req.query('token');
+const payload = await verifySessionToken(token, c.env.TOKEN_SECRET);
+// Then check permissions
+```
+- Pros: Works in browser, simple
+- Cons: Token visible in URL (browser history, logs)
+- Security: Tokens are short-lived (7 days), can be revoked
+
+**B. JWT in Sec-WebSocket-Protocol Header**
+```typescript
+// Frontend:
+new WebSocket(url, ['access_token', jwt]);
+
+// Backend:
+const protocols = c.req.header('Sec-WebSocket-Protocol');
+const token = protocols?.split(',')[1]?.trim();
+```
+- Pros: Not in URL
+- Cons: More complex, requires protocol negotiation
+
+**Recommendation:** Option A (token in query param) for simplicity, already have short-lived tokens
+
+---
+
+## Finding 8: Audit Logging Gaps
+
+**Currently Logged:**
+- User login/logout (auth.ts)
+- User management (users.ts)
+- Permission grants/revokes (permissions.ts)
+- Server start/stop/delete (agents.ts lines 944, 1111, 1309)
+
+**NOT Currently Logged:**
+- Container restarts (no audit call)
+- Server rebuilds (no audit call)
+- Port checks (no audit call)
+- Log viewing (not tracked)
+- RCON commands (not tracked)
+
+**Proposed Additions:**
+```typescript
+// Server operations
+logServerRestarted(db, c, userId, serverId);
+logServerRebuilt(db, c, userId, serverId);
+
+// RCON operations
+logRconCommand(db, c, userId, serverId, command);
+
+// Optional: Log viewing (could be noisy)
+logServerViewed(db, c, userId, serverId);  // On log stream start
+```
+
+---
+
+## Finding 9: Frontend Auth State
+
+**Current Implementation:**
+```typescript
+// frontend/src/contexts/UserContext.tsx
+- Stores JWT token in localStorage
+- Provides login(), logout(), user state
+- Auto-loads on mount
+- 401 errors trigger logout
+
+// frontend/src/lib/api.ts
+- getAuthHeaders() reads token from localStorage
+- All API calls use Authorization: Bearer <token>
+```
+
+**Works Well For:**
+- HTTP endpoints (agents, servers, users, permissions)
+
+**Needs Updates For:**
+- WebSocket connections (logs, RCON)
+- Currently use password query param
+- Need to pass token instead
+
+**Update Needed:**
+```typescript
+// frontend/src/hooks/useLogStream.ts
+// Current:
+const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?password=${encodeURIComponent(adminPassword)}`;
+
+// Proposed:
+const token = getToken();
+const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${encodeURIComponent(token)}`;
+```
+
+---
+
+## Finding 10: Migration Strategy
+
+**Approach:** Incremental migration (not all-at-once)
+
+**Phase 1: Architectural Decisions** (User Input Required)
+- Decide on role model (2 roles vs 4 roles)
+- Decide on permission hierarchy (implement or keep independent)
+- Decide on agent-level permission UI (add or skip)
+- Decide on server creation permission (admin-only or new permission)
+- Decide on RCON permission model (use control or separate)
+
+**Phase 2: Backend Auth Migration**
+1. Update endpoints one-by-one to use requireAuth()
+2. Add permission checks (canViewServer, canControlServer)
+3. Update WebSocket handlers to use JWT
+4. Add missing audit log calls
+
+**Phase 3: Permission System Enhancement**
+- Implement permission hierarchy (if approved)
+- Add agent-level permission endpoints (if approved)
+- Add create permission type (if approved)
+
+**Phase 4: Frontend Updates**
+- Update WebSocket connections to use JWT
+- Remove password prompts
+- Update UI if role model changes
+
+**Phase 5: Testing**
+- Test all permission scenarios
+- Test with non-admin users
+- Verify audit logs
+
+---
+
+## Architectural Recommendations Summary
+
+| Decision | Recommendation | Rationale |
+|----------|---------------|-----------|
+| **Role Model** | Keep 2 roles (admin/user) | Maximum flexibility, fewer migrations |
+| **Permission Hierarchy** | Implement (delete ⊃ control ⊃ view) | More intuitive, fewer grants |
+| **Agent-Level Permissions** | Add UI | Useful for multi-server management |
+| **Server Creation** | Admin-only for now | Simpler, add quotas later |
+| **RCON Permission** | Use 'control' permission | Intuitive, matches operational control |
+| **WebSocket Auth** | JWT in query param | Simplest, works in browser |
+
+---
+
+## Open Questions for User
+
+Before proceeding with implementation, user must decide:
+
+1. ✅ Role model: 2 roles (recommended) or 4 roles?
+2. ✅ Permission hierarchy: Implement (recommended) or keep independent?
+3. ✅ Agent-level permissions UI: Add (recommended) or skip?
+4. ✅ Server creation: Admin-only (recommended) or add permission?
+5. ✅ RCON permission: Use 'control' (recommended) or separate?
+
+User answers will determine which phases to implement.
