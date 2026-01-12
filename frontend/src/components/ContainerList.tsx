@@ -11,16 +11,18 @@ import {
 } from '../hooks/useContainers';
 import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, useStopServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
+import { RconTerminal } from './RconTerminal';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
 
 interface ContainerListProps {
   agentId: string;
   agentName: string;
+  password: string;  // Manager's ADMIN_PASSWORD
   onBack: () => void;
   onViewLogs: (containerId: string, containerName: string) => void;
 }
 
-export function ContainerList({ agentId, agentName, onBack, onViewLogs }: ContainerListProps) {
+export function ContainerList({ agentId, agentName, password, onBack, onViewLogs }: ContainerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
   const { data: serversData } = useServers(agentId);
   const startMutation = useStartContainer();
@@ -50,6 +52,7 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   } | null>(null);
   const [showDeletedServers, setShowDeletedServers] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
+  const [rconServer, setRconServer] = useState<Server | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
   const lastSyncRef = useRef<{ [serverId: string]: number }>({});
@@ -771,6 +774,28 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                         >
                           View Logs
                         </button>
+                        {getServerFromContainerId(container.id) && (
+                          <button
+                            onClick={() => {
+                              const server = getServerFromContainerId(container.id);
+                              if (server) {
+                                setRconServer(server);
+                              }
+                            }}
+                            style={{
+                              padding: '0.25rem 0.75rem',
+                              backgroundColor: '#fd7e14',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.875rem',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            🎮 RCON
+                          </button>
+                        )}
                       </>
                     )}
                     {getServerFromContainerId(container.id) && (
@@ -1279,6 +1304,30 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
           editServer={editServer}
         />
       )}
+
+      {rconServer && (() => {
+        // Parse RCON_PASSWORD from server config
+        let rconPassword = '';
+        try {
+          const config = JSON.parse(rconServer.config);
+          rconPassword = config.RCON_PASSWORD || config.ADMIN_PASSWORD || '';
+        } catch (err) {
+          console.error('Failed to parse server config:', err);
+        }
+
+        return (
+          <RconTerminal
+            agentId={agentId}
+            serverId={rconServer.id}
+            serverName={rconServer.name}
+            containerID={rconServer.container_id || ''}
+            rconPort={rconServer.rcon_port}
+            adminPassword={password}
+            rconPassword={rconPassword}
+            onClose={() => setRconServer(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

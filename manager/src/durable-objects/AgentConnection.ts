@@ -37,6 +37,9 @@ export class AgentConnection extends DurableObject {
   private logSubscribers: Map<string, LogSubscriber> = new Map(); // subscriberId -> LogSubscriber
   private logBuffers: Map<string, CircularBuffer<LogLine>> = new Map(); // containerId -> buffer
 
+  // RCON session tracking
+  private rconSessions: Map<string, { sessionId: string; serverId: string }> = new Map(); // sessionId -> { sessionId, serverId }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
   }
@@ -66,6 +69,7 @@ export class AgentConnection extends DurableObject {
         isRegistered: this.isRegistered,
         logSubscribers: this.logSubscribers.size,
         logBuffers: this.logBuffers.size,
+        rconSessions: this.rconSessions.size,
       }), {
         headers: { "Content-Type": "application/json" },
       });
@@ -247,6 +251,18 @@ export class AgentConnection extends DurableObject {
 
       case "log.stream.error":
         await this.handleLogStreamError(message);
+        break;
+
+      case "rcon.connect":
+        await this.handleRCONConnect(message);
+        break;
+
+      case "rcon.command":
+        await this.handleRCONCommand(message);
+        break;
+
+      case "rcon.disconnect":
+        await this.handleRCONDisconnect(message);
         break;
 
       case "test.echo":
@@ -972,12 +988,93 @@ export class AgentConnection extends DurableObject {
           await this.handleLogUnsubscribe(subscriberId, message);
           break;
 
+        case "rcon.connect":
+        case "rcon.command":
+        case "rcon.disconnect":
+          // Forward RCON messages to agent and send reply back to UI
+          await this.handleUIRCONMessage(ws, message);
+          break;
+
         default:
           ws.send(JSON.stringify(createMessage("error", { message: `Unknown subject: ${message.subject}` })));
       }
     } catch (error) {
       console.error(`[AgentConnection] Error handling UI message:`, error);
       ws.send(JSON.stringify(createMessage("error", { message: "Failed to process message" })));
+    }
+  }
+
+  /**
+   * Handle RCON messages from UI client
+   * Forward to agent and send reply back to UI WebSocket
+   */
+  private async handleUIRCONMessage(ws: WebSocket, message: Message): Promise<void> {
+    try {
+      console.log(`[AgentConnection] UI RCON message: ${message.subject}`);
+
+      // Check if agent is connected
+      const agentWs = await this.getActiveWebSocket();
+      if (!agentWs) {
+        console.error(`[AgentConnection] Cannot forward RCON message: agent not connected`);
+        if (message.reply) {
+          ws.send(JSON.stringify(createMessage(message.reply, {
+            success: false,
+            error: "Agent not connected",
+            errorCode: "AGENT_OFFLINE",
+          })));
+        }
+        return;
+      }
+
+      // Forward message to agent and wait for reply
+      try {
+        const reply = await this.sendMessageWithReply({
+          subject: message.subject,
+          data: message.data,
+        }, 30000);
+
+        // Send reply back to UI WebSocket
+        if (message.reply) {
+          ws.send(JSON.stringify(createMessage(message.reply, reply.data)));
+        }
+
+        // Store RCON session mapping if this was a successful connect
+        if (message.subject === "rcon.connect" && reply.data.success) {
+          const sessionId = reply.data.sessionId;
+          const serverId = (message.data as any).serverId;
+          if (sessionId && serverId) {
+            this.rconSessions.set(sessionId, { sessionId, serverId });
+            console.log(`[AgentConnection] RCON session created: ${sessionId} for server ${serverId}`);
+          }
+        }
+
+        // Clean up RCON session if this was a disconnect
+        if (message.subject === "rcon.disconnect" && reply.data.success) {
+          const sessionId = (message.data as any).sessionId;
+          if (sessionId && this.rconSessions.has(sessionId)) {
+            this.rconSessions.delete(sessionId);
+            console.log(`[AgentConnection] RCON session closed: ${sessionId}`);
+          }
+        }
+      } catch (error) {
+        console.error(`[AgentConnection] RCON message failed:`, error);
+        if (message.reply) {
+          ws.send(JSON.stringify(createMessage(message.reply, {
+            success: false,
+            error: error instanceof Error ? error.message : "RCON operation failed",
+            errorCode: "RCON_FAILED",
+          })));
+        }
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleUIRCONMessage:`, error);
+      if (message.reply) {
+        ws.send(JSON.stringify(createMessage(message.reply, {
+          success: false,
+          error: "Failed to process RCON message",
+          errorCode: "INTERNAL_ERROR",
+        })));
+      }
     }
   }
 
@@ -1168,6 +1265,210 @@ export class AgentConnection extends DurableObject {
         console.error(`[AgentConnection] Failed to send error to subscriber ${subscriber.id}:`, err);
         this.logSubscribers.delete(subscriber.id);
       }
+    }
+  }
+
+  /**
+   * Handle rcon.connect from UI
+   * Forward to agent and store session mapping
+   * Agent will connect via Docker network (no host exposure)
+   */
+  private async handleRCONConnect(message: Message): Promise<void> {
+    try {
+      const { serverId, containerID, port, password } = message.data as {
+        serverId?: string;
+        containerID?: string;
+        port?: number;
+        password?: string;
+      };
+
+      if (!serverId || !containerID || !port || !password) {
+        this.sendError("RCON connect requires serverId, containerID, port, and password");
+        return;
+      }
+
+      console.log(`[AgentConnection] RCON connect request for server ${serverId} (container: ${containerID.substring(0, 12)}, port: ${port})`);
+
+      // Check if agent is connected
+      const agentWs = await this.getActiveWebSocket();
+      if (!agentWs) {
+        console.error(`[AgentConnection] Cannot connect RCON: agent not connected`);
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: "Agent not connected",
+            errorCode: "AGENT_OFFLINE",
+          }));
+        }
+        return;
+      }
+
+      // Forward to agent using request/reply pattern (agent connects via Docker network)
+      try {
+        const reply = await this.sendMessageWithReply({
+          subject: "rcon.connect",
+          data: { serverId, containerId: containerID, port, password },
+        }, 30000);
+
+        // Check if connection succeeded
+        if (reply.data.success) {
+          const sessionId = reply.data.sessionId;
+
+          // Store session mapping
+          this.rconSessions.set(sessionId, { sessionId, serverId });
+          console.log(`[AgentConnection] RCON session created: ${sessionId} for server ${serverId}`);
+
+          // Send success response to UI
+          if (message.reply) {
+            this.send(createMessage(message.reply, {
+              success: true,
+              sessionId,
+            }));
+          }
+        } else {
+          // Forward error to UI
+          if (message.reply) {
+            this.send(createMessage(message.reply, reply.data));
+          }
+        }
+      } catch (error) {
+        console.error(`[AgentConnection] RCON connect failed:`, error);
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: error instanceof Error ? error.message : "RCON connect failed",
+            errorCode: "RCON_CONNECT_FAILED",
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleRCONConnect:`, error);
+      this.sendError("Failed to process RCON connect request");
+    }
+  }
+
+  /**
+   * Handle rcon.command from UI
+   * Forward to agent and return response
+   */
+  private async handleRCONCommand(message: Message): Promise<void> {
+    try {
+      const { sessionId, command } = message.data as {
+        sessionId?: string;
+        command?: string;
+      };
+
+      if (!sessionId || !command) {
+        this.sendError("RCON command requires sessionId and command");
+        return;
+      }
+
+      console.log(`[AgentConnection] RCON command: ${command} (session: ${sessionId})`);
+
+      // Check if agent is connected
+      const agentWs = await this.getActiveWebSocket();
+      if (!agentWs) {
+        console.error(`[AgentConnection] Cannot execute RCON command: agent not connected`);
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: "Agent not connected",
+            errorCode: "AGENT_OFFLINE",
+          }));
+        }
+        return;
+      }
+
+      // Forward to agent using request/reply pattern
+      try {
+        const reply = await this.sendMessageWithReply({
+          subject: "rcon.command",
+          data: { sessionId, command },
+        }, 30000);
+
+        // Forward response to UI
+        if (message.reply) {
+          this.send(createMessage(message.reply, reply.data));
+        }
+      } catch (error) {
+        console.error(`[AgentConnection] RCON command failed:`, error);
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: error instanceof Error ? error.message : "RCON command failed",
+            errorCode: "RCON_COMMAND_FAILED",
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleRCONCommand:`, error);
+      this.sendError("Failed to process RCON command request");
+    }
+  }
+
+  /**
+   * Handle rcon.disconnect from UI
+   * Forward to agent and remove session mapping
+   */
+  private async handleRCONDisconnect(message: Message): Promise<void> {
+    try {
+      const { sessionId } = message.data as { sessionId?: string };
+
+      if (!sessionId) {
+        this.sendError("RCON disconnect requires sessionId");
+        return;
+      }
+
+      console.log(`[AgentConnection] RCON disconnect request for session ${sessionId}`);
+
+      // Check if agent is connected
+      const agentWs = await this.getActiveWebSocket();
+      if (!agentWs) {
+        console.error(`[AgentConnection] Cannot disconnect RCON: agent not connected`);
+        // Remove session from map even if agent is offline
+        this.rconSessions.delete(sessionId);
+
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: "Agent not connected",
+            errorCode: "AGENT_OFFLINE",
+          }));
+        }
+        return;
+      }
+
+      // Forward to agent using request/reply pattern
+      try {
+        const reply = await this.sendMessageWithReply({
+          subject: "rcon.disconnect",
+          data: { sessionId },
+        }, 10000);
+
+        // Remove session from map
+        this.rconSessions.delete(sessionId);
+        console.log(`[AgentConnection] RCON session removed: ${sessionId}`);
+
+        // Forward response to UI
+        if (message.reply) {
+          this.send(createMessage(message.reply, reply.data));
+        }
+      } catch (error) {
+        console.error(`[AgentConnection] RCON disconnect failed:`, error);
+        // Remove session from map even if disconnect failed
+        this.rconSessions.delete(sessionId);
+
+        if (message.reply) {
+          this.send(createMessage(message.reply, {
+            success: false,
+            error: error instanceof Error ? error.message : "RCON disconnect failed",
+            errorCode: "RCON_DISCONNECT_FAILED",
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleRCONDisconnect:`, error);
+      this.sendError("Failed to process RCON disconnect request");
     }
   }
 

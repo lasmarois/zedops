@@ -720,6 +720,12 @@ agents.post('/:id/servers', async (c) => {
     const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
     const stub = c.env.AGENT_CONNECTION.get(id);
 
+    // Add RCON_PORT to config so container knows what port to listen on
+    const configWithRconPort = {
+      ...body.config,
+      RCON_PORT: rconPort.toString(),
+    };
+
     // Forward server.create message to Durable Object
     const response = await stub.fetch(`http://do/servers`, {
       method: 'POST',
@@ -729,7 +735,7 @@ agents.post('/:id/servers', async (c) => {
         name: body.name,
         registry: agent.steam_zomboid_registry,
         imageTag: body.imageTag,
-        config: body.config,
+        config: configWithRconPort,
         gamePort,
         udpPort,
         rconPort,
@@ -1025,8 +1031,12 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
         .bind(Date.now(), serverId)
         .run();
 
-      // Parse config from DB
+      // Parse config from DB and add RCON_PORT
       const config = JSON.parse(server.config as string);
+      const configWithRconPort = {
+        ...config,
+        RCON_PORT: (server.rcon_port as number).toString(),
+      };
 
       // Call server.create on agent
       const createResponse = await stub.fetch(`http://do/servers`, {
@@ -1037,7 +1047,7 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
           name: server.name,
           registry: agent.steam_zomboid_registry,
           imageTag: server.image_tag,
-          config,
+          config: configWithRconPort,
           gamePort: server.game_port,
           udpPort: server.udp_port,
           rconPort: server.rcon_port,

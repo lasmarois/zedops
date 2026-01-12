@@ -426,3 +426,8 @@ Deferred until after core product features are complete and UI is styled. Agent 
 **Current Planning:** Milestone 5 archived, ready to start M6
 
 **Backlog:** See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
+
+### Reminders
+- ability to remove server data (I think this is already implemented when purging.)
+- edit existing server settings
+- remove the sync status button? no need now since it happens automatically ?

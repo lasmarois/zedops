@@ -57,6 +57,7 @@ function App() {
         <ContainerList
           agentId={selectedAgent.id}
           agentName={selectedAgent.name}
+          password={password}
           onBack={handleBackToAgents}
           onViewLogs={handleViewLogs}
         />

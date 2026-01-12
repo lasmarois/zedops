@@ -29,6 +29,7 @@ type Agent struct {
 	conn           *websocket.Conn
 	docker         *DockerClient
 	logStreams     map[string]context.CancelFunc // containerID -> cancel function
+	rconManager    *RCONManager                  // RCON session manager
 }
 
 func main() {
@@ -70,6 +71,10 @@ func main() {
 		log.Println("Docker client initialized successfully")
 	}
 
+	// Initialize RCON manager (requires Docker client for network access)
+	rconManager := NewRCONManager(dockerClient.cli)
+	defer rconManager.Close()
+
 	agent := &Agent{
 		managerURL:     *managerURL,
 		agentName:      name,
@@ -77,6 +82,7 @@ func main() {
 		permanentToken: permanentToken,
 		docker:         dockerClient,
 		logStreams:     make(map[string]context.CancelFunc),
+		rconManager:    rconManager,
 	}
 
 	// Set up graceful shutdown
@@ -282,6 +288,12 @@ func (a *Agent) receiveMessages() {
 			a.handleServerCheckData(msg)
 		case "port.check":
 			a.handlePortCheck(msg)
+		case "rcon.connect":
+			a.handleRCONConnect(msg)
+		case "rcon.command":
+			a.handleRCONCommand(msg)
+		case "rcon.disconnect":
+			a.handleRCONDisconnect(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -918,6 +930,146 @@ func (a *Agent) sendServerErrorWithReply(serverID, containerID, operation, error
 			Operation:   operation,
 			Error:       errorMsg,
 			ErrorCode:   errorCode,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// handleRCONConnect handles rcon.connect messages
+func (a *Agent) handleRCONConnect(msg Message) {
+	// Parse connection data
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		ServerID    string `json:"serverId"`
+		ContainerID string `json:"containerId"`
+		Port        int    `json:"port"`
+		Password    string `json:"password"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendRCONError("", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Validate required fields
+	if req.ContainerID == "" {
+		a.sendRCONError("", "containerID is required", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Connect to RCON via Docker network
+	sessionID, err := a.rconManager.Connect(req.ServerID, req.ContainerID, req.Port, req.Password)
+	if err != nil {
+		log.Printf("[RCON] Connection failed for container %s: %v", req.ContainerID[:12], err)
+		a.sendRCONError("", err.Error(), "RCON_CONNECT_FAILED", msg.Reply)
+		return
+	}
+
+	// Send success response
+	subject := "rcon.connect.response"
+	if msg.Reply != "" {
+		subject = msg.Reply
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"success":   true,
+			"sessionId": sessionID,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// handleRCONCommand handles rcon.command messages
+func (a *Agent) handleRCONCommand(msg Message) {
+	// Parse command data
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		SessionID string `json:"sessionId"`
+		Command   string `json:"command"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendRCONError(req.SessionID, "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Execute command
+	response, err := a.rconManager.Execute(req.SessionID, req.Command)
+	if err != nil {
+		log.Printf("RCON command failed: %v", err)
+		a.sendRCONError(req.SessionID, err.Error(), "RCON_COMMAND_FAILED", msg.Reply)
+		return
+	}
+
+	// Send success response
+	subject := "rcon.command.response"
+	if msg.Reply != "" {
+		subject = msg.Reply
+	}
+
+	responseMsg := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"success":  true,
+			"response": response,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(responseMsg)
+}
+
+// handleRCONDisconnect handles rcon.disconnect messages
+func (a *Agent) handleRCONDisconnect(msg Message) {
+	// Parse disconnect data
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		a.sendRCONError("", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	// Disconnect
+	err := a.rconManager.Disconnect(req.SessionID)
+	if err != nil {
+		log.Printf("RCON disconnect failed: %v", err)
+		a.sendRCONError(req.SessionID, err.Error(), "RCON_DISCONNECT_FAILED", msg.Reply)
+		return
+	}
+
+	// Send success response
+	subject := "rcon.disconnect.response"
+	if msg.Reply != "" {
+		subject = msg.Reply
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"success": true,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// sendRCONError sends an error response for RCON operations
+func (a *Agent) sendRCONError(sessionID, errorMsg, errorCode, replyTo string) {
+	subject := "rcon.error"
+	if replyTo != "" {
+		subject = replyTo
+	}
+
+	response := Message{
+		Subject: subject,
+		Data: map[string]interface{}{
+			"success":   false,
+			"sessionId": sessionID,
+			"error":     errorMsg,
+			"errorCode": errorCode,
 		},
 		Timestamp: time.Now().Unix(),
 	}

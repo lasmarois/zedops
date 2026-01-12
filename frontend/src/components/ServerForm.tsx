@@ -68,6 +68,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
       SERVER_PUBLIC_NAME: serverPublicName || `${serverName} Server`,
       ADMIN_PASSWORD: adminPassword,
       SERVER_PASSWORD: serverPassword,
+      RCON_PASSWORD: adminPassword, // Use same password as admin for RCON access
     };
 
     // Add beta branch if specified (don't add if "none")

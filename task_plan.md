@@ -22,12 +22,13 @@
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 0. Research & Design | ✅ complete | Understand RCON protocol, explore libraries, design architecture |
-| 1. Agent RCON Client | ⏳ pending | Go RCON client, connect to server, send/receive commands |
-| 2. Manager RCON Proxy | ⏳ pending | WebSocket message handlers, RCON session management |
-| 3. Frontend Terminal UI | ⏳ pending | xterm.js integration, command input, response display |
-| 4. Command History & Autocomplete | ⏳ pending | Store history, arrow key navigation, command suggestions |
-| 5. Quick Actions | ⏳ pending | Player list, kick/ban buttons, broadcast message |
-| 6. Testing & Verification | ⏳ pending | End-to-end testing, edge cases |
+| 1. Agent RCON Client | ✅ complete | Go RCON client, connect to server, send/receive commands |
+| 2. Manager RCON Proxy | ✅ complete | WebSocket message handlers, RCON session management |
+| 3. Frontend Terminal UI | ✅ complete | xterm.js integration, command input, response display |
+| 4. Command History & Autocomplete | ✅ complete | Store history, arrow key navigation, command suggestions |
+| 5. Quick Actions | ✅ complete | Player list, kick/ban buttons, broadcast message |
+| 5.5. Secure RCON Network Access | ⏳ in progress | Agent accesses RCON via Docker network (no host exposure) |
+| 6. Testing & Verification | ⏸️ blocked | End-to-end testing, edge cases |
 
 ---
 
@@ -66,9 +67,9 @@
 
 ---
 
-## Phase 1: Agent RCON Client ⏳ Pending
+## Phase 1: Agent RCON Client ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete
 
 **Goals:**
 - Agent can connect to server RCON port
@@ -77,16 +78,18 @@
 - Handle connection errors gracefully
 
 **Tasks:**
-- [ ] Choose Go RCON library (based on Phase 0 research)
-- [ ] Create `agent/rcon.go` with RCON client
-- [ ] Implement RCONConnect(host, port, password)
-- [ ] Implement RCONCommand(command) -> response
-- [ ] Add message handlers in `agent/main.go`
-  - [ ] `rcon.connect` - Establish RCON connection
-  - [ ] `rcon.command` - Execute command
-  - [ ] `rcon.disconnect` - Close connection
-- [ ] Handle errors (connection refused, auth failed, timeout)
-- [ ] Test with local Zomboid server
+- [x] Choose Go RCON library (based on Phase 0 research) → gorcon/rcon
+- [x] Create `agent/rcon.go` with RCON client (RCONManager, RCONSession)
+- [x] Implement Connect(serverId, host, port, password) → sessionId
+- [x] Implement Execute(sessionId, command) → response
+- [x] Implement Disconnect(sessionId) → close connection
+- [x] Add cleanup goroutine (5-minute idle timeout)
+- [x] Add message handlers in `agent/main.go`
+  - [x] `rcon.connect` - Establish RCON connection
+  - [x] `rcon.command` - Execute command
+  - [x] `rcon.disconnect` - Close connection
+- [x] Handle errors (connection refused, auth failed, timeout)
+- [x] Compile agent binary (successful build)
 
 **Message Protocol (Proposed):**
 ```json
@@ -143,9 +146,9 @@
 
 ---
 
-## Phase 2: Manager RCON Proxy ⏳ Pending
+## Phase 2: Manager RCON Proxy ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete
 
 **Goals:**
 - Manager receives RCON requests from UI
@@ -154,15 +157,14 @@
 - Manages RCON session state
 
 **Tasks:**
-- [ ] Add RCON message handlers in `manager/src/durable-objects/AgentConnection.ts`
-  - [ ] Handle `rcon.connect` from UI → forward to agent
-  - [ ] Handle `rcon.command` from UI → forward to agent
-  - [ ] Handle `rcon.disconnect` from UI → forward to agent
-- [ ] Store RCON session state in Durable Object
-  - [ ] Track active sessions (sessionId → serverId mapping)
-  - [ ] Auto-disconnect on timeout (5min idle)
-- [ ] Add API endpoint (optional): `POST /api/agents/:id/servers/:serverId/rcon`
-- [ ] Handle errors and timeouts
+- [x] Add RCON message handlers in `manager/src/durable-objects/AgentConnection.ts`
+  - [x] Handle `rcon.connect` from UI → forward to agent
+  - [x] Handle `rcon.command` from UI → forward to agent
+  - [x] Handle `rcon.disconnect` from UI → forward to agent
+- [x] Store RCON session state in Durable Object
+  - [x] Track active sessions (sessionId → serverId mapping)
+  - [x] Auto-disconnect on timeout (handled by agent's 5min idle cleanup)
+- [x] Handle errors and timeouts
 
 **Session Management:**
 - Session created on first `rcon.connect`
@@ -180,9 +182,9 @@
 
 ---
 
-## Phase 3: Frontend Terminal UI ⏳ Pending
+## Phase 3: Frontend Terminal UI ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete
 
 **Goals:**
 - Display RCON terminal in UI
@@ -191,19 +193,19 @@
 - Terminal scrolls automatically
 
 **Tasks:**
-- [ ] Install xterm.js and xterm-addon-fit
+- [x] Install xterm.js and xterm-addon-fit
   ```bash
-  npm install xterm xterm-addon-fit
+  npm install @xterm/xterm @xterm/addon-fit
   ```
-- [ ] Create `frontend/src/components/RconTerminal.tsx`
-  - [ ] Initialize xterm.js terminal
-  - [ ] Connect to WebSocket (reuse existing connection)
-  - [ ] Send `rcon.connect` on mount
-  - [ ] Handle user input (Enter key → send command)
-  - [ ] Display command responses
-  - [ ] Handle terminal resize (xterm-addon-fit)
-- [ ] Add RCON terminal to ContainerList or separate page
-- [ ] Style terminal (dark theme, monospace font)
+- [x] Create `frontend/src/components/RconTerminal.tsx`
+  - [x] Initialize xterm.js terminal
+  - [x] Connect to WebSocket (reuse existing connection)
+  - [x] Send `rcon.connect` on mount
+  - [x] Handle user input (Enter key → send command)
+  - [x] Display command responses
+  - [x] Handle terminal resize (xterm-addon-fit)
+- [x] Add RCON terminal to ContainerList
+- [x] Style terminal (dark theme, monospace font)
 
 **UI Component Structure:**
 ```tsx
@@ -240,9 +242,9 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 ---
 
-## Phase 4: Command History & Autocomplete ⏳ Pending
+## Phase 4: Command History & Autocomplete ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete
 
 **Goals:**
 - Store command history in browser
@@ -250,12 +252,12 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 - Tab autocomplete for common commands
 
 **Tasks:**
-- [ ] Implement command history in RconTerminal
-  - [ ] Store in state: `const [history, setHistory] = useState<string[]>([])`
-  - [ ] Add command to history on Enter
-  - [ ] Arrow up/down navigate history
-  - [ ] Persist history to localStorage
-- [ ] Implement autocomplete (optional)
+- [x] Implement command history in RconTerminal
+  - [x] Store in state: `const [history, setHistory] = useState<string[]>([])`
+  - [x] Add command to history on Enter
+  - [x] Arrow up/down navigate history
+  - [x] Persist history to localStorage (per-server, max 100 commands)
+- [ ] Implement autocomplete (deferred to Phase 5 - Quick Actions)
   - [ ] Define common Zomboid commands list
   - [ ] Tab key triggers autocomplete
   - [ ] Show suggestions in terminal
@@ -280,9 +282,9 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 ---
 
-## Phase 5: Quick Actions ⏳ Pending
+## Phase 5: Quick Actions ✅ Complete
 
-**Status:** ⏳ pending
+**Status:** ✅ complete
 
 **Goals:**
 - Display player list in UI (not just terminal)
@@ -290,16 +292,16 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 - Pre-fill terminal with command on button click
 
 **Tasks:**
-- [ ] Parse `players` command response
-  - [ ] Extract player list from text output
-  - [ ] Display in structured UI (table or list)
-- [ ] Add quick action buttons
-  - [ ] "Refresh Players" - Run `players` command
-  - [ ] "Kick Player" - Pre-fill `kick "username"`
-  - [ ] "Ban Player" - Pre-fill `ban "username"`
-  - [ ] "Broadcast Message" - Show modal, run `servermsg`
-  - [ ] "Save World" - Run `save` command
-- [ ] Add UI section above terminal with player list
+- [x] Parse `players` command response
+  - [x] Extract player list from text output (comma-separated and line-by-line formats)
+  - [x] Display in structured UI (scrollable list with badges)
+- [x] Add quick action buttons
+  - [x] "Refresh Players" - Run `players` command (🔄 cyan button)
+  - [x] "Kick Player" - Pre-fill `kickuser "username"` in terminal (yellow button per player)
+  - [x] "Ban Player" - Pre-fill `banuser "username"` in terminal (red button per player)
+  - [x] "Broadcast Message" - Show modal, run `servermsg` (📢 orange button)
+  - [x] "Save World" - Run `save` command (💾 green button)
+- [x] Add UI section above terminal with player list (max-height 200px, scrollable)
 
 **UI Layout:**
 ```
@@ -333,55 +335,95 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 ---
 
-## Phase 6: Testing & Verification ⏳ Pending
+## Phase 5.5: Secure RCON Network Access ⏳ In Progress
 
-**Status:** ⏳ pending
+**Status:** ⏳ in progress (BLOCKING Phase 6)
+
+**Critical Blocker Discovered:**
+- Agent `server.go` does NOT bind RCON port to host (only game/UDP ports)
+- RCON connections will fail - agent cannot reach containers
+- Two implementation options identified:
+  - **Option A**: Bind RCON ports to host (27015+) → Security risk, exposed on network
+  - **Option B**: Agent accesses containers via Docker network → Secure, no host exposure
+- **Decision**: Implement Option B for production security
+
+**Goals:**
+- Agent connects to RCON via Docker network (not host ports)
+- Zero RCON exposure on host network
+- All servers use internal port 27015 (no conflicts)
+
+**Tasks:**
+- [x] Identify blocker (missing RCON port binding in server.go:89-103)
+- [x] Fix frontend: ServerForm.tsx sets RCON_PASSWORD=ADMIN_PASSWORD
+- [x] Fix existing servers: Manually updated INI files (build42-testing, jeanguy)
+- [x] Agent: Resolve container IP from Docker API
+- [x] Agent: Connect to RCON at `<container-ip>:27015` (internal)
+- [x] Manager: Update handleRCONConnect() to forward containerID
+- [x] Frontend: Update useRcon/RconTerminal to send containerID
+- [x] Fix WebSocket routing: handleUIMessage() forwards RCON messages
+- [x] Fix password authentication: Separate adminPassword and rconPassword
+- [ ] Test RCON connection via network (not host)
+- [ ] Update documentation: RCON never exposed to host
+
+**Implementation Notes:**
+- Agent must query Docker API for container inspection
+- Extract IP from `NetworkSettings.Networks["zomboid-backend"].IPAddress`
+- Connect to internal port 27015 (no port conflicts between servers)
+- Agent already has Docker client access (server.go)
+
+**Files to Modify:**
+- `agent/rcon.go` - Update Connect() to resolve container IP
+- `agent/main.go` - Pass container ID to RCON connect handler
+
+**Verification:**
+- RCON connection succeeds without host port binding
+- `netstat -tuln | grep 27015` returns empty (port not bound)
+- Agent logs show connection to internal container IP
+
+---
+
+## Phase 6: Testing & Verification ⏸️ Blocked
+
+**Status:** ⏸️ blocked by Phase 5.5
 
 **Goals:**
 - End-to-end testing of RCON flow
 - Edge case testing
 - Performance verification
 
-**Test Scenarios:**
+**Test Document:** See `TEST-PLAN-RCON.md` for detailed test scenarios
 
-1. **Happy Path**
-   - Open RCON terminal
-   - Connect to server RCON port
-   - Execute `players` command
-   - Verify response displays in terminal
-   - Navigate command history with arrow keys
+**Test Scenarios (22 Total):**
 
-2. **Authentication**
-   - Wrong RCON password → error displayed
-   - Correct password → connection successful
-
-3. **Connection Errors**
-   - Server RCON disabled → error message
-   - Server offline → connection refused
-   - Network timeout → timeout error
-
-4. **Session Management**
-   - Multiple commands in same session
-   - Idle timeout (5min) → auto-disconnect
-   - Reconnect after disconnect
-
-5. **Quick Actions**
-   - Refresh players → updates list
-   - Kick player → player removed
-   - Broadcast message → message sent to all players
-
-6. **Edge Cases**
-   - Very long command output (multi-page)
-   - Special characters in commands
-   - Server restart during RCON session
-   - Multiple users sending RCON commands
+1. **Happy Path** - Basic RCON flow (help, players commands)
+2. **Authentication** - Correct password
+3. **Authentication** - Wrong password
+4. **Connection Errors** - Server offline
+5. **Connection Errors** - RCON disabled
+6. **Session Management** - Multiple commands
+7. **Session Management** - Idle timeout (5min)
+8. **Session Management** - Reconnect after disconnect
+9. **Command History** - Arrow navigation
+10. **Command History** - Persistence (localStorage)
+11. **Quick Actions** - Refresh players
+12. **Quick Actions** - Save world
+13. **Quick Actions** - Broadcast message
+14. **Quick Actions** - Kick player
+15. **Quick Actions** - Ban player
+16. **Edge Cases** - Long command output
+17. **Edge Cases** - Special characters
+18. **Edge Cases** - Server restart during session
+19. **Edge Cases** - Multiple users
+20. **Performance** - Terminal responsiveness
+21. **Keyboard Shortcuts** - Ctrl+C, Ctrl+L, arrows
+22. **UI/UX** - Visual design verification
 
 **Verification Checklist:**
 - [ ] RCON connection established successfully
 - [ ] Commands execute and responses return
 - [ ] Command history works (up/down arrows)
 - [ ] Quick actions execute correctly
-- [ ] Player list updates in real-time
+- [ ] Player list updates correctly
 - [ ] Errors handled gracefully
 - [ ] Session cleanup on disconnect
 - [ ] No memory leaks in terminal
@@ -412,7 +454,9 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 | Error | Phase | Attempt | Resolution |
 |-------|-------|---------|------------|
-| _(none yet)_ | - | - | - |
+| RCON port not bound to host in agent/server.go | Phase 6 Testing | 1 | Discovered during test prep - agent cannot reach container RCON ports |
+| ServerForm.tsx missing RCON_PASSWORD ENV | Phase 6 Testing | 1 | Added RCON_PASSWORD=ADMIN_PASSWORD in config (line 71) |
+| Existing servers have empty RCONPassword in INI | Phase 6 Testing | 1 | Manually updated build42-testing and jeanguy INI files |
 
 ---
 
@@ -420,7 +464,11 @@ function RconTerminal({ serverId, rconPort, rconPassword }: RconTerminalProps) {
 
 | Decision | Rationale | Date |
 |----------|-----------|------|
-| _(to be filled during research)_ | - | - |
+| Use gorcon/rcon library | Active maintenance, feature-rich, clean API | 2026-01-11 |
+| RCON session timeout: 5 minutes | Balance between keeping connections alive and resource cleanup | 2026-01-11 |
+| xterm.js for terminal UI | Industry standard (VS Code, Hyper), excellent React integration | 2026-01-11 |
+| **Agent accesses RCON via Docker network (Option B)** | **Security: Zero RCON exposure on host network. All servers use internal port 27015. No firewall rules needed.** | **2026-01-11** |
+| ServerForm sets RCON_PASSWORD=ADMIN_PASSWORD | Simplicity: Single password for both admin and RCON access | 2026-01-11 |
 
 ---
 
