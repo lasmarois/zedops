@@ -36,6 +36,8 @@ export function RconTerminal({
   const currentCommandRef = useRef(''); // Use ref for synchronous updates
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const commandHistoryRef = useRef<string[]>([]); // Ref for closure access
+  const historyIndexRef = useRef(-1); // Ref for closure access
   const [players, setPlayers] = useState<string[]>([]);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -49,6 +51,15 @@ export function RconTerminal({
     rconPassword,
     enabled: true,
   });
+
+  // Keep refs in sync with state for closure access
+  useEffect(() => {
+    commandHistoryRef.current = commandHistory;
+  }, [commandHistory]);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
 
   // Initialize xterm.js
   useEffect(() => {
@@ -94,6 +105,12 @@ export function RconTerminal({
     // Open terminal
     terminal.open(terminalRef.current);
     fitAddon.fit();
+
+    // Reduce rows by 2 to leave space at bottom for visibility
+    const initialRows = terminal.rows;
+    if (initialRows > 5) {
+      terminal.resize(terminal.cols, initialRows - 2);
+    }
 
     // Store refs
     xtermRef.current = terminal;
@@ -153,8 +170,13 @@ export function RconTerminal({
 
     // Handle window resize
     const handleResize = () => {
-      if (fitAddonRef.current) {
+      if (fitAddonRef.current && xtermRef.current) {
         fitAddonRef.current.fit();
+        // Reduce rows by 2 to leave space at bottom for visibility
+        const currentRows = xtermRef.current.rows;
+        if (currentRows > 5) {
+          xtermRef.current.resize(xtermRef.current.cols, currentRows - 2);
+        }
       }
     };
 
@@ -180,6 +202,19 @@ export function RconTerminal({
       terminal.writeln('\x1b[90mType "help" for available commands\x1b[0m');
       terminal.writeln('');
       showPrompt(terminal);
+
+      // Ensure terminal is properly sized and scrolled
+      if (fitAddonRef.current && xtermRef.current) {
+        fitAddonRef.current.fit();
+        // Reduce rows by 2 to leave space at bottom for visibility
+        const currentRows = xtermRef.current.rows;
+        if (currentRows > 5) {
+          xtermRef.current.resize(xtermRef.current.cols, currentRows - 2);
+        }
+      }
+      setTimeout(() => {
+        terminal.scrollToBottom();
+      }, 10);
     } else if (error) {
       terminal.writeln(`\x1b[1;31m✗ Connection failed: ${error}\x1b[0m`);
       terminal.writeln('');
@@ -224,29 +259,46 @@ export function RconTerminal({
     terminal.writeln('');
     currentCommandRef.current = ''; // Clear ref
     showPrompt(terminal);
-    terminal.scrollToBottom(); // Ensure prompt is visible
+
+    // Ensure terminal viewport is updated and scroll to show prompt
+    // Use setTimeout to ensure rendering is complete before scrolling
+    if (fitAddonRef.current && xtermRef.current) {
+      fitAddonRef.current.fit();
+      // Reduce rows by 2 to leave space at bottom for visibility
+      const currentRows = xtermRef.current.rows;
+      if (currentRows > 5) {
+        xtermRef.current.resize(xtermRef.current.cols, currentRows - 2);
+      }
+    }
+    setTimeout(() => {
+      terminal.scrollToBottom();
+    }, 10);
   };
 
   const navigateHistory = (direction: 'up' | 'down', terminal: Terminal) => {
-    if (commandHistory.length === 0) return;
+    // Use refs for closure access (state is stale in onData handler)
+    const history = commandHistoryRef.current;
+    const currentIndex = historyIndexRef.current;
 
-    let newIndex = historyIndex;
+    if (history.length === 0) return;
+
+    let newIndex = currentIndex;
 
     if (direction === 'up') {
-      newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+      newIndex = currentIndex === -1 ? history.length - 1 : Math.max(0, currentIndex - 1);
     } else {
-      newIndex = historyIndex === -1 ? -1 : Math.min(commandHistory.length - 1, historyIndex + 1);
+      newIndex = currentIndex === -1 ? -1 : Math.min(history.length - 1, currentIndex + 1);
     }
 
-    if (newIndex !== historyIndex) {
+    if (newIndex !== currentIndex) {
       setHistoryIndex(newIndex);
 
       // Clear current line
       terminal.write('\r\x1b[K');
       showPrompt(terminal);
 
-      if (newIndex >= 0 && newIndex < commandHistory.length) {
-        const cmd = commandHistory[newIndex];
+      if (newIndex >= 0 && newIndex < history.length) {
+        const cmd = history[newIndex];
         currentCommandRef.current = cmd;
         terminal.write(cmd);
       } else {
@@ -592,8 +644,8 @@ export function RconTerminal({
           style={{
             flex: 1,
             padding: '1rem',
-            overflow: 'auto',
-            minHeight: 0, // Important for flex child to scroll
+            overflow: 'hidden',
+            minHeight: 0, // Important for flex child to shrink correctly
           }}
         />
 
