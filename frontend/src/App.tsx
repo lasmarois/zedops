@@ -11,7 +11,7 @@ import { AgentList } from './components/AgentList';
 import { ContainerList } from './components/ContainerList';
 import { LogViewer } from './components/LogViewer';
 import { UserList } from './components/UserList';
-import { PermissionsManager } from './components/PermissionsManager';
+import { RoleAssignmentsManager } from './components/RoleAssignmentsManager';
 import { AuditLogViewer } from './components/AuditLogViewer';
 import type { Agent, UserAccount } from './lib/api';
 
@@ -92,7 +92,7 @@ function AppContent() {
 
   // User Management Views
   if (currentView === 'permissions' && selectedUser) {
-    return <PermissionsManager user={selectedUser} onBack={handleBackToUsers} />;
+    return <RoleAssignmentsManager user={selectedUser} onBack={handleBackToUsers} />;
   }
 
   if (currentView === 'users') {

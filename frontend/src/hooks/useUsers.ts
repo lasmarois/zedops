@@ -10,6 +10,9 @@ import {
   fetchUserPermissions,
   grantPermission,
   revokePermission,
+  fetchUserRoleAssignments,
+  grantRoleAssignment,
+  revokeRoleAssignment,
   type InviteUserRequest,
 } from '../lib/api';
 import { useUser } from '../contexts/UserContext';
@@ -103,6 +106,62 @@ export function useRevokePermission() {
       revokePermission(permissionId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['userPermissions', variables.userId] });
+    },
+  });
+}
+
+// ============================================================================
+// Role Assignment Hooks (New RBAC System)
+// ============================================================================
+
+/**
+ * Hook to fetch user role assignments
+ */
+export function useUserRoleAssignments(userId: string | null) {
+  const { isAuthenticated } = useUser();
+
+  return useQuery({
+    queryKey: ['userRoleAssignments', userId],
+    queryFn: () => fetchUserRoleAssignments(userId!),
+    enabled: isAuthenticated && !!userId,
+  });
+}
+
+/**
+ * Hook to grant a role assignment
+ */
+export function useGrantRoleAssignment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      role,
+      scope,
+      resourceId,
+    }: {
+      userId: string;
+      role: 'agent-admin' | 'operator' | 'viewer';
+      scope: 'global' | 'agent' | 'server';
+      resourceId: string | null;
+    }) => grantRoleAssignment(userId, role, scope, resourceId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['userRoleAssignments', variables.userId] });
+    },
+  });
+}
+
+/**
+ * Hook to revoke a role assignment
+ */
+export function useRevokeRoleAssignment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ assignmentId }: { assignmentId: string; userId: string }) =>
+      revokeRoleAssignment(assignmentId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['userRoleAssignments', variables.userId] });
     },
   });
 }

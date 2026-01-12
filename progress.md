@@ -576,3 +576,41 @@ GET /api/role-assignments/{scope}/{resourceId}
 ```
 
 **Next: Update frontend to use new API**
+
+**Priority 1: Role Assignment Management - Frontend** ✅ Complete
+
+3. ✅ **Updated API client** (frontend/src/lib/api.ts)
+   - Added RoleAssignment interface
+   - Added UserRoleAssignmentsResponse interface
+   - Added fetchUserRoleAssignments()
+   - Added grantRoleAssignment()
+   - Added revokeRoleAssignment()
+
+4. ✅ **Updated React Query hooks** (frontend/src/hooks/useUsers.ts)
+   - Added useUserRoleAssignments() hook
+   - Added useGrantRoleAssignment() hook
+   - Added useRevokeRoleAssignment() hook
+   - All hooks integrated with TanStack Query for caching/invalidation
+
+5. ✅ **Created RoleAssignmentsManager component** (frontend/src/components/RoleAssignmentsManager.tsx)
+   - Complete rewrite using role-based system
+   - Supports all 3 roles (agent-admin, operator, viewer)
+   - Supports all 3 scopes (global, agent, server)
+   - Validates role constraints (agent-admin only at agent scope)
+   - Validates scope constraints (global cannot have resource_id)
+   - Shows system admin badge if user has admin role
+   - Color-coded role badges (green=agent-admin, blue=operator, gray=viewer)
+   - Agent dropdown for agent scope assignments
+   - Server ID input for server scope assignments
+   - Inline help text explaining each role's capabilities
+
+6. ✅ **Updated App.tsx routing**
+   - Replaced PermissionsManager with RoleAssignmentsManager
+   - Updated import statement
+   - Existing user management flow unchanged
+
+**Result:** Complete role assignment management UI ready for use!
+
+**Next Steps:**
+- Priority 2: Frontend Authentication Updates (WebSocket JWT, remove password prompts)
+- Priority 3: NULL Role User Experience (update UserList, handle no-access cases)

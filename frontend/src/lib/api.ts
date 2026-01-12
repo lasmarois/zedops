@@ -800,6 +800,89 @@ export async function revokePermission(permissionId: string): Promise<{ success:
 }
 
 // ============================================================================
+// Role Assignments (New RBAC System)
+// ============================================================================
+
+export interface RoleAssignment {
+  id: string;
+  user_id: string;
+  role: 'agent-admin' | 'operator' | 'viewer';
+  scope: 'global' | 'agent' | 'server';
+  resource_id: string | null;
+  created_at: number;
+}
+
+export interface UserRoleAssignmentsResponse {
+  user: {
+    id: string;
+    email: string;
+    systemRole: 'admin' | null;
+  };
+  roleAssignments: RoleAssignment[];
+}
+
+/**
+ * Get user role assignments
+ */
+export async function fetchUserRoleAssignments(userId: string): Promise<UserRoleAssignmentsResponse> {
+  const response = await fetch(`${API_BASE}/api/users/${userId}/role-assignments`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch user role assignments');
+  }
+
+  return response.json();
+}
+
+/**
+ * Grant a role assignment to a user
+ */
+export async function grantRoleAssignment(
+  userId: string,
+  role: 'agent-admin' | 'operator' | 'viewer',
+  scope: 'global' | 'agent' | 'server',
+  resourceId: string | null
+): Promise<{ success: boolean; roleAssignment: RoleAssignment }> {
+  const response = await fetch(`${API_BASE}/api/users/${userId}/role-assignments`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ role, scope, resourceId }),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to grant role assignment');
+  }
+
+  return response.json();
+}
+
+/**
+ * Revoke a role assignment
+ */
+export async function revokeRoleAssignment(assignmentId: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/api/role-assignments/${assignmentId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to revoke role assignment');
+  }
+
+  return response.json();
+}
+
+// ============================================================================
 // Audit Logs
 // ============================================================================
 
