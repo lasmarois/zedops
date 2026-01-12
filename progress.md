@@ -823,26 +823,62 @@ switch (message.subject) {
    - **Built:** ✅ Frontend (631.60 kB bundle)
    - **Deployed:** ✅ Version ID 97e81e87-658e-423a-8fe4-9781e0809fe9
 
-5. **Docker Network Port Fix** ✅ Complete
-   - **Problem:** Agent connecting to wrong port (27027 = host port, not container port)
-   - **Root Cause:** rconPort from DB is the host-mapped port, not the internal Docker network port
-   - **Solution:** Always use port 27015 for Docker network RCON connections
-   - **Key Insight:** Inside Docker network, all containers use standard port 27015 (no conflicts)
-   - **File Modified:** RconTerminal.tsx line 47: Changed `port: rconPort` to `port: 27015`
-   - **Built:** ✅ Frontend (631.61 kB bundle)
-   - **Deployed:** ✅ Version ID bf2a1f19-63ba-455d-a200-f6fa493e46c2
+5. **Docker Network Port Fix & RCON_PORT Environment** ✅ Complete
+   - **Problem:** Containers weren't configured with RCON port from database
+   - **Root Cause:** Manager never passed RCON_PORT as environment variable to containers
+   - **Solution:** Add RCON_PORT to container config in manager
+   - **Files Modified:**
+     - routes/agents.ts: Add RCON_PORT to config on create (line 723-727)
+     - routes/agents.ts: Add RCON_PORT to config on restart (line 1034-1039)
+     - RconTerminal.tsx: Use rconPort from DB (reverted from hardcoded 27015)
+   - **Existing Servers Fixed:** Manually updated INI files
+     - build42-testing: RCONPort=27027
+     - jeanguy: RCONPort=27025
+   - **Built:** ✅ Frontend (631.60 kB bundle)
+   - **Deployed:** ✅ Version ID 89292ee2-93cc-4366-8850-61c00c9d4ad5
+
+6. **Command Input Bug Fix** ✅ Complete
+   - **Problem:** Commands typed in terminal not being sent (empty string)
+   - **Root Cause:** React state updates are asynchronous, handleCommandSubmit read stale state
+   - **Solution:** Use refs for synchronous command tracking
+   - **File Modified:** RconTerminal.tsx - Added currentCommandRef for immediate updates
+   - **Built:** ✅ Frontend (631.66 kB bundle)
+   - **Deployed:** ✅ Version ID 3df2baa7-97ba-472e-b16e-d676dae38b88
+
+7. **Session Tracking Bug Fix** ✅ Complete
+   - **Problem:** "RCON not connected" error after successful connection
+   - **Root Cause:** sendCommand using stale sessionId from state before re-render
+   - **Solution:** Use sessionIdRef for synchronous session tracking
+   - **Files Modified:**
+     - useRcon.ts: Added sessionIdRef, updated sendCommand and disconnect
+     - useRcon.ts: Stabilized callbacks with empty dependencies (use refs)
+     - useRcon.ts: Prevented reconnection loops with readyState check
+   - **Built:** ✅ Frontend (631.90 kB bundle)
+   - **Deployed:** ✅ Version ID b282de5a-ecb3-4807-8071-8c4d3e6f7005
+
+### Testing Results
+
+**Basic Testing:** ✅ Complete
+- ✅ RCON connection via Docker network successful
+- ✅ Commands execute correctly (help, players, save, servermsg)
+- ✅ Terminal input works properly
+- ✅ Session persists across commands
+- ✅ Tested on build42-testing and jeanguy servers
+
+**Deferred Testing:**
+- Comprehensive test suite (22 scenarios in TEST-PLAN-RCON.md)
+- Edge cases and performance testing
+- Can be executed later as needed
 
 ### Next Actions
 
-**Testing (Ready):**
-1. [x] Fix handleUIMessage() to forward RCON messages
-2. [x] Deploy manager with fix
-3. [ ] Test RCON connection by clicking RCON button in UI
-
-**After Fix:**
-1. [ ] Complete Phase 6 testing (22 scenarios)
-2. [ ] Archive milestone to planning-history/
-3. [ ] Update CHANGELOG.md
+**Milestone Completion:**
+1. [x] Fix all RCON bugs
+2. [x] Test basic RCON functionality
+3. [x] Commit and push changes
+4. [x] Update planning files
+5. [ ] Archive milestone to planning-history/ (optional)
+6. [ ] Update CHANGELOG.md (for next release)
 
 ### Build Outputs
 

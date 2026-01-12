@@ -62,6 +62,8 @@ export function RconTerminal({
       cursorStyle: 'block',
       fontSize: 14,
       fontFamily: '"Cascadia Code", "Courier New", monospace',
+      scrollback: 5000, // Keep 5000 lines of history
+      convertEol: true, // Convert \n to \r\n
       theme: {
         background: '#1e1e1e',
         foreground: '#d4d4d4',
@@ -222,6 +224,7 @@ export function RconTerminal({
     terminal.writeln('');
     currentCommandRef.current = ''; // Clear ref
     showPrompt(terminal);
+    terminal.scrollToBottom(); // Ensure prompt is visible
   };
 
   const navigateHistory = (direction: 'up' | 'down', terminal: Terminal) => {
@@ -589,7 +592,8 @@ export function RconTerminal({
           style={{
             flex: 1,
             padding: '1rem',
-            overflow: 'hidden',
+            overflow: 'auto',
+            minHeight: 0, // Important for flex child to scroll
           }}
         />
 
