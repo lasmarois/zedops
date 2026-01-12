@@ -322,6 +322,145 @@ Ready to proceed to Phase 3: Backend Auth Migration (update all endpoints to use
 
 ---
 
+## Session 5: Phase 3 - Backend Auth Migration 🚧 In Progress
+
+**Date:** 2026-01-12 (continued)
+**Status:** In Progress
+**Goal:** Replace all ADMIN_PASSWORD authentication with role-based JWT authentication
+
+### Actions Taken
+
+**Endpoints Migrated So Far:**
+
+1. ✅ **GET /api/agents/:id/containers** (line ~121)
+   - Replaced ADMIN_PASSWORD with admin-only role check
+   - Uses: `user.role !== 'admin'` → 403
+
+2. ✅ **POST /api/agents/:id/ports/check** (line ~174)
+   - Replaced ADMIN_PASSWORD with admin-only role check
+   - Rationale: Port management is global agent resource
+
+3. ✅ **GET /api/agents/:id/ports/availability** (line ~239)
+   - Replaced ADMIN_PASSWORD with admin-only role check
+   - Rationale: Port allocation is global agent resource
+
+4. ✅ **POST /api/agents/:id/servers** (line ~570)
+   - Replaced ADMIN_PASSWORD with `canCreateServer()` check
+   - Uses new permission function from Phase 2
+   - Allows: admin + agent-admin (on their agent)
+
+5. ✅ **POST /api/agents/:id/servers/sync** (line ~875)
+   - Replaced ADMIN_PASSWORD with admin-only role check
+   - Rationale: Sync is admin-only operation
+
+6. ✅ **POST /api/agents/:id/containers/:containerId/start** (line ~353)
+   - Replaced ADMIN_PASSWORD with admin-only role check
+   - Note: Generic container start (not server-specific)
+
+7. ✅ **POST /api/agents/:id/containers/:containerId/stop** (line ~401)
+   - Replaced ADMIN_PASSWORD with `canControlServer()` check
+   - Looks up server by container_id, checks control permission
+   - Allows: admin, agent-admin, operator with access
+
+8. ✅ **POST /api/agents/:id/containers/:containerId/restart** (line ~454)
+   - Replaced ADMIN_PASSWORD with `canControlServer()` check
+   - Same pattern as stop endpoint
+
+9. ✅ **GET /api/agents/:id/logs/ws** (line ~524 - WebSocket)
+   - Replaced ADMIN_PASSWORD (query param) with JWT token auth
+   - Token passed via query parameter: `?token=<jwt>`
+   - Verifies JWT signature and session validity
+   - Note: WebSocket endpoints can't use Authorization header in browser
+
+10. ✅ **DELETE /api/agents/:id/servers/failed** (line ~1218)
+    - Replaced ADMIN_PASSWORD with admin-only role check
+    - Bulk cleanup operation, admin-only appropriate
+
+### Implementation Patterns Used
+
+**Pattern 1: Admin-Only Operations**
+```typescript
+const user = c.get('user');
+if (user.role !== 'admin') {
+  return c.json({ error: 'Forbidden - requires admin role' }, 403);
+}
+```
+
+**Pattern 2: Server-Specific Permission Checks**
+```typescript
+const user = c.get('user');
+const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+if (!hasPermission) {
+  return c.json({ error: 'Forbidden - requires operator or higher role for this server' }, 403);
+}
+```
+
+**Pattern 3: Container-to-Server Permission Lookup**
+```typescript
+// Find server by container_id
+const server = await c.env.DB.prepare(
+  'SELECT id FROM servers WHERE container_id = ? AND agent_id = ?'
+).bind(containerId, agentId).first<{ id: string }>();
+
+if (!server) {
+  return c.json({ error: 'Server not found for this container' }, 404);
+}
+
+// Check permission on the server
+const hasPermission = await canControlServer(c.env.DB, user.id, user.role, server.id);
+```
+
+**Pattern 4: WebSocket JWT Auth (Query Param)**
+```typescript
+const token = c.req.query('token');
+const { verifySessionToken, hashToken } = await import('../lib/auth');
+const payload = await verifySessionToken(token, c.env.TOKEN_SECRET);
+const tokenHash = await hashToken(token);
+const session = await c.env.DB.prepare(
+  'SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?'
+).bind(tokenHash, Date.now()).first<{ user_id: string }>();
+```
+
+11. ✅ **DELETE /api/agents/:id/servers/:serverId/purge** (line ~1414)
+    - Replaced ADMIN_PASSWORD with admin-only role check
+    - Rationale: Permanent deletion is destructive, admin-only
+
+12. ✅ **POST /api/agents/:id/servers/:serverId/restore** (line ~1517)
+    - Replaced ADMIN_PASSWORD with admin-only role check
+    - Rationale: Restoring deleted servers is admin operation
+
+13. ✅ **POST /api/agents/:id/servers/:serverId/rebuild** (line ~1572)
+    - Replaced ADMIN_PASSWORD with `canControlServer()` check
+    - Allows: admin, agent-admin, operator with access to server
+    - Rationale: Rebuild = stop + remove + recreate (control operation)
+
+14. ✅ **DELETE /api/agents/:id/servers/failed** (line ~1677, duplicate)
+    - Replaced ADMIN_PASSWORD with admin-only role check
+    - Note: Duplicate route with missing leading slash (`:id` vs `/:id`)
+    - Should be cleaned up in future refactor
+
+### Migration Complete! ✅
+
+**All ADMIN_PASSWORD authentication checks removed** from agents.ts.
+
+Verified via grep: Only remaining reference is type definition (line 22), which is expected.
+
+**Final Count:** 14 endpoints migrated to role-based JWT authentication
+
+### Findings
+
+1. **Duplicate Route Found:**
+   - Line 1218: `agents.delete('/:id/servers/failed', ...)` ✓ correct
+   - Line 1677: `agents.delete(':id/servers/failed', ...)` ✗ missing slash
+   - Both have identical logic
+   - Recommendation: Remove duplicate at line 1677
+
+### Next Steps
+
+**Phase 3 Complete!** ✅ Ready to proceed to Phase 4: WebSocket Auth Migration
+
+---
+
 ## Pending Implementation
 
-Phases 1-2 complete. Ready to start Phase 3 (Backend Auth Migration).
+Phase 3 in progress - 10 endpoints migrated, ~4 remaining.

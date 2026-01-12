@@ -421,6 +421,53 @@ const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${enco
 
 ---
 
+## Finding 11: Code Quality Issues in agents.ts (Phase 3)
+
+**Discovery:** During Phase 3 migration, found duplicate route definition and potential issues.
+
+**Issue 1: Duplicate Route - DELETE /servers/failed**
+
+Two identical route handlers exist for bulk cleanup of failed servers:
+
+```typescript
+// Line 1218 - CORRECT (with leading slash)
+agents.delete('/:id/servers/failed', async (c) => { ... });
+
+// Line 1677 - DUPLICATE (missing leading slash - may not work correctly)
+agents.delete(':id/servers/failed', async (c) => { ... });
+```
+
+**Impact:**
+- Route at line 1677 has incorrect path syntax (missing `/`)
+- May not match requests properly
+- Code duplication increases maintenance burden
+
+**Recommendation:**
+- Remove duplicate route at line 1677
+- Keep route at line 1218 (correct path syntax)
+
+**Issue 2: Generic Container Endpoints**
+
+Found endpoints that operate on containers generically (not server-specific):
+- POST /api/agents/:id/containers/:containerId/start (line 353)
+- POST /api/agents/:id/containers/:containerId/stop (line 401)
+- POST /api/agents/:id/containers/:containerId/restart (line 454)
+
+**Current Permission Logic:**
+- Start: Admin-only (line 358)
+- Stop/Restart: Uses `canControlServer()` via container→server lookup
+
+**Inconsistency:**
+- Why is generic start admin-only, but stop/restart use server permissions?
+- Should all three use the same permission model
+
+**Recommendation:**
+- Review if generic container endpoints are needed
+- If yes: Make permission model consistent (all use server lookup)
+- If no: Remove generic endpoints, use server-specific routes only
+
+---
+
 ## FINAL ARCHITECTURAL DECISION (User Confirmed)
 
 After discussion with user and review of ARCHITECTURE.md original design, implementing:

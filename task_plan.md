@@ -24,11 +24,11 @@
 | Phase | Status | Description | Duration |
 |-------|--------|-------------|----------|
 | 0. Architectural Decisions | ✅ complete | 4-role model with multi-scope assignments | 1 hour |
-| 1. Database Migration | ⏳ next | Create role_assignments table, update schema | 1 hour |
-| 2. Permission Logic Rewrite | ⏳ planned | Role-based checking with inheritance/override | 2 hours |
-| 3. Backend Auth Migration | ⏳ planned | Migrate all endpoints to JWT + role checks | 2 hours |
-| 4. WebSocket Auth Migration | ⏳ planned | Update logs/RCON WebSocket to use JWT | 1 hour |
-| 5. Frontend Updates | ⏳ planned | Role assignment UI + NULL role handling | 2 hours |
+| 1. Database Migration | ✅ complete | Create role_assignments table, update schema | 1 hour |
+| 2. Permission Logic Rewrite | ✅ complete | Role-based checking with inheritance/override | 2 hours |
+| 3. Backend Auth Migration | ✅ complete | Migrate all endpoints to JWT + role checks | 2 hours |
+| 4. WebSocket Auth Migration | ✅ complete | Logs WebSocket uses JWT (RCON not yet implemented) | Included in Phase 3 |
+| 5. Frontend Updates | ⏳ next | Role assignment UI + NULL role handling | 2 hours |
 | 6. Audit Logging Completion | ⏳ planned | Add missing audit log calls | 30 min |
 | 7. Testing & Verification | ⏳ planned | Test all role scenarios | 1 hour |
 | 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
