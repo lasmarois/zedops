@@ -5,6 +5,25 @@
 import { useState } from 'react';
 import type { CreateServerRequest, ServerConfig, PortSet, Server } from '../lib/api';
 import { usePortAvailability } from '../hooks/usePortAvailability';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ServerFormProps {
   agentId: string;
@@ -112,57 +131,36 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     return 'available';
   };
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          padding: '2rem',
-          maxWidth: '500px',
-          width: '90%',
-          maxHeight: '90vh',
-          overflow: 'auto',
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>{editServer ? 'Edit & Retry Server' : 'Create New Server'}</h2>
-        {editServer && (
-          <div
-            style={{
-              padding: '0.75rem',
-              backgroundColor: '#fff3cd',
-              border: '1px solid #ffeaa7',
-              borderRadius: '4px',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-            }}
-          >
-            <strong>Editing failed server:</strong> {editServer.name} - Adjust configuration and retry. The old failed entry will be removed.
-          </div>
-        )}
+  const getPortStatusBadge = (port: number) => {
+    const status = getPortStatus(port);
+    if (status === 'available') {
+      return <Badge variant="success" className="ml-2">✓ Available</Badge>;
+    }
+    if (status === 'unavailable') {
+      return <Badge variant="destructive" className="ml-2">✗ In Use</Badge>;
+    }
+    return <Badge variant="secondary" className="ml-2">? Unknown</Badge>;
+  };
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="serverName"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Server Name *
-            </label>
-            <input
+  return (
+    <Dialog open={true} onOpenChange={() => onCancel()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editServer ? 'Edit & Retry Server' : 'Create New Server'}</DialogTitle>
+          {editServer && (
+            <Alert variant="warning" className="mt-4">
+              <AlertDescription>
+                <strong>Editing failed server:</strong> {editServer.name} - Adjust configuration and retry. The old failed entry will be removed.
+              </AlertDescription>
+            </Alert>
+          )}
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Server Name */}
+          <div className="space-y-2">
+            <Label htmlFor="serverName">Server Name *</Label>
+            <Input
               id="serverName"
               type="text"
               value={serverName}
@@ -172,275 +170,158 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
               }}
               placeholder="myserver"
               disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: nameError ? '1px solid #dc3545' : '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
+              className={nameError ? 'border-destructive' : ''}
             />
             {nameError && (
-              <div style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                {nameError}
-              </div>
+              <p className="text-sm text-destructive">{nameError}</p>
             )}
-            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+            <p className="text-xs text-muted-foreground">
               Used for container name and data directories
-            </div>
+            </p>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="imageTag"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Image Tag
-            </label>
-            <select
-              id="imageTag"
-              value={imageTag}
-              onChange={(e) => setImageTag(e.target.value)}
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
-            >
-              <option value="latest">latest (v2.1.0)</option>
-              <option value="2.1.0">2.1.0</option>
-              <option value="2.1">2.1</option>
-              <option value="2.0.1">2.0.1</option>
-              <option value="2.0.0">2.0.0</option>
-            </select>
+          {/* Image Tag */}
+          <div className="space-y-2">
+            <Label htmlFor="imageTag">Image Tag</Label>
+            <Select value={imageTag} onValueChange={setImageTag} disabled={isSubmitting}>
+              <SelectTrigger id="imageTag">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">latest (v2.1.0)</SelectItem>
+                <SelectItem value="2.1.0">2.1.0</SelectItem>
+                <SelectItem value="2.1">2.1</SelectItem>
+                <SelectItem value="2.0.1">2.0.1</SelectItem>
+                <SelectItem value="2.0.0">2.0.0</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="betaBranch"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Beta Branch
-            </label>
-            <select
-              id="betaBranch"
-              value={betaBranch}
-              onChange={(e) => setBetaBranch(e.target.value)}
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
-            >
-              <option value="none">None (Stable)</option>
-              <option value="build42">build42 (Unstable Build 42)</option>
-              <option value="iwillbackupmysave">iwillbackupmysave (Build 41 Multiplayer)</option>
-              <option value="b41multiplayer">b41multiplayer (Build 41 MP Beta)</option>
-              <option value="unstable">unstable (Latest Unstable)</option>
-            </select>
-            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+          {/* Beta Branch */}
+          <div className="space-y-2">
+            <Label htmlFor="betaBranch">Beta Branch</Label>
+            <Select value={betaBranch} onValueChange={setBetaBranch} disabled={isSubmitting}>
+              <SelectTrigger id="betaBranch">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (Stable)</SelectItem>
+                <SelectItem value="build42">build42 (Unstable Build 42)</SelectItem>
+                <SelectItem value="iwillbackupmysave">iwillbackupmysave (Build 41 Multiplayer)</SelectItem>
+                <SelectItem value="b41multiplayer">b41multiplayer (Build 41 MP Beta)</SelectItem>
+                <SelectItem value="unstable">unstable (Latest Unstable)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
               Select game beta branch from Steam. Leave as "None" for stable release.
-            </div>
+            </p>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="serverPublicName"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Public Server Name
-            </label>
-            <input
+          {/* Public Server Name */}
+          <div className="space-y-2">
+            <Label htmlFor="serverPublicName">Public Server Name</Label>
+            <Input
               id="serverPublicName"
               type="text"
               value={serverPublicName}
               onChange={(e) => setServerPublicName(e.target.value)}
               placeholder="My Project Zomboid Server"
               disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
             />
-            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+            <p className="text-xs text-muted-foreground">
               Displayed in server browser
-            </div>
+            </p>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="adminPassword"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Admin Password *
-            </label>
-            <input
+          {/* Admin Password */}
+          <div className="space-y-2">
+            <Label htmlFor="adminPassword">Admin Password *</Label>
+            <Input
               id="adminPassword"
               type="password"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
               placeholder="Admin password for server management"
               disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
             />
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label
-              htmlFor="serverPassword"
-              style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}
-            >
-              Server Password
-            </label>
-            <input
+          {/* Server Password */}
+          <div className="space-y-2">
+            <Label htmlFor="serverPassword">Server Password</Label>
+            <Input
               id="serverPassword"
               type="password"
               value={serverPassword}
               onChange={(e) => setServerPassword(e.target.value)}
               placeholder="Leave empty for public server"
               disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                fontSize: '1rem',
-              }}
             />
-            <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+            <p className="text-xs text-muted-foreground">
               Optional: Password required to join server
-            </div>
+            </p>
           </div>
 
           {/* Port Configuration Section */}
-          <div style={{ marginBottom: '1.5rem', border: '1px solid #dee2e6', borderRadius: '4px' }}>
-            <button
+          <div className="border rounded-md">
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setShowPortConfig(!showPortConfig)}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                backgroundColor: '#f8f9fa',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontWeight: 'bold',
-                fontSize: '1rem',
-              }}
+              className="w-full justify-between font-semibold"
             >
               <span>Port Configuration (Optional)</span>
               <span>{showPortConfig ? '▼' : '▶'}</span>
-            </button>
+            </Button>
 
             {showPortConfig && (
-              <div style={{ padding: '1rem' }}>
-                <div style={{ marginBottom: '1rem' }}>
-                  <button
-                    type="button"
-                    onClick={handleCheckAvailability}
-                    disabled={portAvailability.isFetching}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      backgroundColor: '#17a2b8',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: portAvailability.isFetching ? 'not-allowed' : 'pointer',
-                      fontSize: '0.875rem',
-                      opacity: portAvailability.isFetching ? 0.6 : 1,
-                    }}
-                  >
-                    {portAvailability.isFetching ? 'Checking...' : 'Check Port Availability'}
-                  </button>
-                </div>
+              <div className="p-4 space-y-4 border-t">
+                {/* Check Availability Button */}
+                <Button
+                  type="button"
+                  variant="info"
+                  size="sm"
+                  onClick={handleCheckAvailability}
+                  disabled={portAvailability.isFetching}
+                >
+                  {portAvailability.isFetching ? 'Checking...' : 'Check Port Availability'}
+                </Button>
 
+                {/* Error Message */}
                 {portAvailability.isError && (
-                  <div
-                    style={{
-                      padding: '0.75rem',
-                      backgroundColor: '#f8d7da',
-                      color: '#721c24',
-                      borderRadius: '4px',
-                      marginBottom: '1rem',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Failed to check port availability. The agent may be offline.
-                  </div>
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Failed to check port availability. The agent may be offline.
+                    </AlertDescription>
+                  </Alert>
                 )}
 
+                {/* Suggested Ports */}
                 {portAvailability.data && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 'bold',
-                        marginBottom: '0.5rem',
-                        color: '#495057',
-                      }}
-                    >
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-muted-foreground">
                       Suggested Available Ports:
-                    </div>
+                    </p>
                     {portAvailability.data.suggestedPorts.map((portSet: PortSet, index: number) => (
                       <div
                         key={index}
-                        style={{
-                          padding: '0.5rem',
-                          backgroundColor: '#d4edda',
-                          border: '1px solid #c3e6cb',
-                          borderRadius: '4px',
-                          marginBottom: '0.5rem',
-                          fontSize: '0.875rem',
-                        }}
+                        className="p-2 bg-success/10 border border-success/20 rounded-md text-sm"
                       >
-                        <div>
-                          <strong>Option {index + 1}:</strong> Game Port: {portSet.gamePort}, UDP
-                          Port: {portSet.udpPort}, RCON Port: {portSet.rconPort}
-                        </div>
+                        <strong>Option {index + 1}:</strong> Game Port: {portSet.gamePort}, UDP
+                        Port: {portSet.udpPort}, RCON Port: {portSet.rconPort}
                       </div>
                     ))}
 
+                    {/* Allocated Ports */}
                     {portAvailability.data.allocatedPorts.length > 0 && (
-                      <div style={{ marginTop: '1rem' }}>
-                        <div
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: 'bold',
-                            marginBottom: '0.5rem',
-                            color: '#495057',
-                          }}
-                        >
+                      <div className="space-y-2 mt-4">
+                        <p className="text-sm font-semibold text-muted-foreground">
                           Currently Allocated Ports:
-                        </div>
+                        </p>
                         {portAvailability.data.allocatedPorts.map((port, index) => (
                           <div
                             key={index}
-                            style={{
-                              padding: '0.5rem',
-                              backgroundColor: '#fff3cd',
-                              border: '1px solid #ffeaa7',
-                              borderRadius: '4px',
-                              marginBottom: '0.5rem',
-                              fontSize: '0.875rem',
-                            }}
+                            className="p-2 bg-warning/10 border border-warning/20 rounded-md text-sm"
                           >
                             <strong>{port.serverName}</strong> ({port.status}): {port.gamePort}-
                             {port.udpPort}, RCON: {port.rconPort}
@@ -451,31 +332,30 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
                   </div>
                 )}
 
-                <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={useCustomPorts}
-                      onChange={(e) => setUseCustomPorts(e.target.checked)}
-                      style={{ marginRight: '0.5rem', cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>
-                      Specify Custom Ports
-                    </span>
-                  </label>
+                {/* Custom Ports Checkbox */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="useCustomPorts"
+                    checked={useCustomPorts}
+                    onChange={(e) => setUseCustomPorts(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  <Label htmlFor="useCustomPorts" className="cursor-pointer font-semibold">
+                    Specify Custom Ports
+                  </Label>
                 </div>
 
+                {/* Custom Port Inputs */}
                 {useCustomPorts && (
-                  <div>
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <label
-                        htmlFor="customGamePort"
-                        style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}
-                      >
+                  <div className="space-y-3">
+                    {/* Game Port */}
+                    <div className="space-y-1">
+                      <Label htmlFor="customGamePort" className="text-sm">
                         Game Port (UDP)
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <input
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
                           id="customGamePort"
                           type="number"
                           value={customGamePort}
@@ -483,39 +363,19 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
                           placeholder="16261"
                           min="1024"
                           max="65535"
-                          style={{
-                            flex: 1,
-                            padding: '0.5rem',
-                            border: '1px solid #ced4da',
-                            borderRadius: '4px',
-                            fontSize: '0.875rem',
-                          }}
+                          className="flex-1"
                         />
-                        {customGamePort && (
-                          <span style={{ fontSize: '0.875rem' }}>
-                            {getPortStatus(parseInt(customGamePort)) === 'available' && (
-                              <span style={{ color: '#28a745' }}>✓ Available</span>
-                            )}
-                            {getPortStatus(parseInt(customGamePort)) === 'unavailable' && (
-                              <span style={{ color: '#dc3545' }}>✗ In Use</span>
-                            )}
-                            {getPortStatus(parseInt(customGamePort)) === 'unknown' && (
-                              <span style={{ color: '#6c757d' }}>? Unknown</span>
-                            )}
-                          </span>
-                        )}
+                        {customGamePort && getPortStatusBadge(parseInt(customGamePort))}
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <label
-                        htmlFor="customUdpPort"
-                        style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}
-                      >
+                    {/* UDP Port */}
+                    <div className="space-y-1">
+                      <Label htmlFor="customUdpPort" className="text-sm">
                         UDP Port (Game Port + 1)
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <input
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
                           id="customUdpPort"
                           type="number"
                           value={customUdpPort}
@@ -523,39 +383,19 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
                           placeholder="16262"
                           min="1024"
                           max="65535"
-                          style={{
-                            flex: 1,
-                            padding: '0.5rem',
-                            border: '1px solid #ced4da',
-                            borderRadius: '4px',
-                            fontSize: '0.875rem',
-                          }}
+                          className="flex-1"
                         />
-                        {customUdpPort && (
-                          <span style={{ fontSize: '0.875rem' }}>
-                            {getPortStatus(parseInt(customUdpPort)) === 'available' && (
-                              <span style={{ color: '#28a745' }}>✓ Available</span>
-                            )}
-                            {getPortStatus(parseInt(customUdpPort)) === 'unavailable' && (
-                              <span style={{ color: '#dc3545' }}>✗ In Use</span>
-                            )}
-                            {getPortStatus(parseInt(customUdpPort)) === 'unknown' && (
-                              <span style={{ color: '#6c757d' }}>? Unknown</span>
-                            )}
-                          </span>
-                        )}
+                        {customUdpPort && getPortStatusBadge(parseInt(customUdpPort))}
                       </div>
                     </div>
 
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <label
-                        htmlFor="customRconPort"
-                        style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}
-                      >
+                    {/* RCON Port */}
+                    <div className="space-y-1">
+                      <Label htmlFor="customRconPort" className="text-sm">
                         RCON Port (TCP, Internal)
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <input
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
                           id="customRconPort"
                           type="number"
                           value={customRconPort}
@@ -563,78 +403,36 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
                           placeholder="27015"
                           min="1024"
                           max="65535"
-                          style={{
-                            flex: 1,
-                            padding: '0.5rem',
-                            border: '1px solid #ced4da',
-                            borderRadius: '4px',
-                            fontSize: '0.875rem',
-                          }}
+                          className="flex-1"
                         />
-                        {customRconPort && (
-                          <span style={{ fontSize: '0.875rem' }}>
-                            {getPortStatus(parseInt(customRconPort)) === 'available' && (
-                              <span style={{ color: '#28a745' }}>✓ Available</span>
-                            )}
-                            {getPortStatus(parseInt(customRconPort)) === 'unavailable' && (
-                              <span style={{ color: '#dc3545' }}>✗ In Use</span>
-                            )}
-                            {getPortStatus(parseInt(customRconPort)) === 'unknown' && (
-                              <span style={{ color: '#6c757d' }}>? Unknown</span>
-                            )}
-                          </span>
-                        )}
+                        {customRconPort && getPortStatusBadge(parseInt(customRconPort))}
                       </div>
                     </div>
 
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: '#6c757d',
-                        marginTop: '0.5rem',
-                        lineHeight: 1.4,
-                      }}
-                    >
+                    <p className="text-xs text-muted-foreground leading-relaxed">
                       <strong>Note:</strong> If no ports are specified, the system will automatically
                       assign the next available ports.
-                    </div>
+                    </p>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-            <button
+          {/* Action Buttons */}
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
+              variant="secondary"
               onClick={onCancel}
               disabled={isSubmitting}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="success"
               disabled={isSubmitting}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
             >
               {isSubmitting
                 ? editServer
@@ -643,10 +441,10 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
                 : editServer
                 ? 'Retry Server'
                 : 'Create Server'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
