@@ -9,6 +9,7 @@ import type { AuditLogsQuery } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -79,7 +80,51 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   if (isLoading) {
-    return <div className="p-8">Loading audit logs...</div>;
+    return (
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-[80px]" />
+            <Skeleton className="h-9 w-[200px]" />
+          </div>
+          <Skeleton className="h-10 w-[120px]" />
+        </div>
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-5 w-[200px]" />
+          <div className="flex gap-2 items-center">
+            <Skeleton className="h-9 w-[80px]" />
+            <Skeleton className="h-5 w-[120px]" />
+            <Skeleton className="h-9 w-[80px]" />
+          </div>
+        </div>
+        <div className="border rounded-md overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>IP Address</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-5 w-[140px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-[100px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[120px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[200px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[110px]" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
   }
 
   if (error) {

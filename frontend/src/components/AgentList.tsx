@@ -7,6 +7,7 @@ import { useUser } from '../contexts/UserContext';
 import type { Agent } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -60,7 +61,52 @@ export function AgentList({ onSelectAgent, onViewUsers, onViewAuditLogs }: Agent
   };
 
   if (isLoading) {
-    return <div className="p-8">Loading agents...</div>;
+    return (
+      <div className="p-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <Skeleton className="h-9 w-[200px] mb-2" />
+            <Skeleton className="h-5 w-[250px]" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-[120px]" />
+            <Skeleton className="h-10 w-[100px]" />
+            <Skeleton className="h-10 w-[80px]" />
+          </div>
+        </div>
+        <Skeleton className="h-5 w-[150px] mb-4" />
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Resources</TableHead>
+                <TableHead>Last Seen</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-5 w-[120px]" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-[80px]" /></TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-6 w-[70px]" />
+                      <Skeleton className="h-6 w-[70px]" />
+                      <Skeleton className="h-6 w-[70px]" />
+                    </div>
+                  </TableCell>
+                  <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
   }
 
   if (error) {

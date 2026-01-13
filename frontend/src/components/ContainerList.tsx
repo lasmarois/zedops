@@ -15,6 +15,7 @@ import { RconTerminal } from './RconTerminal';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -524,10 +525,45 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   if (isLoading) {
     return (
       <div className="p-8">
-        <Button variant="secondary" onClick={onBack} className="mb-8">
-          ← Back to Agents
-        </Button>
-        <div>Loading containers...</div>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <Button variant="secondary" onClick={onBack} className="mb-4">
+              ← Back to Agents
+            </Button>
+            <Skeleton className="h-9 w-[300px]" />
+          </div>
+          <Skeleton className="h-12 w-[150px]" />
+        </div>
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Image</TableHead>
+                <TableHead>State</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[200px]" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-[80px]" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-[120px]" /></TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-9 w-[60px]" />
+                      <Skeleton className="h-9 w-[80px]" />
+                      <Skeleton className="h-9 w-[70px]" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     );
   }
