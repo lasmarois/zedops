@@ -544,12 +544,109 @@ All components finalized with consistent design language:
 **User Approval:** "that's it !!!" 🎉
 
 ### Next Steps
-- [ ] Commit Phase 1 changes
-- [ ] Update task_plan.md (mark Phase 1 complete)
-- [ ] Begin Phase 2: Navigation & Layout
+- [x] Commit Phase 1 changes
+- [x] Update task_plan.md (mark Phase 1 complete)
+- [x] Begin Phase 2: Navigation & Layout
 
 ---
 
-## Session 5: TBD
+## Session 5: Phase 2 - Navigation & Layout (2026-01-13)
 
-*(Next session will be logged here)*
+**Date:** 2026-01-13
+**Duration:** ~45 minutes
+**Goal:** Implement Sidebar, MainLayout, Breadcrumb, and React Router navigation
+
+### Actions Taken
+
+1. **Push Phase 1 to GitHub** ✅
+   - Successfully pushed commit `25e8113` to origin/main
+   - All Phase 1 changes now on remote
+
+2. **Install React Router** ✅
+   - Installed `react-router-dom@^7.1.3`
+   - Added to package.json dependencies
+
+3. **Created Layout Components** ✅
+   - **Sidebar.tsx** - Full navigation sidebar with:
+     - Gradient logo (primary → info)
+     - Infrastructure section (Agents, Servers)
+     - Management section (Users, Permissions, Audit Logs)
+     - Active state styling (primary/10 bg + ring border)
+     - User menu at bottom with avatar
+     - Smooth transitions matching Phase 1 design language
+   - **MainLayout.tsx** - Layout wrapper with sidebar + content area
+   - **Breadcrumb.tsx** - Breadcrumb navigation with hover effects
+
+4. **Created Page Components** ✅
+   - **Dashboard.tsx** - Placeholder dashboard with stats cards
+   - **AgentsPage.tsx** - Wrapper for existing AgentList component
+   - **UsersPage.tsx** - Wrapper for existing UserList component
+   - **AuditLogsPage.tsx** - Wrapper for existing AuditLogViewer component
+
+5. **Updated App.tsx** ✅
+   - Migrated from state-based navigation to React Router
+   - Wrapped with BrowserRouter
+   - Routes:
+     - `/` → redirects to `/dashboard`
+     - `/dashboard` → Dashboard page
+     - `/agents` → Agents page (existing AgentList)
+     - `/servers` → Placeholder (Phase 3)
+     - `/users` → Users page
+     - `/permissions` → Placeholder (Phase 3)
+     - `/audit-logs` → Audit Logs page
+   - Kept Login/Register outside MainLayout
+   - Preserved ComponentShowcase with `?showcase=true`
+
+6. **Fixed TypeScript Errors** ✅
+   - Exported `ActivityEvent` interface from activity-timeline.tsx
+   - Added type annotation to ComponentShowcase sample events
+   - Removed unused icon code (commented for future reference)
+   - Build successful ✅
+
+### Files Created
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/layout/Sidebar.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/layout/MainLayout.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/layout/Breadcrumb.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/Dashboard.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentsPage.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/UsersPage.tsx`
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AuditLogsPage.tsx`
+
+### Files Modified
+- `/Volumes/Data/docker_composes/zedops/frontend/package.json` - Added react-router-dom
+- `/Volumes/Data/docker_composes/zedops/frontend/src/App.tsx` - React Router integration
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/ui/activity-timeline.tsx` - Exported interface, removed unused code
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/ComponentShowcase.tsx` - Type annotation
+
+### Design Enhancements (Phase 1 Consistency)
+**Sidebar:**
+- Gradient logo with hover animation
+- Active nav links: primary/10 background + ring-1 border
+- Rounded-lg for nav items (matches button style)
+- User avatar with primary color ring
+- Smooth 200ms transitions
+- Icon + text labels with count badges
+
+**Breadcrumb:**
+- Semibold font for current page
+- Hover underline for links
+- Muted-foreground for hierarchy
+- Smooth transitions
+
+### Phase 2 Status: ✅ COMPLETE
+
+All tasks completed:
+- ✅ Sidebar Navigation (logo, sections, active states, user menu)
+- ✅ Main Layout (sidebar + content wrapper)
+- ✅ Breadcrumb Component
+- ✅ React Router integration
+- ✅ Page wrappers for existing components
+- ✅ Build successful
+
+**Actual Time:** ~45 minutes (vs 4-5 days estimated - 99% faster!)
+
+### Next Steps
+- [ ] Test app in browser
+- [ ] Verify all navigation links work
+- [ ] Commit Phase 2 changes
+- [ ] Begin Phase 3: Dashboard & Lists (full implementation)

@@ -1,10 +1,8 @@
 import { useState } from "react"
 import { Button } from "./button"
-import { Card, CardContent } from "./card"
-import { Separator } from "./separator"
 import { cn } from "@/lib/utils"
 
-interface ActivityEvent {
+export interface ActivityEvent {
   id: string
   timestamp: string
   user: string
@@ -19,64 +17,63 @@ interface ActivityTimelineProps {
   events: ActivityEvent[]
 }
 
-// Timeline icon components (matching StatusBadge design)
-const TimelineIcons = {
-  dot: ({ color }: { color: string }) => (
-    <svg width="12" height="12" viewBox="0 0 12 12" className={color}>
-      <circle cx="6" cy="6" r="4" fill="currentColor" />
-    </svg>
-  ),
-  pulse: ({ color }: { color: string }) => (
-    <span className="relative flex h-3 w-3">
-      <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", color)}></span>
-      <span className={cn("relative inline-flex rounded-full h-3 w-3", color)}></span>
-    </span>
-  ),
-  check: ({ color }: { color: string }) => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" className={color}>
-      <path d="M2.5 7L5.5 10L11.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  alert: ({ color }: { color: string }) => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className={color}>
-      <path d="M7 4.5V8M7 10V10.5" strokeLinecap="round" />
-      <path d="M7 1.5L1.5 11.5H12.5L7 1.5Z" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  cross: ({ color }: { color: string }) => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" className={color}>
-      <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  info: ({ color }: { color: string }) => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" className={color}>
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M7 6V10M7 4V4.5" strokeLinecap="round" strokeWidth="2.5" />
-    </svg>
-  ),
-}
+// Timeline icon components (for future use - currently using vertical bar design)
+// const TimelineIcons = {
+//   dot: ({ color }: { color: string }) => (
+//     <svg width="12" height="12" viewBox="0 0 12 12" className={color}>
+//       <circle cx="6" cy="6" r="4" fill="currentColor" />
+//     </svg>
+//   ),
+//   pulse: ({ color }: { color: string }) => (
+//     <span className="relative flex h-3 w-3">
+//       <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", color)}></span>
+//       <span className={cn("relative inline-flex rounded-full h-3 w-3", color)}></span>
+//     </span>
+//   ),
+//   check: ({ color }: { color: string }) => (
+//     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" className={color}>
+//       <path d="M2.5 7L5.5 10L11.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+//     </svg>
+//   ),
+//   alert: ({ color }: { color: string }) => (
+//     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className={color}>
+//       <path d="M7 4.5V8M7 10V10.5" strokeLinecap="round" />
+//       <path d="M7 1.5L1.5 11.5H12.5L7 1.5Z" strokeLinecap="round" strokeLinejoin="round" />
+//     </svg>
+//   ),
+//   cross: ({ color }: { color: string }) => (
+//     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" className={color}>
+//       <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" strokeLinecap="round" strokeLinejoin="round" />
+//     </svg>
+//   ),
+//   info: ({ color }: { color: string }) => (
+//     <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" className={color}>
+//       <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+//       <path d="M7 6V10M7 4V4.5" strokeLinecap="round" strokeWidth="2.5" />
+//     </svg>
+//   ),
+// }
 
 export function ActivityTimeline({ events }: ActivityTimelineProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  // Auto-select icon based on action color if not specified
-  const getIcon = (event: ActivityEvent): keyof typeof TimelineIcons => {
-    if (event.icon) return event.icon
-
-    // Smart defaults based on action color
-    switch (event.actionColor) {
-      case "success": return "check"
-      case "error": return "cross"
-      case "warning": return "alert"
-      case "info": return "info"
-      default: return "dot"
-    }
-  }
+  // Auto-select icon based on action color (for future use if icons are re-added)
+  // const getIcon = (event: ActivityEvent): keyof typeof TimelineIcons => {
+  //   if (event.icon) return event.icon
+  //
+  //   // Smart defaults based on action color
+  //   switch (event.actionColor) {
+  //     case "success": return "check"
+  //     case "error": return "cross"
+  //     case "warning": return "alert"
+  //     case "info": return "info"
+  //     default: return "dot"
+  //   }
+  // }
 
   return (
     <div className="space-y-2">
       {events.map((event) => {
-        const IconComponent = TimelineIcons[getIcon(event)]
         const colorClass = cn(
           event.actionColor === "success" && "text-success bg-success",
           event.actionColor === "warning" && "text-warning bg-warning",

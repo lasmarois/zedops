@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { StatusBadge } from './ui/status-badge';
-import { ActivityTimeline } from './ui/activity-timeline';
+import { ActivityTimeline, type ActivityEvent } from './ui/activity-timeline';
 import { LogViewer } from './ui/log-viewer';
 import { Button } from './ui/button';
 
@@ -27,7 +27,7 @@ export function ComponentShowcase() {
   const [selectedFont, setSelectedFont] = useState('Outfit');
 
   // Sample data for ActivityTimeline
-  const sampleEvents = [
+  const sampleEvents: ActivityEvent[] = [
     {
       id: '1',
       timestamp: '2 minutes ago',
