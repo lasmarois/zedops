@@ -382,3 +382,64 @@ During Phase 0.3, some npm install commands were executed from project root (`/V
 
 **Time Spent:** 45 minutes
 
+
+---
+
+## 2026-01-12 Late Evening - Phase 2: Core Components (In Progress)
+
+**Status:** Phase 2 in progress (2/5 components complete)
+
+**Goals:**
+- Replace inline styles with shadcn components across all pages
+- Maintain existing functionality and dark theme aesthetics
+- Improve code maintainability and consistency
+
+**Progress:** 40% complete
+
+### 2.1 Login Component ✅
+- **Before:** 221 lines, 100% inline styles
+- **After:** 125 lines, Tailwind classes (-43% code reduction)
+- **Components used:** Card, Input, Label, Button, Alert
+- **Preserved:** Dark theme (#1a1a1a, #2d2d2d), loading states, error handling
+
+### 2.2 Register Component ✅
+- **Before:** 311 lines, 100% inline styles across 4 states
+- **After:** 212 lines, Tailwind classes (-32% code reduction)
+- **Components used:** Card, Input, Label, Button, Alert
+- **States replaced:**
+  - Verifying (loading)
+  - Success (account created with success color)
+  - Error (invalid invitation with destructive color)
+  - Form (password entry with success button variant)
+
+### 2.3 AgentList Component ⏳ (Next)
+- Status table with agent information
+- Action buttons (view containers)
+- Will use: Table, Badge, Button components
+
+### 2.4 ContainerList Component ⏳
+- Complex table with server/container data
+- Multiple action buttons (start, stop, restart, delete, etc.)
+- Status badges
+- Will use: Table, Badge, Button, Alert components
+
+### 2.5 ServerForm Component ⏳
+- Form for creating/editing servers
+- Multiple inputs for ports, config, mods
+- Will use: Input, Label, Button, Select components
+
+**Build Status:** ✅ All builds passing
+- CSS: 26.85 kB (gzipped: 6.12 kB)
+- JS: 693.47 kB (gzipped: 186.02 kB)
+- No TypeScript errors
+
+**Commits:**
+- `8e9913a` - Phase 2.1: Replace Login and Register inline styles
+
+**Next Steps:**
+- Replace AgentList component
+- Replace ContainerList component
+- Replace ServerForm component
+
+**Time Spent So Far:** 30 minutes
+
