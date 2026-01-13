@@ -486,7 +486,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 | M5: Host Metrics Display | 4-6 hours | 4 hours | ✅ Complete |
 | M6: RCON Integration | 1-2 weeks | 9.5 hours | ✅ Complete |
 | M7: RBAC & Audit Logs | 2 weeks | 24 hours (actual) | ✅ Complete (Phase 1 ✅, Phase 2 ✅) |
-| M7.5: UI Styling & Design System | 1-2 weeks | TBD | ⏳ Planned |
+| M7.5: UI Styling & Design System | 1-2 weeks | In progress | 🚧 In Progress |
 | M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 
 **Progress:** 7/9 core milestones complete (78%) - M7 fully complete! 🎉
@@ -522,7 +522,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - **Milestone 8** - Agent Deployment & Polish (installation automation)
 - **Documentation** - Comprehensive API and user documentation (after M8 complete)
 
-**Current Planning:** M7 fully complete and deployed! Ready for UI styling phase.
+**Current Planning:** M7 fully complete! M7.5 (UI Styling) planning complete, Phase 0 started.
 
 **Backlog:** See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
 
