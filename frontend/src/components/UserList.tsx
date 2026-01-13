@@ -6,6 +6,26 @@ import { useState } from 'react';
 import { useUsers, useDeleteUser, useInviteUser } from '../hooks/useUsers';
 import { useUser } from '../contexts/UserContext';
 import type { UserAccount } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface UserListProps {
   onBack: () => void;
@@ -72,28 +92,18 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   };
 
   if (isLoading) {
-    return <div style={{ padding: '2rem' }}>Loading users...</div>;
+    return <div className="p-8">Loading users...</div>;
   }
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', color: '#dc3545' }}>
-        Error: {error.message}
-        <br />
-        <button
-          onClick={onBack}
-          style={{
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Error: {error.message}</AlertDescription>
+        </Alert>
+        <Button variant="secondary" onClick={onBack}>
           Back
-        </button>
+        </Button>
       </div>
     );
   }
@@ -101,310 +111,165 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
-        }}
-      >
-        <div>
-          <button
-            onClick={onBack}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginRight: '1rem',
-            }}
-          >
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" onClick={onBack}>
             ← Back
-          </button>
-          <h1 style={{ display: 'inline' }}>User Management</h1>
+          </Button>
+          <h1 className="text-3xl font-bold">User Management</h1>
         </div>
         {isAdmin && (
-          <button
+          <Button
             onClick={() => {
               setShowInviteForm(!showInviteForm);
               setInviteToken(null);
               setMessage(null);
             }}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
           >
             {showInviteForm ? 'Cancel' : '+ Invite User'}
-          </button>
+          </Button>
         )}
       </div>
 
       {message && (
-        <div
-          style={{
-            padding: '1rem',
-            marginBottom: '1rem',
-            backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-            color: message.type === 'success' ? '#155724' : '#721c24',
-            border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-            borderRadius: '4px',
-          }}
-        >
-          {message.text}
-        </div>
+        <Alert variant={message.type === 'success' ? 'success' : 'destructive'} className="mb-4">
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
       )}
 
       {showInviteForm && (
-        <div
-          style={{
-            backgroundColor: '#2d2d2d',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Invite New User</h2>
-          <form onSubmit={handleInviteUser}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                htmlFor="email"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+        <div className="bg-[#2d2d2d] p-6 rounded-lg mb-8">
+          <h2 className="text-xl font-bold mb-4 mt-0">Invite New User</h2>
+          <form onSubmit={handleInviteUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-gray-300">
                 Email
-              </label>
-              <input
+              </Label>
+              <Input
                 id="email"
                 type="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 required
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
+                className="bg-[#1a1a1a] border-[#444] text-white"
               />
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                htmlFor="role"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-gray-300">
                 Role
-              </label>
-              <select
-                id="role"
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as 'admin' | 'user')}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
+              </Label>
+              <Select value={inviteRole} onValueChange={(val) => setInviteRole(val as 'admin' | 'user')}>
+                <SelectTrigger id="role" className="bg-[#1a1a1a] border-[#444] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={inviteUserMutation.isPending}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: inviteUserMutation.isPending ? '#6c757d' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: inviteUserMutation.isPending ? 'not-allowed' : 'pointer',
-              }}
             >
               {inviteUserMutation.isPending ? 'Sending...' : 'Send Invitation'}
-            </button>
+            </Button>
           </form>
 
           {inviteToken && (
-            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1a1a1a', borderRadius: '4px' }}>
-              <p style={{ color: '#ccc', marginBottom: '0.5rem' }}>Invitation Link:</p>
-              <code
-                style={{
-                  display: 'block',
-                  padding: '0.5rem',
-                  backgroundColor: '#000',
-                  color: '#0f0',
-                  borderRadius: '4px',
-                  overflowX: 'auto',
-                  fontSize: '0.875rem',
-                }}
-              >
+            <div className="mt-4 p-4 bg-[#1a1a1a] rounded-md">
+              <p className="text-gray-300 mb-2">Invitation Link:</p>
+              <code className="block p-2 bg-black text-success rounded-md overflow-x-auto text-sm">
                 {inviteToken}
               </code>
-              <button
+              <Button
+                size="sm"
+                variant="success"
                 onClick={() => {
                   navigator.clipboard.writeText(inviteToken);
                   setMessage({ type: 'success', text: 'Link copied to clipboard!' });
                 }}
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.25rem 0.5rem',
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                }}
+                className="mt-2"
               >
                 Copy Link
-              </button>
+              </Button>
             </div>
           )}
         </div>
       )}
 
-      <div style={{ marginBottom: '1rem' }}>
-        <p style={{ color: '#888' }}>Total users: {data?.users.length || 0}</p>
+      <div className="mb-4">
+        <p className="text-muted-foreground">Total users: {data?.users.length || 0}</p>
       </div>
 
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          backgroundColor: '#2d2d2d',
-          borderRadius: '8px',
-          overflow: 'hidden',
-        }}
-      >
-        <thead>
-          <tr style={{ backgroundColor: '#1a1a1a' }}>
-            <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Email</th>
-            <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Role</th>
-            <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Created</th>
-            <th style={{ padding: '1rem', textAlign: 'right', color: '#ccc' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data?.users.map((user) => (
-            <tr
-              key={user.id}
-              style={{
-                borderTop: '1px solid #444',
-              }}
-            >
-              <td style={{ padding: '1rem', color: '#fff' }}>
-                {user.email}
-                {user.id === currentUser?.id && (
-                  <span
-                    style={{
-                      marginLeft: '0.5rem',
-                      padding: '0.25rem 0.5rem',
-                      backgroundColor: '#007bff',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                    }}
-                  >
-                    You
-                  </span>
-                )}
-              </td>
-              <td style={{ padding: '1rem' }}>
-                <span
-                  style={{
-                    padding: '0.25rem 0.5rem',
-                    backgroundColor: user.role === 'admin' ? '#dc3545' : '#6c757d',
-                    color: 'white',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  {user.role === 'admin' ? 'admin' : 'user'}
-                </span>
-                {!user.role && (
-                  <span
-                    style={{
-                      marginLeft: '0.5rem',
-                      fontSize: '0.75rem',
-                      color: '#888',
-                    }}
-                  >
-                    (role assignments)
-                  </span>
-                )}
-              </td>
-              <td style={{ padding: '1rem', color: '#ccc', fontSize: '0.875rem' }}>
-                {formatDate(user.created_at)}
-              </td>
-              <td style={{ padding: '1rem', textAlign: 'right' }}>
-                {isAdmin && (
-                  <>
-                    <button
-                      onClick={() => onManagePermissions(user)}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        marginRight: '0.5rem',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      Permissions
-                    </button>
-                    {user.id !== currentUser?.id && (
-                      <button
-                        onClick={() => handleDeleteUser(user.id, user.email)}
-                        disabled={deleteUserMutation.isPending}
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          backgroundColor: '#dc3545',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: deleteUserMutation.isPending ? 'not-allowed' : 'pointer',
-                          fontSize: '0.875rem',
-                        }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {data?.users.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+      {data?.users.length === 0 ? (
+        <div className="text-center p-8 bg-muted rounded-md">
           No users found.
+        </div>
+      ) : (
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    {user.email}
+                    {user.id === currentUser?.id && (
+                      <Badge variant="default" className="ml-2">
+                        You
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'}>
+                      {user.role === 'admin' ? 'admin' : 'user'}
+                    </Badge>
+                    {!user.role && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (role assignments)
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {formatDate(user.created_at)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {isAdmin && (
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => onManagePermissions(user)}
+                        >
+                          Permissions
+                        </Button>
+                        {user.id !== currentUser?.id && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteUser(user.id, user.email)}
+                            disabled={deleteUserMutation.isPending}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
