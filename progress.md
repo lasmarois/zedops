@@ -443,3 +443,74 @@ During Phase 0.3, some npm install commands were executed from project root (`/V
 
 **Time Spent So Far:** 30 minutes
 
+
+---
+
+## 2026-01-12 Late Evening (Continued) - Phase 2.2 & 2.3: AgentList + ContainerList ✅
+
+**Status:** Phase 2 at 80% complete (4/5 components done)
+
+**Work Done:**
+
+### 2.3 AgentList Component ✅
+- **Before:** 269 lines, inline styles for table and badges
+- **After:** 182 lines, Tailwind classes (-32% code reduction)
+- **Components used:** Table, Badge, Button
+- **Key changes:**
+  - Replaced inline table styles with shadcn Table components
+  - Created `getMetricVariant()` function returning semantic variants
+  - Created `MetricBadge` component for CPU/MEM/DSK metrics
+  - Used color-coded badges (success/warning/destructive) for resource usage
+  - Maintained dark theme and hover states
+- **Build test:** ✅ PASSED
+
+### 2.4 ContainerList Component ✅
+- **Before:** 1331 lines, 79 inline style instances
+- **After:** 1012 lines, Tailwind classes (-24% code reduction, -319 lines)
+- **Components used:** Button, Badge, Table, Alert, Dialog
+- **Key changes:**
+  - Replaced ALL 79 inline styles with shadcn components
+  - Converted `getStateColor()` → `getStateVariant()` returning semantic variants
+  - Converted `getServerStatusBadge()` to return variant + text objects
+  - Replaced custom modal overlay with shadcn Dialog component
+  - Applied semantic button variants throughout:
+    - success: Start buttons
+    - destructive: Stop, Delete buttons
+    - warning: RCON, Edit & Retry, Cleanup Failed
+    - info: Restart, Rebuild, Sync
+    - secondary: Back button
+  - Maintained all business logic:
+    - Auto-sync detection (unchanged)
+    - Server lifecycle management (unchanged)
+    - Two-table structure (containers + servers)
+    - RCON terminal integration (unchanged)
+  - All action buttons now use consistent variants
+- **Build test:** ✅ PASSED
+  - CSS: 26.88 kB (gzipped: 6.15 kB) - +30 bytes for Dialog component
+  - JS: 724.06 kB (gzipped: 198.27 kB)
+  - No TypeScript errors
+
+**Commits:**
+- `d31cadb` - Phase 2.2: Replace AgentList inline styles with shadcn
+- *(pending)* - Phase 2.3: Replace ContainerList inline styles with shadcn
+
+**Progress Summary:**
+- ✅ Login (Phase 2.1)
+- ✅ Register (Phase 2.1)
+- ✅ AgentList (Phase 2.2)
+- ✅ ContainerList (Phase 2.3)
+- ⏳ ServerForm (Phase 2.4) - Next (estimated 30 minutes)
+
+**Next Steps:**
+- Commit ContainerList changes
+- Replace ServerForm component (last component in Phase 2)
+- Final build test for Phase 2
+- Update task_plan.md Phase 2 status
+- Begin Phase 3: Page Layouts
+
+**Time Spent:**
+- Login + Register: 30 minutes
+- AgentList: 20 minutes
+- ContainerList: 1 hour (complex component)
+- **Total Phase 2 so far:** 1 hour 50 minutes
+

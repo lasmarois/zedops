@@ -13,6 +13,25 @@ import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useClea
 import { ServerForm } from './ServerForm';
 import { RconTerminal } from './RconTerminal';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface ContainerListProps {
   agentId: string;
@@ -214,18 +233,18 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     return container.id.substring(0, 12);
   };
 
-  const getStateColor = (state: string): string => {
+  const getStateVariant = (state: string): 'success' | 'destructive' | 'warning' | 'info' | 'secondary' => {
     switch (state.toLowerCase()) {
       case 'running':
-        return '#28a745';
+        return 'success';
       case 'exited':
-        return '#dc3545';
+        return 'destructive';
       case 'paused':
-        return '#ffc107';
+        return 'warning';
       case 'restarting':
-        return '#17a2b8';
+        return 'info';
       default:
-        return '#6c757d';
+        return 'secondary';
     }
   };
 
@@ -469,25 +488,25 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
     }
   };
 
-  const getServerStatusBadge = (server: Server) => {
+  const getServerStatusBadge = (server: Server): { variant: 'success' | 'secondary' | 'info' | 'warning' | 'destructive'; text: string } => {
     const { status, data_exists } = server;
 
-    const badgeStyles: Record<string, { bg: string; text: string }> = {
-      running: { bg: '#28a745', text: '✓ Running' },
-      stopped: { bg: '#6c757d', text: '⏸ Stopped' },
-      creating: { bg: '#17a2b8', text: '⏳ Creating' },
-      deleting: { bg: '#fd7e14', text: '⏳ Deleting' },
-      failed: { bg: '#dc3545', text: '❌ Failed' },
-      deleted: { bg: '#fd7e14', text: '🗑️ Deleted' },
+    const badgeMap: Record<string, { variant: 'success' | 'secondary' | 'info' | 'warning' | 'destructive'; text: string }> = {
+      running: { variant: 'success', text: '✓ Running' },
+      stopped: { variant: 'secondary', text: '⏸ Stopped' },
+      creating: { variant: 'info', text: '⏳ Creating' },
+      deleting: { variant: 'warning', text: '⏳ Deleting' },
+      failed: { variant: 'destructive', text: '❌ Failed' },
+      deleted: { variant: 'warning', text: '🗑️ Deleted' },
     };
 
     if (status === 'missing') {
       return data_exists
-        ? { bg: '#ffc107', text: '⚠️ Missing (Recoverable)' }
-        : { bg: '#dc3545', text: '⚠️ Orphaned' };
+        ? { variant: 'warning', text: '⚠️ Missing (Recoverable)' }
+        : { variant: 'destructive', text: '⚠️ Orphaned' };
     }
 
-    return badgeStyles[status] || { bg: '#6c757d', text: status };
+    return badgeMap[status] || { variant: 'secondary', text: status };
   };
 
   const isOperationPending = (): boolean => {
@@ -504,21 +523,10 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
 
   if (isLoading) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <button
-          onClick={onBack}
-          style={{
-            marginBottom: '2rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <Button variant="secondary" onClick={onBack} className="mb-8">
           ← Back to Agents
-        </button>
+        </Button>
         <div>Loading containers...</div>
       </div>
     );
@@ -526,377 +534,212 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
 
   if (error) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <button
-          onClick={onBack}
-          style={{
-            marginBottom: '2rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <Button variant="secondary" onClick={onBack} className="mb-8">
           ← Back to Agents
-        </button>
-        <div style={{ color: '#dc3545' }}>
-          Error: {error.message}
-        </div>
+        </Button>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Error: {error.message}
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
-        }}
-      >
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <button
-            onClick={onBack}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginBottom: '1rem',
-            }}
-          >
+          <Button variant="secondary" onClick={onBack} className="mb-4">
             ← Back to Agents
-          </button>
-          <h1>Containers on {agentName}</h1>
+          </Button>
+          <h1 className="text-3xl font-bold">Containers on {agentName}</h1>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button
-            onClick={() => setShowServerForm(true)}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              fontWeight: 'bold',
-            }}
-          >
+        <div className="flex gap-4">
+          <Button onClick={() => setShowServerForm(true)} size="lg">
             + Create Server
-          </button>
+          </Button>
           {serversData && serversData.servers.some(s => s.status === 'failed') && (
-            <button
+            <Button
+              variant="warning"
               onClick={handleCleanupFailedServers}
               disabled={cleanupFailedServersMutation.isPending}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#ffc107',
-                color: '#000',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: cleanupFailedServersMutation.isPending ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                opacity: cleanupFailedServersMutation.isPending ? 0.6 : 1,
-              }}
+              size="lg"
             >
               {cleanupFailedServersMutation.isPending
                 ? 'Cleaning...'
                 : `🧹 Clean Up Failed Servers (${serversData.servers.filter(s => s.status === 'failed').length})`}
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {serverMessage && (
-        <div
-          style={{
-            padding: '1rem',
-            marginBottom: '1rem',
-            borderRadius: '4px',
-            backgroundColor: serverMessage.type === 'success' ? '#d4edda' : '#f8d7da',
-            color: serverMessage.type === 'success' ? '#155724' : '#721c24',
-            border: `1px solid ${serverMessage.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-          }}
-        >
-          {serverMessage.message}
-        </div>
+        <Alert variant={serverMessage.type === 'success' ? 'success' : 'destructive'} className="mb-4">
+          <AlertDescription>{serverMessage.message}</AlertDescription>
+        </Alert>
       )}
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="mb-4">
         <strong>Total Containers:</strong> {data?.count ?? 0}
         {serversData && serversData.servers.length > 0 && (
-          <span style={{ marginLeft: '1rem', color: '#6c757d' }}>
+          <span className="ml-4 text-muted-foreground">
             (Managed Servers: {serversData.servers.length})
           </span>
         )}
       </div>
 
       {data?.containers.length === 0 ? (
-        <div
-          style={{
-            padding: '2rem',
-            textAlign: 'center',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '4px',
-          }}
-        >
+        <div className="p-8 text-center bg-muted rounded-md">
           No containers found on this agent
         </div>
       ) : (
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            backgroundColor: 'white',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: '#f8f9fa' }}>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Name
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Image
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                State
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Status
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.containers.map((container) => (
-              <tr key={container.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                <td style={{ padding: '1rem' }}>
-                  {getContainerName(container)}
-                </td>
-                <td style={{ padding: '1rem', color: '#6c757d', fontSize: '0.875rem' }}>
-                  {container.image}
-                </td>
-                <td style={{ padding: '1rem' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '0.25rem 0.75rem',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem',
-                      fontWeight: 'bold',
-                      backgroundColor: getStateColor(container.state),
-                      color: 'white',
-                    }}
-                  >
-                    {container.state}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem', color: '#6c757d', fontSize: '0.875rem' }}>
-                  {container.status}
-                </td>
-                <td style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    {container.state.toLowerCase() !== 'running' && (
-                      <button
-                        onClick={() => handleStart(container.id)}
-                        disabled={isOperationPending()}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: '#28a745',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: isOperationPending() ? 'not-allowed' : 'pointer',
-                          fontSize: '0.875rem',
-                          opacity: isOperationPending() ? 0.6 : 1,
-                        }}
-                      >
-                        {isOperationPending() ? 'Working...' : 'Start'}
-                      </button>
-                    )}
-                    {container.state.toLowerCase() === 'running' && (
-                      <>
-                        <button
-                          onClick={() => handleStop(container.id)}
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Image</TableHead>
+                <TableHead>State</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.containers.map((container) => (
+                <TableRow key={container.id}>
+                  <TableCell>{getContainerName(container)}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {container.image}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getStateVariant(container.state)}>
+                      {container.state}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {container.status}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2 flex-wrap">
+                      {container.state.toLowerCase() !== 'running' && (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => handleStart(container.id)}
                           disabled={isOperationPending()}
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            backgroundColor: '#dc3545',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: isOperationPending() ? 'not-allowed' : 'pointer',
-                            fontSize: '0.875rem',
-                            opacity: isOperationPending() ? 0.6 : 1,
-                          }}
                         >
-                          {isOperationPending() ? 'Working...' : 'Stop'}
-                        </button>
-                        <button
-                          onClick={() => handleRestart(container.id)}
-                          disabled={isOperationPending()}
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            backgroundColor: '#17a2b8',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: isOperationPending() ? 'not-allowed' : 'pointer',
-                            fontSize: '0.875rem',
-                            opacity: isOperationPending() ? 0.6 : 1,
-                          }}
-                        >
-                          {isOperationPending() ? 'Working...' : 'Restart'}
-                        </button>
-                        <button
-                          onClick={() => onViewLogs(container.id, getContainerName(container))}
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            backgroundColor: '#6f42c1',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          View Logs
-                        </button>
-                        {getServerFromContainerId(container.id) && (
-                          <button
+                          {isOperationPending() ? 'Working...' : 'Start'}
+                        </Button>
+                      )}
+                      {container.state.toLowerCase() === 'running' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleStop(container.id)}
+                            disabled={isOperationPending()}
+                          >
+                            {isOperationPending() ? 'Working...' : 'Stop'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="info"
+                            onClick={() => handleRestart(container.id)}
+                            disabled={isOperationPending()}
+                          >
+                            {isOperationPending() ? 'Working...' : 'Restart'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onViewLogs(container.id, getContainerName(container))}
+                          >
+                            View Logs
+                          </Button>
+                          {getServerFromContainerId(container.id) && (
+                            <Button
+                              size="sm"
+                              variant="warning"
+                              onClick={() => {
+                                const server = getServerFromContainerId(container.id);
+                                if (server) {
+                                  setRconServer(server);
+                                }
+                              }}
+                            >
+                              🎮 RCON
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      {getServerFromContainerId(container.id) && (
+                        <>
+                          {getServerFromContainerId(container.id)?.status === 'failed' && (
+                            <Button
+                              size="sm"
+                              variant="warning"
+                              onClick={() => {
+                                const server = getServerFromContainerId(container.id);
+                                if (server) {
+                                  handleEditServer(server);
+                                }
+                              }}
+                            >
+                              Edit & Retry
+                            </Button>
+                          )}
+                          {getServerFromContainerId(container.id)?.status === 'running' && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const server = getServerFromContainerId(container.id);
+                                if (server) {
+                                  handleRebuildServer(server.id, server.name);
+                                }
+                              }}
+                              disabled={rebuildServerMutation.isPending}
+                            >
+                              {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
                             onClick={() => {
                               const server = getServerFromContainerId(container.id);
                               if (server) {
-                                setRconServer(server);
+                                handleDeleteServer(server.id, server.name);
                               }
                             }}
-                            style={{
-                              padding: '0.25rem 0.75rem',
-                              backgroundColor: '#fd7e14',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.875rem',
-                              fontWeight: 'bold',
-                            }}
+                            disabled={deleteServerMutation.isPending}
                           >
-                            🎮 RCON
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {getServerFromContainerId(container.id) && (
-                      <>
-                        {getServerFromContainerId(container.id)?.status === 'failed' && (
-                          <button
-                            onClick={() => {
-                              const server = getServerFromContainerId(container.id);
-                              if (server) {
-                                handleEditServer(server);
-                              }
-                            }}
-                            style={{
-                              padding: '0.25rem 0.75rem',
-                              backgroundColor: '#ffc107',
-                              color: '#000',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.875rem',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            Edit & Retry
-                          </button>
-                        )}
-                        {getServerFromContainerId(container.id)?.status === 'running' && (
-                          <button
-                            onClick={() => {
-                              const server = getServerFromContainerId(container.id);
-                              if (server) {
-                                handleRebuildServer(server.id, server.name);
-                              }
-                            }}
-                            disabled={rebuildServerMutation.isPending}
-                            style={{
-                              padding: '0.25rem 0.75rem',
-                              backgroundColor: '#007bff',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: rebuildServerMutation.isPending ? 'not-allowed' : 'pointer',
-                              fontSize: '0.875rem',
-                              opacity: rebuildServerMutation.isPending ? 0.6 : 1,
-                            }}
-                          >
-                            {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            const server = getServerFromContainerId(container.id);
-                            if (server) {
-                              handleDeleteServer(server.id, server.name);
-                            }
-                          }}
-                          disabled={deleteServerMutation.isPending}
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            backgroundColor: '#dc3545',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
-                            fontSize: '0.875rem',
-                            opacity: deleteServerMutation.isPending ? 0.6 : 1,
-                          }}
-                        >
-                          {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {operationStatus && operationStatus.containerId === container.id && (
-                    <div
-                      style={{
-                        marginTop: '0.5rem',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        backgroundColor:
-                          operationStatus.type === 'success' ? '#d4edda' : '#f8d7da',
-                        color: operationStatus.type === 'success' ? '#155724' : '#721c24',
-                      }}
-                    >
-                      {operationStatus.message}
+                            {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
+                          </Button>
+                        </>
+                      )}
                     </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    {operationStatus && operationStatus.containerId === container.id && (
+                      <Alert variant={operationStatus.type === 'success' ? 'success' : 'destructive'} className="mt-2">
+                        <AlertDescription className="text-xs">{operationStatus.message}</AlertDescription>
+                      </Alert>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* All Servers Section */}
       {serversData && serversData.servers.length > 0 && (
-        <div style={{ marginTop: '3rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2>All Servers (Manager Database)</h2>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+        <div className="mt-12">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">All Servers (Manager Database)</h2>
+            <div className="flex gap-4 items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showDeletedServers}
@@ -904,392 +747,229 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                 />
                 Show Deleted Servers
               </label>
-              <button
+              <Button
+                variant="info"
                 onClick={handleSyncServers}
                 disabled={syncServersMutation.isPending}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#17a2b8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: syncServersMutation.isPending ? 'not-allowed' : 'pointer',
-                  opacity: syncServersMutation.isPending ? 0.6 : 1,
-                }}
               >
                 {syncServersMutation.isPending ? '🔄 Syncing...' : '🔄 Sync Status'}
-              </button>
+              </Button>
             </div>
           </div>
 
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              marginTop: '1rem',
-              backgroundColor: 'white',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: '#f8f9fa' }}>
-                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  Server Name
-                </th>
-                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  Status
-                </th>
-                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  Ports (Game/UDP)
-                </th>
-                <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {serversData.servers
-                .filter((server) => showDeletedServers || server.status !== 'deleted')
-                .map((server) => {
-                  const badge = getServerStatusBadge(server);
-                  return (
-                    <tr key={server.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '1rem' }}>
-                        <strong>{server.name}</strong>
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        <span
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '4px',
-                            backgroundColor: badge.bg,
-                            color: 'white',
-                            fontSize: '0.875rem',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {badge.text}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        {server.game_port}/{server.udp_port}
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          {/* Running: Stop, Rebuild, Delete */}
-                          {server.status === 'running' && (
-                            <>
-                              <button
-                                onClick={() => handleServerStop(server.id, server.name)}
-                                disabled={stopServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#ffc107',
-                                  color: '#000',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: stopServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Stop
-                              </button>
-                              <button
-                                onClick={() => handleRebuildServer(server.id, server.name)}
-                                disabled={rebuildServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#17a2b8',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: rebuildServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Rebuild
-                              </button>
-                              <button
-                                onClick={() => handleDeleteServer(server.id, server.name)}
-                                disabled={deleteServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#dc3545',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Server Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Ports (Game/UDP)</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {serversData.servers
+                  .filter((server) => showDeletedServers || server.status !== 'deleted')
+                  .map((server) => {
+                    const badge = getServerStatusBadge(server);
+                    return (
+                      <TableRow key={server.id}>
+                        <TableCell className="font-semibold">{server.name}</TableCell>
+                        <TableCell>
+                          <Badge variant={badge.variant}>{badge.text}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {server.game_port}/{server.udp_port}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2 flex-wrap">
+                            {/* Running: Stop, Rebuild, Delete */}
+                            {server.status === 'running' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="warning"
+                                  onClick={() => handleServerStop(server.id, server.name)}
+                                  disabled={stopServerMutation.isPending}
+                                >
+                                  Stop
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="info"
+                                  onClick={() => handleRebuildServer(server.id, server.name)}
+                                  disabled={rebuildServerMutation.isPending}
+                                >
+                                  Rebuild
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteServer(server.id, server.name)}
+                                  disabled={deleteServerMutation.isPending}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
 
-                          {/* Stopped: Start, Delete */}
-                          {server.status === 'stopped' && (
-                            <>
-                              <button
-                                onClick={() => handleServerStart(server.id, server.name)}
-                                disabled={startServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#28a745',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: startServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Start
-                              </button>
-                              <button
-                                onClick={() => handleDeleteServer(server.id, server.name)}
-                                disabled={deleteServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#dc3545',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: deleteServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
+                            {/* Stopped: Start, Delete */}
+                            {server.status === 'stopped' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleServerStart(server.id, server.name)}
+                                  disabled={startServerMutation.isPending}
+                                >
+                                  Start
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteServer(server.id, server.name)}
+                                  disabled={deleteServerMutation.isPending}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
 
-                          {/* Missing + Data Exists: Start (Recovery), Purge */}
-                          {server.status === 'missing' && server.data_exists && (
-                            <>
-                              <button
-                                onClick={() => handleServerStart(server.id, server.name)}
-                                disabled={startServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#28a745',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: startServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                  fontWeight: 'bold',
-                                }}
-                              >
-                                ▶️ Start (Recovery)
-                              </button>
-                              <button
-                                onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                            {/* Missing + Data Exists: Start (Recovery), Purge */}
+                            {server.status === 'missing' && server.data_exists && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleServerStart(server.id, server.name)}
+                                  disabled={startServerMutation.isPending}
+                                  className="font-bold"
+                                >
+                                  ▶️ Start (Recovery)
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                  disabled={purgeServerMutation.isPending}
+                                >
+                                  🗑️ Purge
+                                </Button>
+                              </>
+                            )}
+
+                            {/* Missing + No Data: Purge Only */}
+                            {server.status === 'missing' && !server.data_exists && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleServerPurge(server.id, server.name, false)}
                                 disabled={purgeServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#6c757d',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
                               >
-                                🗑️ Purge
-                              </button>
-                            </>
-                          )}
+                                🗑️ Purge (Orphaned)
+                              </Button>
+                            )}
 
-                          {/* Missing + No Data: Purge Only */}
-                          {server.status === 'missing' && !server.data_exists && (
-                            <button
-                              onClick={() => handleServerPurge(server.id, server.name, false)}
-                              disabled={purgeServerMutation.isPending}
-                              style={{
-                                padding: '0.375rem 0.75rem',
-                                backgroundColor: '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                fontSize: '0.875rem',
-                              }}
-                            >
-                              🗑️ Purge (Orphaned)
-                            </button>
-                          )}
+                            {/* Deleted: Restore, Purge Now */}
+                            {server.status === 'deleted' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="info"
+                                  onClick={() => handleServerRestore(server.id, server.name)}
+                                  disabled={restoreServerMutation.isPending}
+                                >
+                                  ↩️ Restore
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                  disabled={purgeServerMutation.isPending}
+                                >
+                                  🗑️ Purge Now
+                                </Button>
+                              </>
+                            )}
 
-                          {/* Deleted: Restore, Purge Now */}
-                          {server.status === 'deleted' && (
-                            <>
-                              <button
-                                onClick={() => handleServerRestore(server.id, server.name)}
-                                disabled={restoreServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#17a2b8',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: restoreServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                ↩️ Restore
-                              </button>
-                              <button
-                                onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                disabled={purgeServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#dc3545',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                🗑️ Purge Now
-                              </button>
-                            </>
-                          )}
+                            {/* Failed: Edit & Retry, Purge */}
+                            {server.status === 'failed' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditServer(server);
+                                    setShowServerForm(true);
+                                  }}
+                                >
+                                  Edit & Retry
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleServerPurge(server.id, server.name, true)}
+                                  disabled={purgeServerMutation.isPending}
+                                >
+                                  🗑️ Purge
+                                </Button>
+                              </>
+                            )}
 
-                          {/* Failed: Edit & Retry, Purge */}
-                          {server.status === 'failed' && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditServer(server);
-                                  setShowServerForm(true);
-                                }}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#007bff',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                Edit & Retry
-                              </button>
-                              <button
-                                onClick={() => handleServerPurge(server.id, server.name, true)}
-                                disabled={purgeServerMutation.isPending}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: '#dc3545',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.875rem',
-                                }}
-                              >
-                                🗑️ Purge
-                              </button>
-                            </>
-                          )}
-
-                          {/* Creating/Deleting: No actions */}
-                          {(server.status === 'creating' || server.status === 'deleting') && (
-                            <span style={{ color: '#6c757d', fontSize: '0.875rem', fontStyle: 'italic' }}>
-                              Operation in progress...
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+                            {/* Creating/Deleting: No actions */}
+                            {(server.status === 'creating' || server.status === 'deleting') && (
+                              <span className="text-sm text-muted-foreground italic">
+                                Operation in progress...
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          </div>
 
           {serversData.servers.filter((s) => s.status === 'deleted').length > 0 && !showDeletedServers && (
-            <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '0.875rem', color: '#6c757d' }}>
+            <div className="mt-4 p-3 bg-muted rounded-md text-sm text-muted-foreground">
               💡 {serversData.servers.filter((s) => s.status === 'deleted').length} deleted server(s) hidden. Check "Show Deleted Servers" to view them.
             </div>
           )}
         </div>
       )}
 
-      {/* Purge Confirmation Modal */}
-      {confirmPurge && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '8px',
-            maxWidth: '500px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-          }}>
-            <h3 style={{ marginTop: 0, color: '#dc3545' }}>⚠️ Permanent Deletion</h3>
-            <p>
-              You are about to permanently delete server <strong>"{confirmPurge.serverName}"</strong>.
-            </p>
-            <p style={{ marginBottom: '1.5rem' }}>
+      {/* Purge Confirmation Dialog */}
+      <Dialog open={!!confirmPurge} onOpenChange={() => setConfirmPurge(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">⚠️ Permanent Deletion</DialogTitle>
+            <DialogDescription>
+              You are about to permanently delete server <strong>"{confirmPurge?.serverName}"</strong>.
+              <br /><br />
               This action cannot be undone. The server record will be removed from the database.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setConfirmPurge(null)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, false)}
-                disabled={purgeServerMutation.isPending}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#ffc107',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                }}
-              >
-                Keep Data & Purge
-              </button>
-              <button
-                onClick={() => handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, true)}
-                disabled={purgeServerMutation.isPending}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: purgeServerMutation.isPending ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold',
-                }}
-              >
-                {purgeServerMutation.isPending ? 'Purging...' : 'Remove Data & Purge'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="secondary" onClick={() => setConfirmPurge(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="warning"
+              onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, false)}
+              disabled={purgeServerMutation.isPending}
+            >
+              Keep Data & Purge
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, true)}
+              disabled={purgeServerMutation.isPending}
+            >
+              {purgeServerMutation.isPending ? 'Purging...' : 'Remove Data & Purge'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showServerForm && (
         <ServerForm
