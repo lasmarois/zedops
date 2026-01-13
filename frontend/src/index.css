@@ -3,79 +3,59 @@
 @tailwind utilities;
 
 :root {
-  /* Base colors */
-  --background: 0 0% 100%;
-  --foreground: 210 11% 15%;
+  /* Midnight Blue Theme - Dark Only */
+  /* Base Colors - Pronounced midnight blue, not black */
+  --background: 220 45% 12%;        /* #0C1628 - Main app background */
+  --foreground: 210 40% 98%;        /* #F8FAFC - Primary text */
 
   /* Card */
-  --card: 0 0% 100%;
-  --card-foreground: 210 11% 15%;
+  --card: 220 40% 16%;              /* #151F33 - Card/panel backgrounds */
+  --card-foreground: 210 40% 98%;
 
   /* Popover */
-  --popover: 0 0% 100%;
-  --popover-foreground: 210 11% 15%;
+  --popover: 220 40% 16%;           /* #151F33 - Dropdown/modal backgrounds */
+  --popover-foreground: 210 40% 98%;
 
-  /* Primary (Bootstrap blue #007bff) */
-  --primary: 211 100% 50%;
-  --primary-foreground: 0 0% 100%;
+  /* Primary Accent - Bright blue for actions */
+  --primary: 217 91% 60%;           /* #3B82F6 - Buttons, links, focus */
+  --primary-foreground: 220 45% 12%; /* Dark text on bright buttons */
 
-  /* Secondary (Bootstrap gray #6c757d) */
-  --secondary: 210 7% 46%;
-  --secondary-foreground: 0 0% 100%;
+  /* Secondary - Subtle backgrounds */
+  --secondary: 217 32% 20%;         /* #1F2937 - Hover states, secondary buttons */
+  --secondary-foreground: 210 40% 98%;
 
-  /* Muted (light gray backgrounds) */
-  --muted: 210 17% 98%;
-  --muted-foreground: 210 7% 46%;
+  /* Muted - Very subtle elements */
+  --muted: 217 32% 18%;             /* #1A2332 - Disabled backgrounds */
+  --muted-foreground: 215 20% 70%;  /* #9CA3AF - Subtle text */
 
-  /* Accent (subtle highlight) */
-  --accent: 210 17% 95%;
-  --accent-foreground: 210 11% 15%;
+  /* Accent - Special highlights */
+  --accent: 217 32% 20%;            /* #1F2937 - Accent areas */
+  --accent-foreground: 210 40% 98%;
 
-  /* Destructive (Bootstrap danger #dc3545) */
-  --destructive: 354 70% 54%;
-  --destructive-foreground: 0 0% 100%;
+  /* Destructive - Danger actions */
+  --destructive: 0 84% 60%;         /* #DC2626 - Delete/danger buttons */
+  --destructive-foreground: 210 40% 98%;
 
-  /* Success (Bootstrap success #28a745) */
-  --success: 134 61% 41%;
-  --success-foreground: 0 0% 100%;
+  /* Semantic Status Colors (Text-Only) */
+  --success: 142 76% 60%;           /* #34D399 - Green for success/online */
+  --warning: 38 92% 60%;            /* #FBBF24 - Amber for warnings */
+  --error: 0 84% 65%;               /* #EF4444 - Red for errors/offline */
+  --info: 199 89% 60%;              /* #22D3EE - Cyan for info */
 
-  /* Warning (Bootstrap warning #ffc107) */
-  --warning: 45 100% 51%;
-  --warning-foreground: 210 11% 15%;
+  /* Borders & Inputs */
+  --border: 217 32% 30%;            /* #374151 - Visible borders */
+  --input: 217 32% 30%;             /* Input borders */
+  --ring: 217 91% 60%;              /* Focus ring (matches primary) */
 
-  /* Info (Bootstrap info #17a2b8) */
-  --info: 188 78% 41%;
-  --info-foreground: 0 0% 100%;
-
-  /* Borders and inputs */
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 211 100% 50%;
+  /* Chart/Graph Colors (Future) */
+  --chart-1: 217 91% 60%;           /* Blue */
+  --chart-2: 142 76% 60%;           /* Green */
+  --chart-3: 38 92% 60%;            /* Amber */
+  --chart-4: 280 87% 65%;           /* Purple */
+  --chart-5: 340 82% 60%;           /* Pink */
 
   /* Border radius */
-  --radius: 0.375rem;
-}
-
-.dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 48%;
+  --radius: 0.5rem;                 /* 8px - default for cards, inputs, buttons */
 }
 
 * {

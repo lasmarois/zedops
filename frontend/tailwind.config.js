@@ -14,11 +14,9 @@ export default {
     'bg-destructive',
     'bg-destructive-foreground',
     'bg-success',
-    'bg-success-foreground',
     'bg-warning',
-    'bg-warning-foreground',
+    'bg-error',
     'bg-info',
-    'bg-info-foreground',
     'bg-accent',
     'bg-accent-foreground',
     'bg-muted',
@@ -30,19 +28,15 @@ export default {
     'text-destructive',
     'text-destructive-foreground',
     'text-success',
-    'text-success-foreground',
     'text-warning',
-    'text-warning-foreground',
+    'text-error',
     'text-info',
-    'text-info-foreground',
     'text-accent-foreground',
     'text-muted-foreground',
     'hover:bg-primary/90',
     'hover:bg-secondary/80',
     'hover:bg-destructive/90',
-    'hover:bg-success/90',
-    'hover:bg-warning/90',
-    'hover:bg-info/90',
+    'hover:bg-accent/80',
   ],
   theme: {
     container: {
@@ -73,15 +67,15 @@ export default {
         },
         success: {
           DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
-          foreground: "hsl(var(--warning-foreground))",
+        },
+        error: {
+          DEFAULT: "hsl(var(--error))",
         },
         info: {
           DEFAULT: "hsl(var(--info))",
-          foreground: "hsl(var(--info-foreground))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
