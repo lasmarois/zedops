@@ -1245,3 +1245,24 @@ User noticed task_plan.md and MILESTONES.md had inconsistencies:
 
 **Time Spent:** ~30 minutes (planning files review and updates)
 
+
+---
+
+## 2026-01-12 Late Evening - Documentation Deferred
+
+**Decision:** Defer Phase 8 (Documentation) to future milestone
+
+**Rationale:**
+- Product still evolving rapidly (M7.5 UI styling, M8 agent deployment pending)
+- Better to document once features are stable and complete
+- Current deployment guides sufficient for now (QUICK-START-RBAC.md, DEPLOYMENT-RBAC.md)
+
+**Updated Planning:**
+- Phase 8 marked as "⏳ deferred" in task_plan.md
+- Documentation will be comprehensive milestone after M8 complete
+- Focus on completing core product features first
+
+**M7 Status:** ✅ Fully complete (Phases 0-7)
+
+**Next Focus:** M7.5 (UI Styling & Design System) or address reminders
+

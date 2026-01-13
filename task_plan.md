@@ -32,7 +32,7 @@
 | 6. Audit Logging Completion | ✅ complete | Add audit logs for all server operations + RCON + API endpoint | 2 hours |
 | 6.5. RCON Console Fix | ✅ complete | Fixed WebSocket auth middleware conflict | 30 min |
 | 7. Testing & Verification | ✅ complete | Test all role scenarios with 4-role RBAC | 2 hours |
-| 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
+| 8. Documentation | ⏳ deferred | Update API docs, role model docs (deferred to future milestone) | TBD |
 
 ---
 
@@ -619,14 +619,22 @@ VALUES (
 
 ---
 
-## Phase 8: Documentation ⏳ Planned
+## Phase 8: Documentation ⏳ Deferred
 
-**Status:** ⏳ planned
+**Status:** ⏳ deferred to future milestone
 
-**Goals:**
-- Update API documentation
-- Document permission model
-- Update deployment guides
+**Decision:** Defer comprehensive documentation until after M7.5 (UI Styling) and M8 (Agent Deployment) are complete
+
+**Rationale:**
+- Product is still evolving rapidly
+- Better to document once features are stable
+- Current deployment guides (QUICK-START-RBAC.md, DEPLOYMENT-RBAC.md) are sufficient for now
+
+**Goals (when resumed):**
+- Update API documentation with all endpoints
+- Document permission model (4-role RBAC)
+- Update deployment guides with final product state
+- Create user guide documentation
 
 ### 8.1 Update API Documentation
 
@@ -750,7 +758,9 @@ M7 Phase 2 completion requirements:
 - [ ] **Documentation is updated** (API docs, role model docs, deployment guides) ⏳ Phase 8
 - [x] **Architectural decisions documented** (in progress.md, findings.md, and ISSUE file) ✅
 
-**Phase 2 Status:** ✅ COMPLETE (except documentation - Phase 8)
+**Phase 2 Status:** ✅ COMPLETE
+
+**Documentation Note:** Phase 8 (Documentation) deferred to future milestone after more features are complete
 
 ---
 

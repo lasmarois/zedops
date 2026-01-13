@@ -520,6 +520,7 @@ Deferred until after core product features are complete and UI is styled. Agent 
 
 **Deferred:**
 - **Milestone 8** - Agent Deployment & Polish (installation automation)
+- **Documentation** - Comprehensive API and user documentation (after M8 complete)
 
 **Current Planning:** M7 fully complete and deployed! Ready for UI styling phase.
 
