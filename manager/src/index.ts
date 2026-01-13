@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { AgentConnection } from './durable-objects/AgentConnection';
 import { admin } from './routes/admin';
 import { agents } from './routes/agents';
+import { servers } from './routes/servers';
 import { auth } from './routes/auth';
 import { users } from './routes/users';
 import { invitations } from './routes/invitations';
@@ -44,6 +45,7 @@ app.route('/api/role-assignments', roleAssignments); // New role-based system
 app.route('/api/audit', audit); // Audit logs
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
+app.route('/api/servers', servers); // Global server endpoints
 
 /**
  * WebSocket endpoint - Routes to AgentConnection Durable Object

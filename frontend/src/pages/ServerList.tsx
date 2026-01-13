@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAgents } from "@/hooks/useAgents"
+import { useAllServers } from "@/hooks/useServers"
 import { Plus, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -24,16 +24,23 @@ interface ServerWithAgent {
 
 export function ServerList() {
   const navigate = useNavigate()
-  const { isLoading: agentsLoading } = useAgents()
+  const { data: serversData, isLoading } = useAllServers()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
 
-  // Fetch servers for each agent and combine them
-  const allServers: ServerWithAgent[] = []
-
-  // This is a placeholder - in reality we'd need to fetch servers for each agent
-  // For now, showing empty state until global server API is implemented
-  // TODO: Implement global server fetching in Phase 4
+  // Map API data to component format
+  const allServers: ServerWithAgent[] = serversData?.servers?.map((server: any) => ({
+    id: server.id,
+    name: server.name,
+    status: server.status,
+    agentId: server.agent_id,
+    agentName: server.agent_name,
+    gamePort: server.game_port,
+    udpPort: server.udp_port,
+    rconPort: server.rcon_port,
+    imageTag: server.image_tag,
+    createdAt: server.created_at,
+  })) || []
 
   // Filter servers
   const filteredServers = allServers.filter(server => {
@@ -42,8 +49,6 @@ export function ServerList() {
     const matchesStatus = statusFilter === "all" || server.status === statusFilter
     return matchesSearch && matchesStatus
   })
-
-  const isLoading = agentsLoading
 
   return (
     <div className="p-8 space-y-6">

@@ -16,7 +16,65 @@ import {
   syncServers,
   type CreateServerRequest,
 } from '../lib/api';
+import { getToken } from '../lib/auth';
 import { useUser } from '../contexts/UserContext';
+
+/**
+ * Hook to fetch ALL servers across all agents (global view)
+ */
+export function useAllServers() {
+  const { isAuthenticated } = useUser();
+
+  return useQuery({
+    queryKey: ['servers', 'all'],
+    queryFn: async () => {
+      const token = getToken();
+      const response = await fetch('/api/servers', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch servers');
+      }
+
+      return response.json();
+    },
+    enabled: isAuthenticated,
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+  });
+}
+
+/**
+ * Hook to fetch a single server by ID (global endpoint)
+ */
+export function useServerById(serverId: string | null) {
+  const { isAuthenticated } = useUser();
+
+  return useQuery({
+    queryKey: ['server', serverId],
+    queryFn: async () => {
+      const token = getToken();
+      const response = await fetch(`/api/servers/${serverId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Server not found');
+        }
+        throw new Error('Failed to fetch server');
+      }
+
+      return response.json();
+    },
+    enabled: isAuthenticated && !!serverId,
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+  });
+}
 
 /**
  * Hook to fetch servers for a specific agent

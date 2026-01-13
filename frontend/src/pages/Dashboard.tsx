@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { ActivityTimeline, type ActivityEvent } from "@/components/ui/activity-timeline"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgents } from "@/hooks/useAgents"
+import { useAllServers } from "@/hooks/useServers"
 import { useUsers } from "@/hooks/useUsers"
 import { useAuditLogs } from "@/hooks/useAuditLogs"
 import { Server, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
@@ -14,6 +15,7 @@ import { formatDistanceToNow } from "date-fns"
 export function Dashboard() {
   const navigate = useNavigate()
   const { data: agentsData, isLoading: agentsLoading } = useAgents()
+  const { data: serversData, isLoading: serversLoading } = useAllServers()
   const { data: usersData, isLoading: usersLoading } = useUsers()
   const { data: auditLogsData, isLoading: auditLoading } = useAuditLogs({ pageSize: 10 })
 
@@ -23,8 +25,8 @@ export function Dashboard() {
   const offlineAgents = totalAgents - onlineAgents
 
   // Count total servers across all agents
-  const totalServers = 0 // TODO: Implement when global server list is available
-  const runningServers = 0 // TODO: Implement
+  const totalServers = serversData?.count || 0
+  const runningServers = serversData?.servers?.filter((s: any) => s.status === 'running').length || 0
 
   const totalUsers = usersData?.users.length || 0
 
@@ -110,19 +112,25 @@ export function Dashboard() {
             <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalServers}</div>
-            <div className="mt-2 space-y-1">
-              <div className="text-sm text-success">{runningServers} running</div>
-              <div className="text-sm text-muted-foreground">{totalServers - runningServers} stopped</div>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="mt-4 w-full"
-              onClick={() => navigate('/servers')}
-            >
-              View All →
-            </Button>
+            {serversLoading ? (
+              <Skeleton className="h-9 w-12" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold">{totalServers}</div>
+                <div className="mt-2 space-y-1">
+                  <div className="text-sm text-success">{runningServers} running</div>
+                  <div className="text-sm text-muted-foreground">{totalServers - runningServers} stopped</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="mt-4 w-full"
+                  onClick={() => navigate('/servers')}
+                >
+                  View All →
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 

@@ -7,17 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogViewer } from "@/components/LogViewer"
 import { RconTerminal } from "@/components/RconTerminal"
+import { useServerById } from "@/hooks/useServers"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 
 export function ServerDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-
-  // TODO: Fetch server data from API
-  const isLoading = false
-
-  // Suppress unused variable warnings (TODO: use when API is implemented)
-  void id; void navigate;
+  const { data: serverData, isLoading, error } = useServerById(id || null)
 
   if (isLoading) {
     return (
@@ -29,20 +25,42 @@ export function ServerDetail() {
     )
   }
 
-  // Placeholder data for development (TODO: Replace with real API data)
-  const serverId = "server-123"
-  const serverName = "jeanguy"
-  const agentName = "maestroserver"
-  const agentId = "agent-123"
-  const status = "running" as 'running' | 'stopped' | 'failed' // Can be running, stopped, or failed
-  const uptime = "2d 4h 23m"
-  const players = { current: 5, max: 32 }
-  const cpuPercent = 15
-  const memoryUsedGB = 1.2
-  const diskUsedGB = 4.1
-  const containerID = "container-123"
-  const rconPort = 27015
-  const rconPassword = "placeholder"
+  if (error || !serverData?.server) {
+    return (
+      <div className="p-8 space-y-6">
+        <div className="text-center py-16">
+          <h2 className="text-2xl font-bold text-error">Server Not Found</h2>
+          <p className="text-muted-foreground mt-2">
+            The server you're looking for doesn't exist or you don't have access to it.
+          </p>
+          <Button className="mt-6" onClick={() => navigate('/servers')}>
+            Back to Servers
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Extract server data from API response
+  const server = serverData.server
+  const serverId = server.id
+  const serverName = server.name
+  const agentName = server.agent_name
+  const agentId = server.agent_id
+  const status = server.status as 'running' | 'stopped' | 'failed'
+  const containerID = server.container_id || ''
+  const rconPort = server.rcon_port
+
+  // Parse config to get RCON password
+  const config = server.config ? JSON.parse(server.config) : {}
+  const rconPassword = config.SERVER_RCON_PASSWORD || ''
+
+  // Placeholder for metrics (TODO: Get from agent metrics)
+  const uptime = "N/A" // TODO: Calculate from container start time
+  const players = { current: 0, max: 32 } // TODO: Get from RCON
+  const cpuPercent = 0 // TODO: Get from agent metrics
+  const memoryUsedGB = 0 // TODO: Get from agent metrics
+  const diskUsedGB = 0 // TODO: Get from agent metrics
 
   return (
     <div className="p-8 space-y-6">
