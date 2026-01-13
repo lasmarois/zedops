@@ -242,3 +242,58 @@ frontend/src/
 
 **Time Spent:** 30 minutes
 
+
+---
+
+## 2026-01-12 Late Evening - Phase 0 Cleanup: Root Directory Files
+
+**Status:** Phase 0 cleanup (discovered after Phase 0.3 completion)
+
+**Issue Discovered:**
+User noticed unexpected files in project root:
+- `node_modules/` (57MB)
+- `src/components/ui/` (empty directory)
+- `package.json` with Radix UI dependencies
+- `package-lock.json`
+
+**Root Cause:**
+During Phase 0.3, some npm install commands were executed from project root (`/Volumes/Data/docker_composes/zedops`) instead of frontend directory (`/Volumes/Data/docker_composes/zedops/frontend`). This created duplicate package files in the wrong location.
+
+**Verification:**
+- ✅ Frontend has correct dependencies (clsx, tailwind-merge, react, etc.)
+- ❌ Frontend missing Radix UI packages (@radix-ui/react-*)
+- ❌ Radix packages only exist in root node_modules/
+
+**Resolution Plan:**
+1. Install Radix UI packages in correct location (frontend/node_modules/)
+2. Verify frontend build still works
+3. Remove duplicate files from root directory
+4. Commit cleanup
+
+**Work Done:**
+- ✅ Identified misplaced files in root
+- ✅ Verified frontend package.json structure
+- ✅ Installed Radix UI packages in frontend/ (51 packages added)
+- ✅ Verified build successful (bundle size unchanged)
+- ✅ Removed duplicate files from root:
+  - node_modules/ (57MB)
+  - src/components/ui/
+  - package.json
+  - package-lock.json
+- ✅ Final build test: PASSED ✅
+
+**Verification:**
+- frontend/package.json now has all dependencies:
+  - @radix-ui/react-dialog, react-label, react-select, react-slot
+  - class-variance-authority
+  - lucide-react
+- Build output: 25.53 kB CSS, 661.81 kB JS (matches Phase 0.3)
+- All shadcn components functional
+
+**Next Steps:**
+- Commit cleanup work
+- Phase 0 officially COMPLETE!
+- Begin Phase 1: Design System
+
+**Time Spent:** 25 minutes (investigation + cleanup + verification)
+
