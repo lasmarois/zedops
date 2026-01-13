@@ -13,6 +13,26 @@ import {
 } from '../hooks/useUsers';
 import { useAgents } from '../hooks/useAgents';
 import type { UserAccount, RoleAssignment } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface RoleAssignmentsManagerProps {
   user: UserAccount;
@@ -117,367 +137,224 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
     return roleNames[role] || role;
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, string> = {
-      'agent-admin': '#28a745',
-      'operator': '#007bff',
-      'viewer': '#6c757d',
+  const getRoleBadgeVariant = (role: string): 'success' | 'default' | 'secondary' => {
+    const variants: Record<string, 'success' | 'default' | 'secondary'> = {
+      'agent-admin': 'success',
+      'operator': 'default',
+      'viewer': 'secondary',
     };
-    return colors[role] || '#6c757d';
+    return variants[role] || 'secondary';
   };
 
   if (isLoading) {
-    return <div style={{ padding: '2rem' }}>Loading role assignments...</div>;
+    return <div className="p-8">Loading role assignments...</div>;
   }
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', color: '#dc3545' }}>
-        Error: {error.message}
-        <br />
-        <button
-          onClick={onBack}
-          style={{
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Error: {error.message}</AlertDescription>
+        </Alert>
+        <Button variant="secondary" onClick={onBack}>
           Back
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
-        }}
-      >
-        <div>
-          <button
-            onClick={onBack}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginRight: '1rem',
-            }}
-          >
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" onClick={onBack}>
             ← Back
-          </button>
-          <h1 style={{ display: 'inline' }}>Role Assignments for {user.email}</h1>
+          </Button>
+          <h1 className="text-3xl font-bold">Role Assignments for {user.email}</h1>
         </div>
-        <button
+        <Button
           onClick={() => {
             setShowGrantForm(!showGrantForm);
             setMessage(null);
           }}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
         >
           {showGrantForm ? 'Cancel' : '+ Grant Role'}
-        </button>
+        </Button>
       </div>
 
       {/* System Role Badge */}
       {data?.user.systemRole === 'admin' && (
-        <div
-          style={{
-            padding: '1rem',
-            marginBottom: '1rem',
-            backgroundColor: '#d4edda',
-            color: '#155724',
-            border: '1px solid #c3e6cb',
-            borderRadius: '4px',
-          }}
-        >
-          <strong>System Admin:</strong> This user has global admin access and bypasses all permission checks.
-          Role assignments are not needed.
-        </div>
+        <Alert variant="success" className="mb-4">
+          <AlertDescription>
+            <strong>System Admin:</strong> This user has global admin access and bypasses all permission checks.
+            Role assignments are not needed.
+          </AlertDescription>
+        </Alert>
       )}
 
       {message && (
-        <div
-          style={{
-            padding: '1rem',
-            marginBottom: '1rem',
-            backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-            color: message.type === 'success' ? '#155724' : '#721c24',
-            border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-            borderRadius: '4px',
-          }}
-        >
-          {message.text}
-        </div>
+        <Alert variant={message.type === 'success' ? 'success' : 'destructive'} className="mb-4">
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
       )}
 
       {showGrantForm && (
-        <div
-          style={{
-            backgroundColor: '#2d2d2d',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Grant New Role Assignment</h2>
-          <form onSubmit={handleGrantRoleAssignment}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                htmlFor="role"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+        <div className="bg-[#2d2d2d] p-6 rounded-lg mb-8">
+          <h2 className="text-xl font-bold mb-4 mt-0">Grant New Role Assignment</h2>
+          <form onSubmit={handleGrantRoleAssignment} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-gray-300">
                 Role
-              </label>
-              <select
-                id="role"
+              </Label>
+              <Select
                 value={role}
-                onChange={(e) => {
-                  setRole(e.target.value as 'agent-admin' | 'operator' | 'viewer');
+                onValueChange={(val) => {
+                  setRole(val as 'agent-admin' | 'operator' | 'viewer');
                   // Reset scope if agent-admin (must be agent scope)
-                  if (e.target.value === 'agent-admin' && scope !== 'agent') {
+                  if (val === 'agent-admin' && scope !== 'agent') {
                     setScope('agent');
                   }
                 }}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
               >
-                <option value="viewer">Viewer (read-only)</option>
-                <option value="operator">Operator (control + RCON)</option>
-                <option value="agent-admin">Agent Admin (full control of agent)</option>
-              </select>
-              <small style={{ color: '#888', display: 'block', marginTop: '0.25rem' }}>
+                <SelectTrigger id="role" className="bg-[#1a1a1a] border-[#444] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                  <SelectItem value="operator">Operator (control + RCON)</SelectItem>
+                  <SelectItem value="agent-admin">Agent Admin (full control of agent)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
                 {role === 'viewer' && 'Can view servers and logs'}
                 {role === 'operator' && 'Can start/stop/restart servers and use RCON'}
                 {role === 'agent-admin' && 'Can create/delete servers on assigned agent'}
-              </small>
+              </p>
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                htmlFor="scope"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+            <div className="space-y-2">
+              <Label htmlFor="scope" className="text-gray-300">
                 Scope
-              </label>
-              <select
-                id="scope"
+              </Label>
+              <Select
                 value={scope}
-                onChange={(e) => {
-                  setScope(e.target.value as 'global' | 'agent' | 'server');
+                onValueChange={(val) => {
+                  setScope(val as 'global' | 'agent' | 'server');
                   setResourceId('');
                 }}
                 disabled={role === 'agent-admin'}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: role === 'agent-admin' ? '#333' : '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                  cursor: role === 'agent-admin' ? 'not-allowed' : 'pointer',
-                }}
               >
-                <option value="global">Global (all agents & servers)</option>
-                <option value="agent">Agent (all servers on agent)</option>
-                <option value="server">Server (specific server only)</option>
-              </select>
+                <SelectTrigger
+                  id="scope"
+                  className="bg-[#1a1a1a] border-[#444] text-white"
+                  disabled={role === 'agent-admin'}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Global (all agents & servers)</SelectItem>
+                  <SelectItem value="agent">Agent (all servers on agent)</SelectItem>
+                  <SelectItem value="server">Server (specific server only)</SelectItem>
+                </SelectContent>
+              </Select>
               {role === 'agent-admin' && (
-                <small style={{ color: '#ffc107', display: 'block', marginTop: '0.25rem' }}>
+                <p className="text-xs text-warning">
                   agent-admin role can only be assigned at agent scope
-                </small>
+                </p>
               )}
             </div>
 
             {scope !== 'global' && (
-              <div style={{ marginBottom: '1rem' }}>
-                <label
-                  htmlFor="resourceId"
-                  style={{
-                    display: 'block',
-                    marginBottom: '0.5rem',
-                    color: '#ccc',
-                  }}
-                >
+              <div className="space-y-2">
+                <Label htmlFor="resourceId" className="text-gray-300">
                   {scope === 'agent' ? 'Agent' : 'Server ID'}
-                </label>
+                </Label>
                 {scope === 'agent' ? (
-                  <select
-                    id="resourceId"
-                    value={resourceId}
-                    onChange={(e) => setResourceId(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '4px',
-                      color: '#fff',
-                    }}
-                  >
-                    <option value="">Select an agent...</option>
-                    {agentsData?.agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name} ({agent.id})
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={resourceId} onValueChange={setResourceId}>
+                    <SelectTrigger id="resourceId" className="bg-[#1a1a1a] border-[#444] text-white">
+                      <SelectValue placeholder="Select an agent..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agentsData?.agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name} ({agent.id})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
-                  <input
+                  <Input
                     id="resourceId"
                     type="text"
                     value={resourceId}
                     onChange={(e) => setResourceId(e.target.value)}
                     placeholder="Enter server ID"
                     required
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '4px',
-                      color: '#fff',
-                    }}
+                    className="bg-[#1a1a1a] border-[#444] text-white"
                   />
                 )}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={grantMutation.isPending}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: grantMutation.isPending ? '#6c757d' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: grantMutation.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
+            <Button type="submit" disabled={grantMutation.isPending}>
               {grantMutation.isPending ? 'Granting...' : 'Grant Role'}
-            </button>
+            </Button>
           </form>
         </div>
       )}
 
-      <div style={{ marginBottom: '1rem' }}>
-        <p style={{ color: '#888' }}>
+      <div className="mb-4">
+        <p className="text-muted-foreground">
           Total role assignments: {data?.roleAssignments.length || 0}
         </p>
       </div>
 
       {data?.roleAssignments && data.roleAssignments.length > 0 ? (
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            backgroundColor: '#2d2d2d',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: '#1a1a1a' }}>
-              <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Role</th>
-              <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Scope</th>
-              <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Resource</th>
-              <th style={{ padding: '1rem', textAlign: 'right', color: '#ccc' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.roleAssignments.map((assignment) => (
-              <tr key={assignment.id} style={{ borderTop: '1px solid #444' }}>
-                <td style={{ padding: '1rem' }}>
-                  <span
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      backgroundColor: getRoleBadgeColor(assignment.role),
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {formatRole(assignment.role)}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem', color: '#fff', textTransform: 'capitalize' }}>
-                  {assignment.scope}
-                </td>
-                <td style={{ padding: '1rem', color: '#fff' }}>{getResourceName(assignment)}</td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  <button
-                    onClick={() => handleRevokeRoleAssignment(assignment.id)}
-                    disabled={revokeMutation.isPending}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      backgroundColor: '#dc3545',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: revokeMutation.isPending ? 'not-allowed' : 'pointer',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Revoke
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Role</TableHead>
+                <TableHead>Scope</TableHead>
+                <TableHead>Resource</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.roleAssignments.map((assignment) => (
+                <TableRow key={assignment.id}>
+                  <TableCell>
+                    <Badge variant={getRoleBadgeVariant(assignment.role)}>
+                      {formatRole(assignment.role)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="capitalize">{assignment.scope}</TableCell>
+                  <TableCell>{getResourceName(assignment)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleRevokeRoleAssignment(assignment.id)}
+                      disabled={revokeMutation.isPending}
+                    >
+                      Revoke
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '2rem',
-            color: '#888',
-            backgroundColor: '#2d2d2d',
-            borderRadius: '8px',
-          }}
-        >
+        <div className="text-center p-8 bg-muted rounded-md">
           No role assignments yet. Click "Grant Role" to add one.
           {data?.user.systemRole !== 'admin' && (
             <>
               <br />
               <br />
-              <small style={{ color: '#ffc107' }}>
+              <span className="text-sm text-warning">
                 This user has no access until roles are assigned.
-              </small>
+              </span>
             </>
           )}
         </div>
