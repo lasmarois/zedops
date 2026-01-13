@@ -37,12 +37,62 @@
    - Phase 6: Design Assets & Handoff
 
 **Next Steps:**
-- Answer open questions from task_plan.md
-- Begin Phase 0: Research & Discovery
-- Audit current UI (take screenshots)
-- Gather design inspiration
+- Document complete information architecture
+- Design each page type (Dashboard, Agent Detail, Server Detail)
+- Specify tab layouts and preview panels
+- Create implementation roadmap (M9 + future milestones)
 
-**Status:** Planning complete, ready to start Phase 0
+**Status:** Planning complete, user vision captured
+
+---
+
+## Session 2: Vision Refinement (2026-01-12)
+
+**Time:** Continued
+
+**Goals:**
+- Clarify design approach and tool selection
+- Capture user's hypervisor-style vision
+- Document requirements for future features
+
+**User Decisions:**
+1. **Design tool:** Text-based specifications (no Figma/Penpot)
+2. **Navigation:** Sidebar with sections (Infrastructure, Management)
+3. **Dashboard:** Add new global dashboard page
+4. **Branding:** Keep minimal (ZedOps text, current colors)
+
+**User Vision Captured:**
+- "Professional infrastructure tool pattern" - Proxmox VE / vSphere style
+- Hierarchical navigation: Agent → Agent Detail, Server → Server Detail
+- **Hypervisor-style server pages** with:
+  - Preview panels for logs/RCON (expandable)
+  - Quick action buttons
+  - Tab-based organization
+- **Future-proof design** for:
+  - Server.ini view/edit
+  - Docker ENV view/edit (elegant, intuitive)
+  - Backup management
+  - Performance metrics
+- **Historical metrics** (1-2 day retention, graphs)
+- Scalable design (many agents, many servers)
+
+**Research Findings:**
+- Documented common patterns from Proxmox VE, vSphere, Portainer
+- Identified 8 key hypervisor UI patterns (tree nav, tabs, action bar, graphs, etc.)
+
+**Files Updated:**
+- task_plan.md: Updated overview with hypervisor vision
+- findings.md: Captured user requirements and research
+- progress.md: This file
+
+**Next Steps:**
+- Create complete information architecture spec
+- Design page layouts (Dashboard, Agent Detail, Server Detail)
+- Specify tab structures and panel layouts
+- Document future features design
+- Create phased implementation roadmap
+
+**Status:** Phase 0 in progress - Vision defined, ready for detailed design
 
 ---
 

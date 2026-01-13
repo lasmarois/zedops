@@ -10,7 +10,14 @@
 
 ## Overview
 
-After completing foundational UI styling with shadcn/ui (M7.5), design a cohesive visual language that elevates ZedOps from functional to exceptional. This is a **design-focused milestone** - no code implementation, only design artifacts and specifications.
+After completing foundational UI styling with shadcn/ui (M7.5), design a **professional hypervisor-style UI** that elevates ZedOps to infrastructure management tool quality (Proxmox VE, vSphere, Portainer). This is a **design-focused milestone** - no code implementation, only design artifacts and specifications.
+
+**Vision:** Professional, scalable infrastructure management UI with:
+- Hypervisor-style resource detail pages (tabs, previews, quick actions)
+- Historical metrics with graphs (24-48h retention)
+- Collapsible preview panels for logs/RCON
+- Future-proof design for unimplemented features (server.ini editor, ENV editor, backups)
+- Beautiful shadcn/ui powered interface
 
 **Current State:**
 - ✅ All 10 pages styled with shadcn/ui + Tailwind CSS
@@ -18,13 +25,16 @@ After completing foundational UI styling with shadcn/ui (M7.5), design a cohesiv
 - ✅ WCAG AA accessible (11.5:1 text contrast)
 - ✅ Responsive layouts (mobile/tablet/desktop)
 - ✅ Loading/error/empty states implemented
+- ✅ Basic metrics displayed (current values only)
 
 **Target State:**
-- Complete visual mockups for all pages
-- Defined visual design system (colors, typography, icons, components)
-- Modern navigation structure designed
-- Responsive templates specified
-- Implementation specifications ready for M9
+- Complete specifications for all pages (text-based with diagrams)
+- Hypervisor-style server/agent detail pages designed
+- Tab-based organization specified
+- Collapsible preview panels designed
+- Historical metrics graphs specified (future implementation)
+- Future features designed (server.ini editor, ENV editor)
+- Implementation roadmap for M9 and beyond
 
 ---
 
