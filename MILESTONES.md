@@ -860,8 +860,11 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
 - M7.5 Phase 6 testing moved to M11
+- **Agent Disconnect Functionality** - Add ability to disconnect agent from manager UI (see [MILESTONE-M98.md](MILESTONE-M98.md) Future Enhancements section)
+  - Current: Disconnect button exists but is disabled/non-functional
+  - Needs: Manager endpoint to force-close WebSocket, confirmation dialog, proper status handling
 
 ### Reminders
-- ability to remove server data (I think this is already implemented when purging.)
+- ✅ ~~ability to remove server data~~ (Implemented via purge in M9.8.7)
 - edit existing server settings
-- remove the sync status button? no need now since it happens automatically ?
+- ✅ ~~remove the sync status button?~~ (Addressed in M9.8.13 - moved to small icon)
