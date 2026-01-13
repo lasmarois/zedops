@@ -74,23 +74,40 @@ Connecting to RCON server...
 - **Root Cause:** `stub.fetch()` was creating new request with `http://do/logs/ws` URL and copying headers
 - **Issue:** Recreating request doesn't preserve WebSocket upgrade context
 
-**Step 7: Fixed WebSocket Forward to Durable Object** ✅
-- **Fix:** Pass original request directly: `stub.fetch(c.req.raw)` instead of creating new request
-- **Reason:** Durable Object needs the original request to properly handle WebSocket upgrade
-- **Files Modified:** `manager/src/routes/agents.ts` (lines 655-657)
-- **Deployed:** Version ID 2d3c64dc-bbae-4e67-ae3a-619c99d323b4
+**Step 7: Fixed WebSocket Forward to Durable Object** ❌ (Reverted)
+- **Attempted:** Pass original request directly: `stub.fetch(c.req.raw)`
+- **Problem:** Request not reaching Durable Object at all
+- **Finding:** Middleware was blocking the request before handler ran
 
-**Step 4: Hypothesis** 🔍
-Possible causes:
-1. JWT token not available in frontend context (but other features work, so unlikely)
-2. JWT verification failing on WebSocket endpoint for some reason
-3. Session check failing (token hash mismatch or expired session)
-4. Browser WebSocket error before upgrade completes
-5. Missing permission check that was added during RBAC migration
+**Step 8: Root Cause Identified** ✅ 🎯
+- **Discovery:** Auth middleware `agents.use('*', requireAuth())` was blocking WebSocket endpoint
+- **Issue:** Middleware expects JWT in `Authorization` header, but WebSockets send `?token=<jwt>`
+- **Why it broke:** Worked in M6 with password auth, broke after RBAC migration to JWT
+- **Evidence:** No logs from handler despite requests showing as "Ok" (401 before handler)
+
+**Step 9: Final Fix - Exclude WebSocket from Middleware** ✅
+- **Solution:** Modified middleware to skip WebSocket endpoint
+- **Implementation:**
+  ```typescript
+  agents.use('*', async (c, next) => {
+    // Skip middleware for WebSocket endpoint (it does its own JWT auth from query param)
+    if (c.req.path.endsWith('/logs/ws')) {
+      await next();
+      return;
+    }
+    // All other routes use standard JWT auth from Authorization header
+    return requireAuth()(c, next);
+  });
+  ```
+- **Files Modified:** `manager/src/routes/agents.ts` (lines 31-41)
+- **Deployed:** Version ID 1b9e5b86-6277-4f0f-9d84-88c80a5483b3
+- **Result:** ✅ **RCON CONSOLE WORKING!**
 
 ### Files Modified
 
-- `frontend/src/hooks/useRcon.ts` - Improved error logging (lines 137-153)
+- `frontend/src/hooks/useRcon.ts` - Enhanced error logging and connection diagnostics
+- `manager/src/routes/agents.ts` - Excluded WebSocket endpoint from auth middleware
+- `manager/src/durable-objects/AgentConnection.ts` - Added diagnostic logging
 
 ### Next Actions
 

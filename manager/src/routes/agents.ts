@@ -28,8 +28,17 @@ type Bindings = {
 
 const agents = new Hono<{ Bindings: Bindings }>();
 
-// All routes require authentication
-agents.use('*', requireAuth());
+// Apply authentication middleware to all routes EXCEPT WebSocket endpoint
+// WebSocket endpoint (/logs/ws) handles its own auth via query parameter
+agents.use('*', async (c, next) => {
+  // Skip middleware for WebSocket endpoint (it does its own JWT auth from query param)
+  if (c.req.path.endsWith('/logs/ws')) {
+    await next();
+    return;
+  }
+  // All other routes use standard JWT auth from Authorization header
+  return requireAuth()(c, next);
+});
 
 /**
  * GET /api/agents
@@ -592,11 +601,15 @@ agents.post('/:id/containers/:containerId/restart', async (c) => {
  * JWT authentication via query parameter (since WebSocket doesn't support custom headers in browser)
  */
 agents.get('/:id/logs/ws', async (c) => {
+  console.log('[Agents API] ===== WEBSOCKET ENDPOINT CALLED =====');
   const agentId = c.req.param('id');
+  console.log(`[Agents API] Agent ID: ${agentId}`);
 
   // Authenticate via JWT token in query parameter
   const token = c.req.query('token');
+  console.log(`[Agents API] Token present: ${!!token}`);
   if (!token) {
+    console.log('[Agents API] No token, returning 401');
     return c.json({ error: 'Unauthorized - Missing token parameter' }, 401);
   }
 
@@ -629,12 +642,17 @@ agents.get('/:id/logs/ws', async (c) => {
       .first<{ id: string; email: string; role: string | null }>();
 
     if (!user) {
+      console.log('[Agents API] User not found in DB');
       return c.json({ error: 'Unauthorized - User not found' }, 401);
     }
+
+    console.log(`[Agents API] Auth successful for user: ${user.email}`);
   } catch (error) {
     console.error('[Agents API] WebSocket auth error:', error);
     return c.json({ error: 'Unauthorized - Invalid or expired token' }, 401);
   }
+
+  console.log('[Agents API] Starting agent lookup...');
 
   // Verify agent exists and get name
   try {
@@ -648,13 +666,22 @@ agents.get('/:id/logs/ws', async (c) => {
       return c.json({ error: 'Agent not found' }, 404);
     }
 
+    console.log(`[Agents API] Forwarding WebSocket to DO for agent: ${agent.name}`);
+
     // Get Durable Object for this agent using agent name
     const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
     const stub = c.env.AGENT_CONNECTION.get(id);
 
-    // Forward WebSocket upgrade request to Durable Object
-    // Use the original request to preserve WebSocket headers
-    return stub.fetch(c.req.raw);
+    console.log(`[Agents API] DO stub obtained, forwarding request`);
+
+    // Forward the ORIGINAL WebSocket request to Durable Object
+    // The DO will handle routing based on the pathname
+    console.log(`[Agents API] Calling stub.fetch() with original request`);
+    console.log(`[Agents API] Original URL: ${c.req.raw.url}`);
+    const response = await stub.fetch(c.req.raw);
+    console.log(`[Agents API] stub.fetch() returned, status: ${response.status}`);
+
+    return response;
   } catch (error) {
     console.error('[Agents API] Error establishing log WebSocket:', error);
     return c.json({ error: 'Failed to connect to agent' }, 500);

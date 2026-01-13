@@ -27,10 +27,11 @@
 | 1. Database Migration | ✅ complete | Create role_assignments table, update schema | 1 hour |
 | 2. Permission Logic Rewrite | ✅ complete | Role-based checking with inheritance/override | 2 hours |
 | 3. Backend Auth Migration | ✅ complete | Migrate all endpoints to JWT + role checks | 2 hours |
-| 4. WebSocket Auth Migration | ✅ complete | Logs WebSocket uses JWT (RCON not yet implemented) | Included in Phase 3 |
-| 5. Frontend Updates | ⏳ next | Role assignment UI + NULL role handling | 2 hours |
-| 6. Audit Logging Completion | ⏳ planned | Add missing audit log calls | 30 min |
-| 7. Testing & Verification | ⏳ planned | Test all role scenarios | 1 hour |
+| 4. WebSocket Auth Migration | ✅ complete | Logs & RCON WebSocket use JWT | Included in Phase 3 |
+| 5. Frontend Updates | ✅ complete | Role assignment UI + agent/containers permissions | 3 hours |
+| 6. Audit Logging Completion | ✅ complete | Add audit logs for role assignments | 30 min |
+| 6.5. RCON Console Fix | ✅ complete | Fixed WebSocket auth middleware conflict | 2 hours |
+| 7. Testing & Verification | ⏳ next | Test all role scenarios | 1 hour |
 | 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
 
 ---
