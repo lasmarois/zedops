@@ -431,11 +431,13 @@ After building all core features (M1-M7), apply consistent design system across 
 
 ---
 
-## Milestone 8: Visual Redesign - Design Phase ⏳ Planned
+## Milestone 8: Visual Redesign - Design Phase 🚧 In Progress
 
 **Goal:** Design comprehensive visual redesign and modern template for ZedOps UI
 
 **Duration:** 1-2 weeks
+
+**Started:** 2026-01-12
 
 **Rationale:**
 After completing the foundational UI styling (M7.5), create a cohesive visual design that elevates the product from functional to exceptional. This complex design phase will define the visual language, user flows, and template structure before implementation.
@@ -477,7 +479,9 @@ After completing the foundational UI styling (M7.5), create a cohesive visual de
 
 **Dependencies:** Milestone 7.5 (UI Styling & Design System)
 
-**Planning:** *(not started)*
+**Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)
+
+**Status:** 🚧 Phase 0 (Research & Discovery) - Planning complete, starting research
 
 **Note:** This is a design-focused milestone. No code changes in this phase - all work is design artifacts and specifications.
 
@@ -680,7 +684,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** Milestone 8 (Visual Redesign - Design Phase) 🎯
+**Active Milestone:** Milestone 8 (Visual Redesign - Design Phase) 🚧
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -706,7 +710,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - **Milestone 11** - Testing & Verification (after M9)
 - **Documentation** - Comprehensive API and user documentation (after M11)
 
-**Current Planning:** M7.5 complete and archived! Ready to start M8.
+**Current Planning:** M8 in progress - Phase 0 (Research & Discovery)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements

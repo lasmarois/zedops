@@ -393,6 +393,48 @@ See [TECH_DECISIONS.md](TECH_DECISIONS.md) for full rationale.
 
 **For all decisions:** See [TECH_DECISIONS.md](TECH_DECISIONS.md)
 
+### When to Document Technical Decisions
+
+Use [TECH_DECISIONS.md](TECH_DECISIONS.md) to record major architectural or technical choices:
+
+**Always Document:**
+- Architecture changes (protocol design, communication patterns)
+- Technology choices (Go vs Rust, Workers vs Pages, libraries)
+- Security decisions (authentication approach, token storage)
+- Design patterns (milestone-based development, monorepo structure)
+- Trade-offs with alternatives considered
+
+**Template Format:**
+```markdown
+## TD-XXX: Decision Name (YYYY-MM-DD)
+
+**Decision:** Brief statement of what was decided
+
+**Rationale:**
+- Key reason 1
+- Key reason 2
+- Key reason 3
+
+**Alternatives Considered:**
+- Alternative 1 (rejected: reason)
+- Alternative 2 (rejected: reason)
+
+**Status:** ✅ Accepted / 🚧 Proposed / ❌ Rejected / 🔄 Superseded by TD-YYY
+
+**References:** [Link to relevant docs]
+```
+
+**When to Create:**
+- During planning phase (proposed decisions)
+- After implementing significant features (accepted decisions)
+- When refactoring architecture (superseding old decisions)
+
+**Workflow:**
+1. Draft decision during planning (status: 🚧 Proposed)
+2. Implement and validate approach
+3. Update status to ✅ Accepted
+4. Reference decision ID (TD-XXX) in code comments or docs
+
 ---
 
 ## Project Principles
