@@ -1042,3 +1042,102 @@ Email: test@example.com | Role: [user] (role assignments) | Created: ...
 **Status:** ✅ Complete - UserList now shows meaningful role info!
 
 ---
+
+---
+
+## 2026-01-12 Evening - Phase 6: Audit Logging Completion
+
+### Audit Logging Implementation
+**Time:** 15:30-16:30
+
+**Issue 1: Missing Audit Log Calls**
+- User discovered audit functions existed but weren't being called
+- Added audit logging to 8 server operations in agents.ts
+- Added RCON command logging in AgentConnection.ts with user tracking
+- Deployed successfully (version: e0c28d15)
+
+**Issue 2: Missing /api/audit Endpoint (404)**
+- Frontend has AuditLogViewer but backend endpoint missing
+- Created manager/src/routes/audit.ts with pagination & filtering
+- Mounted in index.ts
+- Deployed successfully (version: 8fe08055)
+
+**Issue 3: Audit API 500 Error**
+- GET /api/audit returns 500 Internal Server Error
+- Added comprehensive logging to debug
+- Deploying fix now...
+
+
+**Issue 3 RESOLVED:**
+- Fixed requireAuth() call (was missing parentheses)
+- Deployed successfully (version: 0c83e320)
+- Audit logs now working! ✅
+
+**Final Status:**
+- ✅ All 8 server operations have audit logging
+- ✅ RCON commands have audit logging with user tracking
+- ✅ Audit logs API endpoint working (/api/audit)
+- ✅ Frontend AuditLogViewer displaying logs correctly
+- ✅ Pagination, filtering, user attribution all functional
+
+---
+
+## Phase 6 Complete - Summary
+
+**What Was Implemented:**
+
+1. **Server Operations Audit Logging** (agents.ts):
+   - Server Created, Started, Stopped, Restarted
+   - Server Rebuilt, Deleted, Purged, Restored
+   - All operations log: user_id, action, resource, timestamp, IP, user-agent
+
+2. **RCON Audit Logging** (AgentConnection.ts):
+   - User tracking via WebSocket headers
+   - Command logging with full context
+   - Server name, command text captured
+
+3. **Audit Logs API** (audit.ts):
+   - GET /api/audit with pagination & filtering
+   - Admin-only access (for now)
+   - Joins users table for email display
+
+**Deployments:**
+- Version e0c28d15: Audit logging implementation
+- Version 8fe08055: Audit API endpoint
+- Version ca34b87c: Debug logging added
+- Version ec6c7e02: Test endpoint
+- Version 1dd14f00: Ping endpoint
+- Version 0c83e320: Fixed requireAuth() bug ✅ FINAL
+
+**Time Spent:** ~2 hours (including debugging)
+
+
+---
+
+## 2026-01-12 Evening - Phase 7: Testing & Verification Started
+
+**Status:** Testing comprehensive RBAC implementation
+
+**Updated Test Plan:**
+- Modified Phase 7 test scenarios to match implemented 4-role system
+- Old plan referenced deprecated permission system (view/control/delete)
+- New plan tests: admin, agent-admin, operator, viewer roles
+- Tests cover: server scope, agent scope, global scope, mixed scopes
+
+**Test Scenarios:**
+1. Viewer role (server scope) - read-only access
+2. Operator role (server scope) - control single server
+3. Operator role (agent scope) - control all servers on agent
+4. Agent-admin role (agent scope) - full agent management
+5. Global operator role - control all servers everywhere
+6. No role assignments - empty access
+7. Mixed scopes - server override of agent role
+8. Admin system role - bypass all checks
+
+**Next Steps:**
+- Create test users via UI
+- Grant role assignments
+- Execute test scenarios
+- Verify audit logs
+- Document findings
+

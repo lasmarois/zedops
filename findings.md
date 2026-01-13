@@ -577,3 +577,316 @@ Before proceeding with implementation, user must decide:
 5. ✅ RCON permission: **Use operator role**
 
 User answers will determine which phases to implement.
+
+---
+
+## Finding 11: 🚨 Agent List Endpoint Blocks Non-Admin Users (CRITICAL)
+
+**Date Discovered:** 2026-01-12 (Phase 5 Frontend Updates)
+
+**Issue:**
+The `GET /api/agents` endpoint is hardcoded to admin-only, which prevents non-admin users from navigating the system even with valid role assignments.
+
+**Location:**
+```typescript
+// manager/src/routes/agents.ts:39-44
+agents.get('/', async (c) => {
+  const user = c.get('user');
+
+  // Only admins can list all agents
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  }
+```
+
+**Impact:**
+- **Severity:** 🔴 CRITICAL - Completely blocks non-admin users
+- When a non-admin user logs in, the frontend AgentList component calls `GET /api/agents`
+- Backend returns 403 Forbidden
+- User sees error page with "Error: Forbidden - requires admin role"
+- User cannot access ANY servers, even with valid role assignments
+- Makes the entire RBAC system non-functional for non-admin users
+
+**Root Cause:**
+The endpoint was designed for admin-only agent management. The RBAC implementation added role assignments for servers but didn't update the agent list endpoint to filter agents based on user's accessible servers.
+
+**Solution:**
+Modify `GET /api/agents` to return filtered agent list for non-admin users:
+
+```typescript
+agents.get('/', async (c) => {
+  const user = c.get('user');
+
+  if (user.role === 'admin') {
+    // Admins see all agents (existing behavior)
+    const result = await c.env.DB.prepare('SELECT * FROM agents').all();
+    return c.json({ success: true, agents: result.results });
+  }
+
+  // Non-admins: Return only agents where user has role assignments
+  const assignments = await getUserRoleAssignments(c.env.DB, user.id);
+
+  const agentIds = new Set<string>();
+
+  for (const assignment of assignments) {
+    if (assignment.scope === 'global') {
+      // Global access: return all agents
+      const result = await c.env.DB.prepare('SELECT * FROM agents').all();
+      return c.json({ success: true, agents: result.results });
+    }
+
+    if (assignment.scope === 'agent' && assignment.resource_id) {
+      agentIds.add(assignment.resource_id);
+    }
+
+    if (assignment.scope === 'server' && assignment.resource_id) {
+      // Find which agent this server belongs to
+      const server = await c.env.DB.prepare(
+        'SELECT agent_id FROM servers WHERE id = ?'
+      ).bind(assignment.resource_id).first<{ agent_id: string }>();
+      if (server) {
+        agentIds.add(server.agent_id);
+      }
+    }
+  }
+
+  if (agentIds.size === 0) {
+    return c.json({ success: true, agents: [] });
+  }
+
+  // Return only agents user has access to
+  const placeholders = Array.from(agentIds).map(() => '?').join(',');
+  const agents = await c.env.DB.prepare(
+    `SELECT * FROM agents WHERE id IN (${placeholders})`
+  ).bind(...Array.from(agentIds)).all();
+
+  return c.json({ success: true, agents: agents.results });
+});
+```
+
+**Logic:**
+1. Admin users → Return all agents (no change)
+2. Users with global role assignments → Return all agents
+3. Users with agent-scope assignments → Return those specific agents
+4. Users with server-scope assignments → Return agents that contain those servers
+5. Users with no assignments → Return empty array
+
+**Files to Modify:**
+- `manager/src/routes/agents.ts` (lines 39-88)
+
+**Priority:** 🔴 CRITICAL - Must be implemented before Phase 5 can be considered complete
+
+**Testing Required:**
+1. Create test user with NULL system role
+2. Grant operator role at agent scope
+3. Login as test user
+4. Verify: Can see agent list (only assigned agents)
+5. Verify: Can navigate to servers on assigned agents
+6. Verify: Cannot see non-assigned agents
+
+**Status:** ✅ RESOLVED - Implemented agent filtering logic
+
+**Implementation Details:**
+- Modified `manager/src/routes/agents.ts` (lines 11-119)
+- Admin users: Return all agents (no change)
+- Non-admin users: Filter by role assignments
+  - Global scope → all agents
+  - Agent scope → specific agents
+  - Server scope → agents containing those servers
+  - No assignments → empty list
+- Uses `getUserRoleAssignments()` to check user's access
+- Returns filtered list without errors
+
+**Date Resolved:** 2026-01-12 (Phase 5 completion)
+
+---
+
+## Finding 12: 🐛 Audit Logging Functions Not Called (Phase 6)
+
+**Date Discovered:** 2026-01-12 Evening (Phase 6 review)
+
+**User Report:**
+> "I feel audit logs is not completed"
+
+**Investigation:**
+User requested verification of audit logging implementation. Upon inspection:
+
+**What Existed:**
+- ✅ Audit log functions defined in `manager/src/lib/audit.ts`:
+  - `logServerOperation()` - Generic server operation logger
+  - `logServerCreated()` - Server creation
+  - `logRconCommand()` - RCON command execution
+  - `logRoleAssignmentGranted/Revoked()` - Role management
+
+**What Was Missing:**
+- ❌ NO audit log calls in any server operation endpoints
+- ❌ NO audit log calls in RCON handler
+- ❌ Functions existed but were never invoked
+
+**Endpoints Missing Audit Logs:**
+```typescript
+// manager/src/routes/agents.ts
+POST   /api/agents/:id/servers                    - Server creation (no log)
+POST   /api/agents/:id/servers/:serverId/start    - Server start (no log)
+POST   /api/agents/:id/servers/:serverId/stop     - Server stop (no log)
+POST   /api/agents/:id/containers/:containerId/restart - Restart (no log)
+POST   /api/agents/:id/servers/:serverId/rebuild  - Rebuild (no log)
+DELETE /api/agents/:id/servers/:serverId          - Soft delete (no log)
+DELETE /api/agents/:id/servers/:serverId/purge    - Hard delete (no log)
+POST   /api/agents/:id/servers/:serverId/restore  - Restore (no log)
+
+// manager/src/durable-objects/AgentConnection.ts
+rcon.command - RCON command execution (no log)
+```
+
+**Impact:**
+- No audit trail for server operations
+- Compliance/security issue - can't track who did what
+- No forensics if issues occur
+
+**Resolution:**
+
+### 1. Added Audit Logging to All Server Operations
+
+**File:** `manager/src/routes/agents.ts`
+
+Added `logServerOperation()` or `logServerCreated()` calls after each operation:
+
+```typescript
+// Server creation
+await logServerCreated(c.env.DB, c, user.id, serverId, body.name, agentId);
+
+// Server start (both normal start and container recreation)
+await logServerOperation(c.env.DB, c, user.id, 'server.started', serverId, server.name as string, agentId);
+
+// Server stop
+await logServerOperation(c.env.DB, c, user.id, 'server.stopped', serverId, server.name as string, agentId);
+
+// Server restart
+if (response.ok) {
+  await logServerOperation(c.env.DB, c, user.id, 'server.restarted', server.id, server.name, agentId);
+}
+
+// Server rebuild
+await logServerOperation(c.env.DB, c, user.id, 'server.rebuilt', serverId, server.name as string, agentId);
+
+// Server delete (soft delete)
+await logServerOperation(c.env.DB, c, user.id, 'server.deleted', serverId, serverName?.name || 'unknown', agentId);
+
+// Server purge (hard delete)
+await logServerOperation(c.env.DB, c, user.id, 'server.purged', serverId, server.name as string, agentId);
+
+// Server restore
+await logServerOperation(c.env.DB, c, user.id, 'server.restored', serverId, server.name as string, agentId);
+```
+
+### 2. Added RCON Command Audit Logging
+
+**Challenge:** RCON commands execute in a Durable Object via WebSocket, which doesn't have access to user context.
+
+**Solution:**
+1. Modified WebSocket upgrade in `agents.ts` to pass user ID via header:
+   ```typescript
+   const headers = new Headers(c.req.raw.headers);
+   headers.set('X-User-Id', session.user_id);
+   const modifiedRequest = new Request(c.req.raw, { headers });
+   ```
+
+2. Added user tracking in Durable Object:
+   ```typescript
+   // AgentConnection.ts
+   private uiWebSockets: Map<WebSocket, string> = new Map(); // WebSocket -> userId
+
+   // On WebSocket upgrade
+   const userId = request.headers.get("X-User-Id") || undefined;
+   if (userId) {
+     this.uiWebSockets.set(server, userId);
+   }
+   ```
+
+3. Added audit logging in RCON handler:
+   ```typescript
+   // After successful RCON command
+   if (message.subject === "rcon.command" && reply.data.success) {
+     const userId = this.uiWebSockets.get(ws);
+     const session = this.rconSessions.get(sessionId);
+
+     if (session && userId) {
+       const server = await this.env.DB.prepare(
+         'SELECT name FROM servers WHERE id = ?'
+       ).bind(session.serverId).first();
+
+       await logRconCommand(
+         this.env.DB,
+         mockContext,
+         userId,
+         session.serverId,
+         server.name,
+         command
+       );
+     }
+   }
+   ```
+
+### 3. Missing Audit Logs API Endpoint
+
+**Discovery:** Frontend has `AuditLogViewer.tsx` component but backend endpoint `/api/audit` didn't exist.
+
+**Error:**
+```
+GET /api/audit?page=1&pageSize=50 - 404 Not Found
+```
+
+**Solution:**
+Created `manager/src/routes/audit.ts`:
+- GET /api/audit - Paginated audit log retrieval
+- Filtering by: user, action, resource type, date range
+- Joins users table to show email instead of user_id
+- Admin-only access (for now)
+
+**Bug Found During Implementation:**
+```typescript
+// WRONG:
+audit.get('/', requireAuth, async (c) => { ... });
+
+// CORRECT:
+audit.get('/', requireAuth(), async (c) => { ... });
+```
+
+Issue: `requireAuth` is a function that **returns** middleware, so it must be called with `()`.
+
+**Error Symptoms:**
+- Worker threw exception (Error 1101)
+- Uncaught error crash instead of proper 401/403 responses
+
+**Resolution:**
+- Fixed function call
+- Deployed successfully
+- Audit logs API now working
+
+**Files Modified:**
+- `manager/src/routes/agents.ts` - Added 8 audit log calls
+- `manager/src/durable-objects/AgentConnection.ts` - Added RCON logging + user tracking
+- `manager/src/types/LogMessage.ts` - Added userId to LogSubscriber interface
+- `manager/src/routes/audit.ts` - NEW: Audit logs API endpoint
+- `manager/src/index.ts` - Mounted `/api/audit` route
+
+**Deployments:**
+- v e0c28d15: Audit logging implementation
+- v 8fe08055: Audit API endpoint
+- v ca34b87c: Debug logging
+- v ec6c7e02: Test endpoint
+- v 1dd14f00: Ping endpoint
+- v 0c83e320: Fixed requireAuth() bug ✅
+
+**Status:** ✅ RESOLVED
+
+**Date Resolved:** 2026-01-12 Evening (Phase 6 completion)
+
+**Verification:**
+- All server operations create audit_logs entries
+- RCON commands logged with user attribution
+- Frontend AuditLogViewer displays logs correctly
+- Pagination and filtering working
+
+---

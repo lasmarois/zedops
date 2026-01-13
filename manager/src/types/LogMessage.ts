@@ -21,6 +21,7 @@ export interface LogSubscriber {
   id: string;            // Unique subscriber ID
   ws: WebSocket;         // WebSocket connection to UI client
   containerId: string;   // Container being watched
+  userId?: string;       // User ID for audit logging (optional for backward compatibility)
 }
 
 /**

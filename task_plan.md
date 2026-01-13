@@ -29,9 +29,9 @@
 | 3. Backend Auth Migration | ✅ complete | Migrate all endpoints to JWT + role checks | 2 hours |
 | 4. WebSocket Auth Migration | ✅ complete | Logs & RCON WebSocket use JWT | Included in Phase 3 |
 | 5. Frontend Updates | ✅ complete | Role assignment UI + agent/containers permissions | 3 hours |
-| 6. Audit Logging Completion | ✅ complete | Add audit logs for role assignments | 30 min |
+| 6. Audit Logging Completion | ✅ complete | Add audit logs for all server operations + RCON + API endpoint | 2 hours |
 | 6.5. RCON Console Fix | ✅ complete | Fixed WebSocket auth middleware conflict | 2 hours |
-| 7. Testing & Verification | ⏳ next | Test all role scenarios | 1 hour |
+| 7. Testing & Verification | 🚧 in_progress | Test all role scenarios with 4-role RBAC | 1-2 hours |
 | 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
 
 ---
@@ -668,75 +668,120 @@ const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${enco
 
 ---
 
-## Phase 7: Testing & Verification ⏳ Planned
+## Phase 7: Testing & Verification 🚧 In Progress
 
-**Status:** ⏳ planned
+**Status:** 🚧 in_progress
 
 **Goals:**
-- Comprehensive testing of all permission scenarios
+- Comprehensive testing of all role scenarios
 - Verify audit logging
-- Test with multiple users
+- Test with multiple users and scopes
 
 ### 7.1 Setup Test Users
 
-- [ ] Invite test user via admin UI
-- [ ] Register test user
-- [ ] Create test user in database directly for speed:
-  ```sql
-  INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
-  VALUES (
-    'test-user-1',
-    'test@example.com',
-    '$2b$10$...', -- bcrypt hash of 'testpass'
-    'user',
-    unixepoch() * 1000,
-    unixepoch() * 1000
-  );
-  ```
+- [ ] Create test user 1: NULL system role (for role assignment testing)
+- [ ] Create test user 2: Another NULL role user (for multi-user scenarios)
+- [ ] Verify both users can login but see "No access" message
+
+**Via UI (Recommended):**
+1. Admin logs in
+2. Goes to Users page
+3. Creates invitation for test@example.com
+4. User registers via invitation link
+5. User gets NULL system role by default
+
+**Via Database (Fast):**
+```bash
+# Create test user with NULL system role
+npx wrangler d1 execute zedops-db --command "
+INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+VALUES (
+  'test-user-1',
+  'test@example.com',
+  '\$2b\$10\$abcdefghijklmnopqrstuvwxyz123456',
+  NULL,
+  $(date +%s000),
+  $(date +%s000)
+);"
+```
 
 ---
 
-### 7.2 Test Permission Scenarios
+### 7.2 Test Role Scenarios (4-Role RBAC System)
 
-**Scenario 1: View-Only Permission**
-- [ ] Grant 'view' permission to server-123
-- [ ] Login as test user
-- [ ] Verify: Can see server-123 in list
+**Scenario 1: Viewer Role (Server Scope)**
+- [ ] Grant viewer role to test-user-1 for server-123 (server scope)
+- [ ] Login as test-user-1
+- [ ] Verify: Can see agent containing server-123 in list
+- [ ] Verify: Can see server-123 in server list
 - [ ] Verify: Can view server-123 logs
 - [ ] Verify: Cannot start/stop server-123 (403)
 - [ ] Verify: Cannot use RCON on server-123 (403)
 - [ ] Verify: Cannot delete server-123 (403)
+- [ ] Verify: Cannot see other servers on same agent
 
-**Scenario 2: Control Permission**
-- [ ] Grant 'control' permission to server-456
-- [ ] Login as test user
+**Scenario 2: Operator Role (Server Scope)**
+- [ ] Grant operator role to test-user-1 for server-456 (server scope)
+- [ ] Login as test-user-1
 - [ ] Verify: Can see server-456 in list
-- [ ] Verify: Can view logs (if hierarchy implemented)
+- [ ] Verify: Can view logs (operator includes viewer)
 - [ ] Verify: Can start/stop/restart server-456
 - [ ] Verify: Can use RCON on server-456
 - [ ] Verify: Cannot delete server-456 (403)
+- [ ] Verify: Cannot create new servers (403)
 
-**Scenario 3: Delete Permission**
-- [ ] Grant 'delete' permission to server-789
-- [ ] Login as test user
-- [ ] Verify: Can see server-789
-- [ ] Verify: Can view logs (if hierarchy)
-- [ ] Verify: Can control server (if hierarchy)
-- [ ] Verify: Can delete server-789
-
-**Scenario 4: No Permissions**
-- [ ] Revoke all permissions from test user
-- [ ] Login as test user
-- [ ] Verify: Server list is empty
-- [ ] Verify: Attempting to access server by URL returns 403
-
-**Scenario 5: Agent-Level Permission (if implemented)**
-- [ ] Grant 'control' permission to agent-abc
-- [ ] Create new server on agent-abc
-- [ ] Login as test user
-- [ ] Verify: Can see all servers on agent-abc
+**Scenario 3: Operator Role (Agent Scope)**
+- [ ] Grant operator role to test-user-1 for entire agent-abc (agent scope)
+- [ ] Login as test-user-1
+- [ ] Verify: Can see agent-abc in agent list
+- [ ] Verify: Can see ALL servers on agent-abc
 - [ ] Verify: Can control all servers on agent-abc
+- [ ] Verify: Can use RCON on all servers on agent-abc
+- [ ] Verify: Cannot delete servers (403)
+- [ ] Verify: Cannot create servers (403)
 - [ ] Verify: Cannot see servers on other agents
+
+**Scenario 4: Agent-Admin Role (Agent Scope)**
+- [ ] Grant agent-admin role to test-user-1 for agent-xyz (agent scope)
+- [ ] Login as test-user-1
+- [ ] Verify: Can see agent-xyz in agent list
+- [ ] Verify: Can see all servers on agent-xyz
+- [ ] Verify: Can control all servers (includes operator capabilities)
+- [ ] Verify: Can delete servers on agent-xyz
+- [ ] Verify: Can create NEW servers on agent-xyz
+- [ ] Verify: Cannot see/manage servers on other agents
+
+**Scenario 5: Global Operator Role**
+- [ ] Grant operator role to test-user-2 at global scope
+- [ ] Login as test-user-2
+- [ ] Verify: Can see ALL agents
+- [ ] Verify: Can see ALL servers across all agents
+- [ ] Verify: Can control any server
+- [ ] Verify: Can use RCON on any server
+- [ ] Verify: Cannot delete servers (403)
+- [ ] Verify: Cannot create servers (403)
+
+**Scenario 6: No Role Assignments**
+- [ ] Create test-user-3 with NULL system role, no role assignments
+- [ ] Login as test-user-3
+- [ ] Verify: Agent list is empty
+- [ ] Verify: Attempting to access server by URL returns 403
+- [ ] Verify: UI shows "No access" message
+
+**Scenario 7: Mixed Scopes (Override)**
+- [ ] Grant viewer role to test-user-1 for agent-abc (agent scope)
+- [ ] Grant operator role to test-user-1 for server-123 on agent-abc (server scope override)
+- [ ] Login as test-user-1
+- [ ] Verify: Can control server-123 (operator overrides agent-level viewer)
+- [ ] Verify: Can only view other servers on agent-abc (viewer from agent-level)
+
+**Scenario 8: Admin System Role**
+- [ ] Login as admin@zedops.local (admin system role)
+- [ ] Verify: Can see ALL agents (bypasses role checks)
+- [ ] Verify: Can perform ALL operations on all servers
+- [ ] Verify: Can create/delete servers on any agent
+- [ ] Verify: Can manage users and role assignments
+- [ ] Verify: No role assignments needed (admin bypasses everything)
 
 ---
 

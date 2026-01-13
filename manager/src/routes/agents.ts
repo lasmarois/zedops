@@ -18,6 +18,7 @@ import {
   getUserRoleAssignments,
   getEffectiveRoleForAgent,
 } from '../lib/permissions';
+import { logServerCreated, logServerOperation } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -545,10 +546,10 @@ agents.post('/:id/containers/:containerId/restart', async (c) => {
   // Find server by container_id to check permissions
   try {
     const server = await c.env.DB.prepare(
-      'SELECT id FROM servers WHERE container_id = ? AND agent_id = ?'
+      'SELECT id, name FROM servers WHERE container_id = ? AND agent_id = ?'
     )
       .bind(containerId, agentId)
-      .first<{ id: string }>();
+      .first<{ id: string; name: string }>();
 
     if (!server) {
       return c.json({ error: 'Server not found for this container' }, 404);
@@ -582,6 +583,11 @@ agents.post('/:id/containers/:containerId/restart', async (c) => {
         method: 'POST',
       }
     );
+
+    // Audit log if successful
+    if (response.ok) {
+      await logServerOperation(c.env.DB, c, user.id, 'server.restarted', server.id, server.name, agentId);
+    }
 
     return new Response(response.body, {
       status: response.status,
@@ -674,11 +680,28 @@ agents.get('/:id/logs/ws', async (c) => {
 
     console.log(`[Agents API] DO stub obtained, forwarding request`);
 
-    // Forward the ORIGINAL WebSocket request to Durable Object
-    // The DO will handle routing based on the pathname
-    console.log(`[Agents API] Calling stub.fetch() with original request`);
+    // Clone the request and add user ID header for audit logging in DO
+    // (WebSocket connections can't be easily re-authenticated in DO, so we pass user info here)
+    const headers = new Headers(c.req.raw.headers);
+    const { verifySessionToken, hashToken } = await import('../lib/auth');
+    const payload = await verifySessionToken(token, c.env.TOKEN_SECRET);
+    const tokenHash = await hashToken(token);
+    const session = await c.env.DB.prepare(
+      'SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?'
+    )
+      .bind(tokenHash, Date.now())
+      .first<{ user_id: string }>();
+
+    if (session) {
+      headers.set('X-User-Id', session.user_id);
+    }
+
+    const modifiedRequest = new Request(c.req.raw, { headers });
+
+    // Forward the WebSocket request with user ID to Durable Object
+    console.log(`[Agents API] Calling stub.fetch() with modified request`);
     console.log(`[Agents API] Original URL: ${c.req.raw.url}`);
-    const response = await stub.fetch(c.req.raw);
+    const response = await stub.fetch(modifiedRequest);
     console.log(`[Agents API] stub.fetch() returned, status: ${response.status}`);
 
     return response;
@@ -898,6 +921,9 @@ agents.post('/:id/servers', async (c) => {
     )
       .bind(serverId)
       .first();
+
+    // Audit log
+    await logServerCreated(c.env.DB, c, user.id, serverId, body.name, agentId);
 
     return c.json({
       success: true,
@@ -1120,6 +1146,9 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
         .bind(Date.now(), serverId)
         .run();
 
+      // Audit log
+      await logServerOperation(c.env.DB, c, user.id, 'server.started', serverId, server.name as string, agentId);
+
       return c.json({
         success: true,
         message: 'Server started successfully',
@@ -1194,6 +1223,9 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
       )
         .bind(result.containerId, Date.now(), serverId)
         .run();
+
+      // Audit log (container recreation + start)
+      await logServerOperation(c.env.DB, c, user.id, 'server.started', serverId, server.name as string, agentId);
 
       return c.json({
         success: true,
@@ -1288,6 +1320,9 @@ agents.post('/:id/servers/:serverId/stop', async (c) => {
     )
       .bind(Date.now(), serverId)
       .run();
+
+    // Audit log
+    await logServerOperation(c.env.DB, c, user.id, 'server.stopped', serverId, server.name as string, agentId);
 
     return c.json({
       success: true,
@@ -1440,6 +1475,13 @@ agents.delete('/:id/servers/:serverId', async (c) => {
       return c.json({ error: 'Server is already deleted. Use PURGE to permanently remove.' }, 400);
     }
 
+    // Get server name for audit log
+    const serverName = await c.env.DB.prepare(
+      `SELECT name FROM servers WHERE id = ?`
+    )
+      .bind(serverId)
+      .first<{ name: string }>();
+
     // Soft delete: set deleted_at and status='deleted'
     const now = Date.now();
     await c.env.DB.prepare(
@@ -1479,6 +1521,9 @@ agents.delete('/:id/servers/:serverId', async (c) => {
         }
       }
     }
+
+    // Audit log
+    await logServerOperation(c.env.DB, c, user.id, 'server.deleted', serverId, serverName?.name || 'unknown', agentId);
 
     return c.json({
       success: true,
@@ -1586,6 +1631,9 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
 
     console.log(`[Purge] Server ${server.name} (${serverId}) permanently deleted`);
 
+    // Audit log (before DB record is deleted)
+    await logServerOperation(c.env.DB, c, user.id, 'server.purged', serverId, server.name as string, agentId);
+
     return c.json({
       success: true,
       message: removeData
@@ -1645,6 +1693,9 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
       .run();
 
     console.log(`[Restore] Server ${server.name} (${serverId}) restored`);
+
+    // Audit log
+    await logServerOperation(c.env.DB, c, user.id, 'server.restored', serverId, server.name as string, agentId);
 
     return c.json({
       success: true,
@@ -1750,6 +1801,9 @@ agents.post('/:id/servers/:serverId/rebuild', async (c) => {
     )
       .bind(serverId)
       .first();
+
+    // Audit log
+    await logServerOperation(c.env.DB, c, user.id, 'server.rebuilt', serverId, server.name as string, agentId);
 
     return c.json({
       success: true,

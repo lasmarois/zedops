@@ -27,9 +27,12 @@ export type AuditAction =
   | 'invitation.created'
   | 'invitation.accepted'
   | 'invitation.cancelled'
-  // Permissions
+  // Permissions (legacy)
   | 'permission.granted'
   | 'permission.revoked'
+  // Role Assignments (RBAC)
+  | 'role_assignment.granted'
+  | 'role_assignment.revoked'
   // Server operations
   | 'server.created'
   | 'server.started'
@@ -45,7 +48,14 @@ export type AuditAction =
   // RCON operations
   | 'rcon.command';
 
-export type ResourceType = 'user' | 'invitation' | 'permission' | 'server' | 'agent' | 'session';
+export type ResourceType =
+  | 'user'
+  | 'invitation'
+  | 'permission'
+  | 'role_assignment'
+  | 'server'
+  | 'agent'
+  | 'session';
 
 export interface AuditLogEntry {
   userId?: string | null;
@@ -382,6 +392,60 @@ export async function logRconCommand(
       serverName,
       command,
       // Don't log full response (could contain sensitive data)
+    },
+  });
+}
+
+/**
+ * Log role assignment granted
+ */
+export async function logRoleAssignmentGranted(
+  db: D1Database,
+  c: Context,
+  grantedByUserId: string,
+  assignmentId: string,
+  targetUserId: string,
+  role: string,
+  scope: string,
+  resourceId: string | null
+): Promise<void> {
+  await logAudit(db, c, {
+    userId: grantedByUserId,
+    action: 'role_assignment.granted',
+    resourceType: 'role_assignment',
+    resourceId: assignmentId,
+    details: {
+      targetUserId,
+      role,
+      scope,
+      resourceId,
+    },
+  });
+}
+
+/**
+ * Log role assignment revoked
+ */
+export async function logRoleAssignmentRevoked(
+  db: D1Database,
+  c: Context,
+  revokedByUserId: string,
+  assignmentId: string,
+  targetUserId: string,
+  role: string,
+  scope: string,
+  resourceId: string | null
+): Promise<void> {
+  await logAudit(db, c, {
+    userId: revokedByUserId,
+    action: 'role_assignment.revoked',
+    resourceType: 'role_assignment',
+    resourceId: assignmentId,
+    details: {
+      targetUserId,
+      role,
+      scope,
+      resourceId,
     },
   });
 }

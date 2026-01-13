@@ -342,8 +342,19 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                     fontSize: '0.875rem',
                   }}
                 >
-                  {user.role}
+                  {user.role === 'admin' ? 'admin' : 'user'}
                 </span>
+                {!user.role && (
+                  <span
+                    style={{
+                      marginLeft: '0.5rem',
+                      fontSize: '0.75rem',
+                      color: '#888',
+                    }}
+                  >
+                    (role assignments)
+                  </span>
+                )}
               </td>
               <td style={{ padding: '1rem', color: '#ccc', fontSize: '0.875rem' }}>
                 {formatDate(user.created_at)}

@@ -825,7 +825,7 @@ export interface UserRoleAssignmentsResponse {
  * Get user role assignments
  */
 export async function fetchUserRoleAssignments(userId: string): Promise<UserRoleAssignmentsResponse> {
-  const response = await fetch(`${API_BASE}/api/users/${userId}/role-assignments`, {
+  const response = await fetch(`${API_BASE}/api/role-assignments/${userId}`, {
     headers: getAuthHeaders(),
   });
 
@@ -846,7 +846,7 @@ export async function grantRoleAssignment(
   scope: 'global' | 'agent' | 'server',
   resourceId: string | null
 ): Promise<{ success: boolean; roleAssignment: RoleAssignment }> {
-  const response = await fetch(`${API_BASE}/api/users/${userId}/role-assignments`, {
+  const response = await fetch(`${API_BASE}/api/role-assignments/${userId}`, {
     method: 'POST',
     headers: {
       ...getAuthHeaders(),

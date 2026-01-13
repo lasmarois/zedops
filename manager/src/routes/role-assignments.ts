@@ -18,6 +18,7 @@ import {
   type AssignmentRole,
   type Scope,
 } from '../lib/permissions';
+import { logRoleAssignmentGranted, logRoleAssignmentRevoked } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -146,7 +147,18 @@ roleAssignments.post('/:userId', async (c) => {
       resourceId || null
     );
 
-    // TODO: Add audit logging when audit functions are updated for role assignments
+    // Audit log the grant operation
+    const currentUser = c.get('user');
+    await logRoleAssignmentGranted(
+      c.env.DB,
+      c,
+      currentUser.id, // Admin who granted the role
+      result.id, // Assignment ID
+      userId, // Target user
+      role,
+      scope,
+      resourceId || null
+    );
 
     return c.json(
       {
@@ -182,7 +194,13 @@ roleAssignments.delete('/:assignmentId', async (c) => {
       'SELECT id, user_id, role, scope, resource_id FROM role_assignments WHERE id = ?'
     )
       .bind(assignmentId)
-      .first();
+      .first<{
+        id: string;
+        user_id: string;
+        role: string;
+        scope: string;
+        resource_id: string | null;
+      }>();
 
     if (!assignment) {
       return c.json({ error: 'Role assignment not found' }, 404);
@@ -195,7 +213,18 @@ roleAssignments.delete('/:assignmentId', async (c) => {
       return c.json({ error: 'Failed to revoke role assignment' }, 500);
     }
 
-    // TODO: Add audit logging
+    // Audit log the revoke operation
+    const currentUser = c.get('user');
+    await logRoleAssignmentRevoked(
+      c.env.DB,
+      c,
+      currentUser.id, // Admin who revoked the role
+      assignment.id, // Assignment ID
+      assignment.user_id, // Target user
+      assignment.role,
+      assignment.scope,
+      assignment.resource_id
+    );
 
     return c.json({
       message: 'Role assignment revoked successfully',

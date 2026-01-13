@@ -25,6 +25,7 @@ import {
   LogSubscriber,
   CircularBuffer,
 } from "../types/LogMessage";
+import { logRconCommand } from "../lib/audit";
 
 export class AgentConnection extends DurableObject {
   private ws: WebSocket | null = null;
@@ -40,6 +41,9 @@ export class AgentConnection extends DurableObject {
   // RCON session tracking
   private rconSessions: Map<string, { sessionId: string; serverId: string }> = new Map(); // sessionId -> { sessionId, serverId }
 
+  // UI WebSocket tracking (for audit logging)
+  private uiWebSockets: Map<WebSocket, string> = new Map(); // UI WebSocket -> userId
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
   }
@@ -51,13 +55,16 @@ export class AgentConnection extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
+    console.log(`[AgentConnection] fetch() called with URL: ${url.pathname}`);
+
     // WebSocket upgrade endpoint (for agent)
     if (url.pathname === "/ws") {
       return this.handleWebSocketUpgrade(request);
     }
 
     // WebSocket upgrade endpoint (for UI log subscribers)
-    if (url.pathname === "/logs/ws") {
+    // Support both /logs/ws and /api/agents/{id}/logs/ws
+    if (url.pathname === "/logs/ws" || url.pathname.endsWith("/logs/ws")) {
       return this.handleUIWebSocketUpgrade(request);
     }
 
@@ -920,9 +927,22 @@ export class AgentConnection extends DurableObject {
    * Handle UI WebSocket upgrade (for log subscribers)
    */
   private async handleUIWebSocketUpgrade(request: Request): Promise<Response> {
+    console.log(`[AgentConnection] handleUIWebSocketUpgrade called`);
+    console.log(`[AgentConnection] Request URL: ${request.url}`);
+    console.log(`[AgentConnection] Request method: ${request.method}`);
+    console.log(`[AgentConnection] Upgrade header: ${request.headers.get("Upgrade")}`);
+    console.log(`[AgentConnection] Connection header: ${request.headers.get("Connection")}`);
+
     const upgradeHeader = request.headers.get("Upgrade");
     if (upgradeHeader !== "websocket") {
+      console.error(`[AgentConnection] Invalid upgrade header: ${upgradeHeader}`);
       return new Response("Expected Upgrade: websocket", { status: 426 });
+    }
+
+    // Extract user ID from header (passed by agents.ts for audit logging)
+    const userId = request.headers.get("X-User-Id") || undefined;
+    if (userId) {
+      console.log(`[AgentConnection] UI connection with user ID: ${userId}`);
     }
 
     // Create WebSocket pair
@@ -935,6 +955,11 @@ export class AgentConnection extends DurableObject {
     // Generate unique subscriber ID
     const subscriberId = crypto.randomUUID();
 
+    // Store user ID for audit logging
+    if (userId) {
+      this.uiWebSockets.set(server, userId);
+    }
+
     console.log(`[AgentConnection] UI subscriber connected: ${subscriberId}`);
 
     // Set up message handlers for UI client
@@ -945,11 +970,13 @@ export class AgentConnection extends DurableObject {
     server.addEventListener("close", () => {
       console.log(`[AgentConnection] UI subscriber disconnected: ${subscriberId}`);
       this.logSubscribers.delete(subscriberId);
+      this.uiWebSockets.delete(server);
     });
 
     server.addEventListener("error", (event) => {
       console.error(`[AgentConnection] UI subscriber error: ${subscriberId}`, event);
       this.logSubscribers.delete(subscriberId);
+      this.uiWebSockets.delete(server);
     });
 
     // Return the client side to the UI
@@ -1045,6 +1072,48 @@ export class AgentConnection extends DurableObject {
           if (sessionId && serverId) {
             this.rconSessions.set(sessionId, { sessionId, serverId });
             console.log(`[AgentConnection] RCON session created: ${sessionId} for server ${serverId}`);
+          }
+        }
+
+        // Audit log RCON commands
+        if (message.subject === "rcon.command" && reply.data.success) {
+          const sessionId = (message.data as any).sessionId;
+          const command = (message.data as any).command;
+          const userId = this.uiWebSockets.get(ws);
+
+          if (sessionId && command && userId) {
+            const session = this.rconSessions.get(sessionId);
+            if (session) {
+              // Fetch server name from database for audit log
+              try {
+                const server = await this.env.DB.prepare(
+                  'SELECT name FROM servers WHERE id = ?'
+                )
+                  .bind(session.serverId)
+                  .first<{ name: string }>();
+
+                if (server) {
+                  // Create minimal context for audit logging (WebSocket has no IP/user-agent)
+                  const mockContext = {
+                    req: {
+                      header: () => null,
+                    },
+                  } as any;
+
+                  await logRconCommand(
+                    this.env.DB,
+                    mockContext,
+                    userId,
+                    session.serverId,
+                    server.name,
+                    command
+                  );
+                }
+              } catch (error) {
+                console.error('[AgentConnection] Failed to log RCON command:', error);
+                // Don't fail the request if audit logging fails
+              }
+            }
           }
         }
 

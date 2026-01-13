@@ -15,8 +15,9 @@ import { agents } from './routes/agents';
 import { auth } from './routes/auth';
 import { users } from './routes/users';
 import { invitations } from './routes/invitations';
-import { permissions } from './routes/permissions';
+// import { permissions } from './routes/permissions'; // DEPRECATED - Removed (incompatible with role-based system)
 import { roleAssignments } from './routes/role-assignments';
+import { audit } from './routes/audit';
 import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
@@ -38,8 +39,9 @@ app.route('/api/auth', auth);
 app.route('/api/users', users);
 app.route('/api/users/invite', invitations);
 app.route('/api/invite', invitations); // Public invitation endpoints
-app.route('/api/permissions', permissions); // Legacy - deprecated, use role-assignments instead
+// app.route('/api/permissions', permissions); // DEPRECATED - Removed (incompatible with role-based system)
 app.route('/api/role-assignments', roleAssignments); // New role-based system
+app.route('/api/audit', audit); // Audit logs
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 
@@ -149,7 +151,7 @@ const indexHtmlContent = `<!doctype html>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
-    <script type="module" crossorigin src="/assets/index-ri63bDOb.js"></script>
+    <script type="module" crossorigin src="/assets/index-C8kK7RS2.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-WvvdXZei.css">
   </head>
   <body>
