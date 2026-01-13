@@ -85,3 +85,62 @@ Agents Page → /agents/:id → AgentDetail → /servers/:id → ServerDetail
 - This milestone (M9.5) connects UI to real data
 - Small effort (4-6 hours) for big impact (users see new design!)
 - No breaking changes (backward compatible)
+
+---
+
+## Session 2: Implementation (2026-01-13)
+
+**Date:** 2026-01-13
+**Duration:** ~2 hours
+**Goal:** Implement all 6 phases and deploy to production
+
+### Actions Taken
+
+1. **Phase 1: Backend Server API Endpoints** ✅
+   - Created `manager/src/routes/servers.ts` - New route file for global endpoints
+   - Implemented `GET /api/servers` - List all servers across agents
+   - Implemented `GET /api/servers/:id` - Single server details
+   - Added permission checking (admin sees all, users see assigned)
+   - Includes agent_name via LEFT JOIN for display
+   - Mounted route in `manager/src/index.ts`
+   - Deployed to Cloudflare successfully
+
+2. **Phase 2: Frontend Server Hooks** ✅
+   - Added `useAllServers()` hook in `frontend/src/hooks/useServers.ts`
+   - Added `useServerById(serverId)` hook
+   - Uses `getToken()` from auth.ts (same pattern as existing hooks)
+   - 5 second refetch interval for real-time updates
+   - Properly typed with TypeScript
+
+3. **Phase 3: Wire Up ServerList & Dashboard** ✅
+   - Updated `ServerList.tsx` to use `useAllServers()` hook
+   - Replaced hardcoded empty array with real API data
+   - Map API response to component format (agent_id → agentId, etc.)
+   - Updated `Dashboard.tsx` to show real server counts
+   - Added server loading skeleton
+   - Total servers and running servers counts now accurate
+
+4. **Phase 4: Wire Up ServerDetail** ✅
+   - Updated `ServerDetail.tsx` to use `useServerById(id)` hook
+   - Extract server data from API response
+   - Parse config JSON to get RCON password
+   - Pass real agentId, containerId to LogViewer and RconTerminal
+   - Added 404 error handling (server not found page)
+   - Loading skeleton and error states
+
+5. **Phase 5: Remove Old Navigation** ✅
+   - Simplified `AgentsPage.tsx` from 75 lines to 28 lines
+   - Removed `selectedAgent` and `selectedContainer` state
+   - Removed `handleBackToAgents`, `handleViewLogs`, `handleBackToContainers` functions
+   - Removed conditional rendering (ContainerList, LogViewer)
+   - Navigation now goes directly to `/agents/:id` (AgentDetail page)
+   - Clean, simple implementation following M9 design
+
+6. **Phase 6: Build, Test, Deploy** ✅
+   - Fixed TypeScript errors
+   - Build successful: 249.47KB gzipped (excellent)
+   - Deployed to production: https://zedops.mail-bcf.workers.dev
+
+### Status: ✅ M9.5 COMPLETE
+
+**Actual Time:** ~2 hours (vs 4-6 hours estimated - 50% faster!)
