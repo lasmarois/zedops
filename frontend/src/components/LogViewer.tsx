@@ -4,6 +4,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useLogStream } from '../hooks/useLogStream';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface LogViewerProps {
   agentId: string;
@@ -92,159 +104,88 @@ export function LogViewer({
   };
 
   return (
-    <div style={{ padding: '2rem', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="p-8 h-screen flex flex-col">
       {/* Header */}
-      <div style={{ marginBottom: '1rem' }}>
-        <button
-          onClick={onBack}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-          }}
-        >
+      <div className="mb-4">
+        <Button variant="secondary" onClick={onBack} className="mb-4">
           ← Back to Containers
-        </button>
+        </Button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-          <h2 style={{ margin: 0 }}>Logs: {containerName}</h2>
-          <div
-            style={{
-              display: 'inline-block',
-              padding: '0.25rem 0.75rem',
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-              fontWeight: 'bold',
-              backgroundColor: isConnected ? '#28a745' : '#dc3545',
-              color: 'white',
-            }}
-          >
+        <div className="flex items-center gap-4 mb-4">
+          <h2 className="text-2xl font-bold m-0">Logs: {containerName}</h2>
+          <Badge variant={isConnected ? 'success' : 'destructive'}>
             {isConnected ? 'Connected' : 'Disconnected'}
-          </div>
+          </Badge>
         </div>
 
         {error && (
-          <div
-            style={{
-              padding: '0.75rem',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              borderRadius: '4px',
-              marginBottom: '1rem',
-            }}
-          >
-            Error: {error}
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>Error: {error}</AlertDescription>
+          </Alert>
         )}
       </div>
 
       {/* Controls */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '1rem',
-          marginBottom: '1rem',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="flex gap-4 mb-4 items-center flex-wrap">
         {/* Stream filter */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <label style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>Stream:</label>
-          <select
-            value={streamFilter}
-            onChange={(e) => setStreamFilter(e.target.value as 'all' | 'stdout' | 'stderr')}
-            style={{
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px',
-              border: '1px solid #dee2e6',
-              fontSize: '0.875rem',
-            }}
-          >
-            <option value="all">All</option>
-            <option value="stdout">stdout</option>
-            <option value="stderr">stderr</option>
-          </select>
+        <div className="flex gap-2 items-center">
+          <Label className="text-sm font-bold">Stream:</Label>
+          <Select value={streamFilter} onValueChange={(val) => setStreamFilter(val as 'all' | 'stdout' | 'stderr')}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="stdout">stdout</SelectItem>
+              <SelectItem value="stderr">stderr</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Search */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flex: 1 }}>
-          <label style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>Search:</label>
-          <input
+        <div className="flex gap-2 items-center flex-1">
+          <Label className="text-sm font-bold">Search:</Label>
+          <Input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Filter logs..."
-            style={{
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px',
-              border: '1px solid #dee2e6',
-              fontSize: '0.875rem',
-              flex: 1,
-              maxWidth: '300px',
-            }}
+            className="flex-1 max-w-[300px]"
           />
         </div>
 
         {/* Action buttons */}
-        <button
+        <Button
+          size="sm"
+          variant={isPaused ? 'success' : 'warning'}
           onClick={togglePause}
-          style={{
-            padding: '0.25rem 0.75rem',
-            backgroundColor: isPaused ? '#28a745' : '#ffc107',
-            color: isPaused ? 'white' : '#000',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: 'bold',
-          }}
         >
           {isPaused ? 'Resume' : 'Pause'}
-        </button>
+        </Button>
 
-        <button
+        <Button
+          size="sm"
+          variant={autoScroll ? 'secondary' : 'info'}
           onClick={() => setAutoScroll(true)}
           disabled={autoScroll}
-          style={{
-            padding: '0.25rem 0.75rem',
-            backgroundColor: autoScroll ? '#6c757d' : '#17a2b8',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: autoScroll ? 'not-allowed' : 'pointer',
-            fontSize: '0.875rem',
-            opacity: autoScroll ? 0.6 : 1,
-          }}
         >
           Auto-scroll
-        </button>
+        </Button>
 
-        <button
+        <Button
+          size="sm"
+          variant="destructive"
           onClick={handleClear}
-          style={{
-            padding: '0.25rem 0.75rem',
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-          }}
         >
           Clear
-        </button>
+        </Button>
 
-        <div style={{ fontSize: '0.875rem', color: '#6c757d' }}>
+        <span className="text-sm text-muted-foreground">
           {filteredLogs.length} / {logs.length} lines
-        </div>
+        </span>
       </div>
 
-      {/* Log display */}
+      {/* Log display - PRESERVE DRACULA THEME */}
       <div
         ref={logContainerRef}
         onScroll={handleScroll}
