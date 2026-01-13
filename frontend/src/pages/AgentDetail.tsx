@@ -82,7 +82,12 @@ export function AgentDetail() {
           <Button variant="outline" disabled={agent.status !== 'online'}>
             Configure
           </Button>
-          <Button variant="outline" className="text-error hover:text-error">
+          <Button
+            variant="outline"
+            className="text-error hover:text-error"
+            disabled
+            title="Not yet implemented - Planned for future release"
+          >
             Disconnect
           </Button>
         </div>

@@ -287,3 +287,26 @@ M9.8 complete when:
 - Test thoroughly after each sub-milestone
 - Archive planning files after each completion
 - Move to M10 only after user approval
+
+---
+
+## Future Enhancements (Post M9.8)
+
+### Agent Disconnect Functionality
+**Status:** 📋 Planned (Not Implemented)
+**Priority:** LOW
+**Current State:** Disconnect button exists in AgentDetail page but is non-functional (no onClick handler)
+
+**Proposed Implementation:**
+- Add confirmation dialog: "Are you sure you want to disconnect this agent?"
+- Close WebSocket connection from manager side
+- Optionally mark agent as manually disconnected (vs connection lost)
+- Show appropriate status/messaging after disconnect
+- Allow reconnection or require agent restart
+
+**Backend Needs:**
+- Manager endpoint to force-disconnect an agent's WebSocket
+- Durable Object method to close specific agent connection
+- Consider: Should disconnect persist or auto-reconnect on agent side?
+
+**UI Location:** AgentDetail page header (currently has red "Disconnect" button)
