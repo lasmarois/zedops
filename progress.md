@@ -297,3 +297,88 @@ During Phase 0.3, some npm install commands were executed from project root (`/V
 
 **Time Spent:** 25 minutes (investigation + cleanup + verification)
 
+
+---
+
+## 2026-01-12 Late Evening - Phase 1: Design System ✅
+
+**Status:** Phase 1 complete
+
+**Goals:**
+- Define color palette based on existing Bootstrap-inspired colors
+- Add success, warning, info semantic colors
+- Define typography system (font families, sizes)
+- Configure design tokens in Tailwind
+
+**Work Done:**
+
+### 1.1 Color Palette ✅
+- ✅ Analyzed current inline styles from ContainerList, Login, AgentList
+- ✅ Identified Bootstrap color scheme:
+  - Primary: #007bff → hsl(211, 100%, 50%)
+  - Success: #28a745 → hsl(134, 61%, 41%)
+  - Danger: #dc3545 → hsl(354, 70%, 54%)
+  - Warning: #ffc107 → hsl(45, 100%, 51%)
+  - Info: #17a2b8 → hsl(188, 78%, 41%)
+  - Secondary: #6c757d → hsl(210, 7%, 46%)
+- ✅ Updated CSS variables in index.css:
+  - Converted all Bootstrap colors to HSL format
+  - Added --success, --warning, --info tokens
+  - Maintained shadcn's semantic structure
+- ✅ Updated tailwind.config.js:
+  - Added success, warning, info to colors object
+  - Each with DEFAULT and foreground variants
+
+### 1.2 Component Variants ✅
+- ✅ Updated Badge component:
+  - Added success, warning, info variants
+  - All variants follow Bootstrap color scheme
+- ✅ Updated Button component:
+  - Added success, warning, info variants
+  - Consistent hover states (bg/90)
+- ✅ Updated Alert component:
+  - Added success, warning, info variants
+  - Border and text color styling
+
+### 1.3 Typography System ✅
+- ✅ Configured font families:
+  - Sans: System font stack (matches existing body styles)
+  - Mono: Courier New for code/logs
+- ✅ Defined font size scale:
+  - xs (0.75rem) through 4xl (2.25rem)
+  - All with proper line heights
+- ✅ Added to tailwind.config.js
+
+### 1.4 Spacing & Layout ✅
+- ✅ Using Tailwind default spacing scale (no customization needed)
+- ✅ Container configuration:
+  - center: true
+  - padding: 2rem
+  - max-width: 1400px (2xl breakpoint)
+- ✅ Border radius tokens:
+  - --radius: 0.375rem (slightly rounded)
+  - lg, md, sm calculated variants
+
+**Build Test:** ✅ PASSED
+- CSS size: 25.62 kB (gzipped: 5.89 kB) - +90 bytes for new variants
+- JS size: 661.81 kB (gzipped: 175.27 kB) - unchanged
+- TypeScript compilation: No errors
+- All new color variants functional
+
+**Design Tokens Summary:**
+
+| Token | Value (HSL) | Hex Equivalent | Usage |
+|-------|-------------|----------------|-------|
+| primary | 211 100% 50% | #007bff | Primary actions, links |
+| success | 134 61% 41% | #28a745 | Success states, running containers |
+| destructive | 354 70% 54% | #dc3545 | Error states, delete actions |
+| warning | 45 100% 51% | #ffc107 | Warning states, paused containers |
+| info | 188 78% 41% | #17a2b8 | Info states, restarting containers |
+| secondary | 210 7% 46% | #6c757d | Secondary actions, muted text |
+
+**Next Steps:**
+- Commit Phase 1 work
+- Begin Phase 2: Core Components (replace inline styles)
+
+**Time Spent:** 45 minutes
+
