@@ -714,17 +714,17 @@ func (a *Agent) handleServerDelete(msg Message) {
 		return
 	}
 
-	log.Printf("Deleting server container: %s", req.ContainerID)
+	log.Printf("Deleting server: containerID=%s, serverName=%s, removeVolumes=%v", req.ContainerID, req.ServerName, req.RemoveVolumes)
 
-	// Delete server
-	err := a.docker.DeleteServer(ctx, req.ContainerID, req.RemoveVolumes)
+	// Delete server (container and/or data)
+	err := a.docker.DeleteServer(ctx, req.ContainerID, req.ServerName, req.RemoveVolumes)
 	if err != nil {
-		log.Printf("Failed to delete server %s: %v", req.ContainerID, err)
+		log.Printf("Failed to delete server (container=%s, name=%s): %v", req.ContainerID, req.ServerName, err)
 		a.sendServerErrorWithReply("", req.ContainerID, "delete", err.Error(), "SERVER_DELETE_FAILED", msg.Reply)
 		return
 	}
 
-	log.Printf("Server deleted successfully: %s", req.ContainerID)
+	log.Printf("Server deleted successfully: %s", req.ServerName)
 
 	// Send success response
 	a.sendServerSuccessWithReply("", req.ContainerID, "delete", msg.Reply)

@@ -231,11 +231,243 @@ Agents Page → /agents/:id → AgentDetail → /servers/:id → ServerDetail
 
 ---
 
-## Overall M9 Status: ✅ COMPLETE
+## Session 4: M9.8 Polish Phase - M9.8.1 Implementation (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Fix server status to reflect agent connectivity
+
+### M9.8 - Parent Milestone Created ✅
+
+**Approach:** Iterative sub-milestones (M9.8.1, M9.8.2, etc.) - one complex task per sub-milestone using planning-with-files skill.
+
+**Files Created:**
+- MILESTONE-M98.md - Parent milestone document
+- M9.6-7 archived to planning-history/m96-m97-ui-consistency/
+
+### M9.8.1: Fix Server Status When Agent Offline ✅
+
+**Duration:** ~1 hour
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Problem:** Servers showed "running" even when agent was offline - misleading users
+
+**Solution:**
+1. **Backend** (3 endpoints): Added `agent.status` to all server queries
+2. **Frontend Interface**: Updated Server interface, created getDisplayStatus helper
+3. **Frontend Components**: Updated ServerList, AgentServerList, ServerDetail
+4. **Deploy**: Built and deployed successfully
+
+**Key Changes:**
+- Added `agent_status` field to 3 API endpoints (servers.ts, agents.ts)
+- Created `frontend/src/lib/server-status.ts` with smart status logic
+- Agent offline takes precedence - shows "Agent Offline" (warning/orange)
+- Agent online - shows actual server status
+
+**Deployment:**
+- Version: 127bd742-e409-4119-a0db-1a6b1eb8c1ee
+- URL: https://zedops.mail-bcf.workers.dev
+- Build: SUCCESS (927.64 KB → 249.77 KB gzipped)
+
+**Files Created:**
+- task_plan_m98_1.md - 4-phase implementation plan
+- findings_m98_1.md - Root cause analysis
+- progress_m98_1.md - Session log
+- M981-COMPLETE.md - Completion summary
+- frontend/src/lib/server-status.ts - NEW utility file
+
+**Status:** ✅ COMPLETE
+**Actual Time:** 1 hour (vs 1 hour estimated - perfect!)
+
+---
+
+## Session 5: M9.8.2 Dynamic Color Coding (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Add dynamic color coding to Dashboard stat cards
+
+### M9.8.2: Dynamic Color Coding for Dashboard Stats ✅
+
+**Duration:** ~10 minutes
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Problem:** Dashboard stats showed "0 running" and "0 online" in green (misleading - green indicates healthy)
+
+**Solution:**
+1. **Frontend Changes**: Added conditional className to Dashboard.tsx
+2. **Logic**: count > 0 → green, count = 0 → gray
+3. **Deploy**: Built and deployed successfully
+
+**Key Changes:**
+- Modified 2 lines in Dashboard.tsx (Agents card + Servers card)
+- Added ternary operators: `${count > 0 ? 'text-success' : 'text-muted-foreground'}`
+- Pure CSS class change (no logic changes)
+
+**Deployment:**
+- Version: 88ec4682-d24a-4783-a6de-92599c43e0ef
+- URL: https://zedops.mail-bcf.workers.dev
+- Build: SUCCESS (927.71 KB → 249.81 KB gzipped)
+
+**Files Created:**
+- task_plan_m98_2.md - 2-phase implementation plan
+- findings_m98_2.md - Design analysis
+- progress_m98_2.md - Session log
+- M982-COMPLETE.md - Completion summary
+
+**Status:** ✅ COMPLETE
+**Actual Time:** 10 minutes (vs 15 min estimated - 33% faster!)
+
+---
+
+## Session 6: M9.8.3 Fix RCON Window Close Button (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Fix RCON terminal X button so it closes the window
+
+### M9.8.3: Fix RCON Window Close Button ✅
+
+**Duration:** ~20 minutes
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Problem:** RCON terminal X button didn't close the window (empty onClose handler)
+
+**Solution:**
+1. **Investigation**: Found empty `onClose={() => {}}` in ServerDetail.tsx
+2. **Implementation**: Added state management (`showRcon`) and conditional rendering
+3. **Deploy**: Built and deployed successfully
+
+**Key Changes:**
+- Added `useState` import and `showRcon` state in ServerDetail.tsx
+- RCON tab now shows "Open RCON Terminal" button
+- Button opens terminal as overlay (conditionally rendered)
+- X button calls `setShowRcon(false)` → properly closes window
+- Matches pattern used in AgentServerList.tsx
+
+**Deployment:**
+- Version: 0ac84cfc-79cf-409e-a67b-4345820f5864
+- URL: https://zedops.mail-bcf.workers.dev
+- Build: SUCCESS (927.56 KB → 249.84 KB gzipped)
+
+**Files Created:**
+- task_plan_m98_3.md - 3-phase implementation plan
+- findings_m98_3.md - Root cause investigation
+- progress_m98_3.md - Session log
+- M983-COMPLETE.md - Completion summary
+
+**Status:** ✅ COMPLETE
+**Actual Time:** 20 minutes (vs 20 min estimated - perfect!)
+
+---
+
+## Session 7: M9.8.4 Embed RCON Terminal in Tab (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Embed RCON terminal in ServerDetail tab instead of full-screen overlay
+
+### M9.8.4: Embed RCON Terminal in Tab ✅
+
+**Duration:** ~27 minutes
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Problem:** M9.8.3 added button + overlay, but user wanted embedded terminal in the tab
+
+**User Request:** "I see you added a button to open it, could it be embedded?" → "yes embed it"
+
+**Solution:**
+1. **Dual-Mode Support**: Added `embedded` prop to RconTerminal component
+2. **Embedded Mode**: ServerDetail (600px, no X button, fits in tab)
+3. **Overlay Mode**: AgentServerList unchanged (backward compatible)
+4. **Implementation**: Conditional rendering, extracted reusable JSX
+
+**Key Changes:**
+- RconTerminal.tsx: Added `embedded?: boolean` prop with default false
+- Created `terminalContent` JSX variable for reuse
+- Conditional wrapper: embedded (`h-[600px]`) vs overlay (`fixed inset-0`)
+- Conditional X button: only shows in overlay mode
+- ServerDetail: Removed button, embedded terminal directly in tab
+- AgentServerList: No changes (defaults to overlay)
+
+**Benefits:**
+- Better UX: Can see server details while using RCON
+- Simpler code: Removed state management from ServerDetail
+- Backward compatible: AgentServerList overlay mode unchanged
+- Dual behavior: One component, two render modes
+
+**Deployment:**
+- Version: 704a00c1-387f-495d-8114-6a333b83c006
+- URL: https://zedops.mail-bcf.workers.dev
+- Build: SUCCESS (927.48 KB → 249.82 KB gzipped)
+
+**Files Created:**
+- task_plan_m98_4.md - 4-phase implementation plan
+- findings_m98_4.md - Use case analysis
+- progress_m98_4.md - Session log
+- M984-COMPLETE.md - Completion summary
+
+**Status:** ✅ COMPLETE
+**Actual Time:** 27 minutes (vs 30 min estimated - 10% faster!)
+
+---
+
+## Session 8: M9.8.5 Increase RCON Terminal Height (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Make embedded RCON terminal use more vertical space
+
+### M9.8.5: Increase Embedded RCON Terminal Height ✅
+
+**Duration:** ~10 minutes
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Problem:** Embedded RCON terminal (600px) only used half of available vertical space
+
+**User Request:** "it works !!! but it is only using half the available space left in the page ! could we adjust that?"
+
+**Solution:**
+Changed from fixed height to viewport-based responsive height
+
+**Implementation:**
+- Single CSS change in RconTerminal.tsx (line 589)
+- From: `h-[600px]` (fixed)
+- To: `h-[calc(100vh-300px)]` (viewport-based)
+
+**Calculation:**
+- `100vh` = full viewport height
+- `-300px` = space for header + cards + tabs + margins
+- Result: Terminal fills remaining space responsively
+
+**Benefits:**
+- Uses most of available vertical space
+- Responsive: adapts to screen size
+- No overflow on small screens
+- No wasted space on large monitors
+
+**Deployment:**
+- Version: ada07587-29d6-4328-9efe-e17ee917d73a
+- URL: https://zedops.mail-bcf.workers.dev
+- Build: SUCCESS (927.49 KB → 249.83 KB gzipped)
+
+**Files Created:**
+- task_plan_m98_5.md - 3-phase implementation plan
+- findings_m98_5.md - Height analysis
+- progress_m98_5.md - Session log
+- M985-COMPLETE.md - Completion summary
+
+**Status:** ✅ COMPLETE
+**Actual Time:** 10 minutes (vs 15 min estimated - 33% faster!)
+
+---
+
+## Overall M9 Status: 🚧 IN PROGRESS (M9.8 Polish Phase)
 
 **M9:** Design & Component Library ✅
 **M9.5:** Bridge Design to Functionality ✅
 **M9.6:** Investigation ✅
 **M9.7:** Fix UI/UX Inconsistencies ✅
+**M9.8.1:** Fix Server Status (Agent Offline) ✅
+**M9.8.2:** Dynamic Color Coding for Dashboard Stats ✅
+**M9.8.3:** Fix RCON Window Close Button ✅
+**M9.8.4:** Embed RCON Terminal in Tab ✅
+**M9.8.5:** Increase Embedded RCON Terminal Height ✅
+**M9.8.x:** Additional polish tasks as discovered ⏳
 
-**Next Milestone:** M10 (Future enhancements - metrics, backups, etc.)
+**Next Sub-Milestone:** M9.8.6 (TBD based on user testing)

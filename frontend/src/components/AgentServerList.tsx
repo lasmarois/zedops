@@ -10,10 +10,11 @@ import {
   useStopContainer,
   useRestartContainer,
 } from '../hooks/useContainers';
-import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, useStopServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
+import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
 import { RconTerminal } from './RconTerminal';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
+import { getDisplayStatus } from '../lib/server-status';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +27,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical, Play, Square, RotateCw, Wrench, Trash2, Terminal, Gamepad2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +64,6 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   const rebuildServerMutation = useRebuildServer();
   const cleanupFailedServersMutation = useCleanupFailedServers();
   const startServerMutation = useStartServer();
-  const stopServerMutation = useStopServer();
   const purgeServerMutation = usePurgeServer();
   const restoreServerMutation = useRestoreServer();
   const syncServersMutation = useSyncServers();
@@ -72,6 +82,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     type: 'success' | 'error';
   } | null>(null);
   const [showDeletedServers, setShowDeletedServers] = useState(false);
+  const [showIssues, setShowIssues] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
   const [rconServer, setRconServer] = useState<Server | null>(null);
 
@@ -236,18 +247,18 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     return container.id.substring(0, 12);
   };
 
-  const getStateVariant = (state: string): 'success' | 'destructive' | 'warning' | 'info' | 'secondary' => {
+  const getStateVariant = (state: string): 'success' | 'error' | 'warning' | 'info' | 'muted' => {
     switch (state.toLowerCase()) {
       case 'running':
         return 'success';
       case 'exited':
-        return 'destructive';
+        return 'error';
       case 'paused':
         return 'warning';
       case 'restarting':
         return 'info';
       default:
-        return 'secondary';
+        return 'muted';
     }
   };
 
@@ -419,23 +430,6 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  const handleServerStop = async (serverId: string, serverName: string) => {
-    try {
-      await stopServerMutation.mutateAsync({ agentId, serverId });
-      setServerMessage({
-        message: `Server "${serverName}" stopped successfully`,
-        type: 'success',
-      });
-      setTimeout(() => setServerMessage(null), 5000);
-    } catch (error) {
-      setServerMessage({
-        message: error instanceof Error ? error.message : 'Failed to stop server',
-        type: 'error',
-      });
-      setTimeout(() => setServerMessage(null), 5000);
-    }
-  };
-
   const handleServerPurge = async (serverId: string, serverName: string, removeData: boolean) => {
     try {
       await purgeServerMutation.mutateAsync({ agentId, serverId, removeData });
@@ -491,25 +485,37 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  const getServerStatusBadge = (server: Server): { variant: 'success' | 'secondary' | 'info' | 'warning' | 'destructive'; text: string } => {
-    const { status, data_exists } = server;
+  const getServerStatusBadge = (server: Server): { variant: 'success' | 'muted' | 'info' | 'warning' | 'error'; text: string } => {
+    // Use shared status display logic that considers agent connectivity
+    const displayStatus = getDisplayStatus(server);
 
-    const badgeMap: Record<string, { variant: 'success' | 'secondary' | 'info' | 'warning' | 'destructive'; text: string }> = {
-      running: { variant: 'success', text: '✓ Running' },
-      stopped: { variant: 'secondary', text: '⏸ Stopped' },
-      creating: { variant: 'info', text: '⏳ Creating' },
-      deleting: { variant: 'warning', text: '⏳ Deleting' },
-      failed: { variant: 'destructive', text: '❌ Failed' },
-      deleted: { variant: 'warning', text: '🗑️ Deleted' },
+    // Map our display variant types to StatusBadge variant types
+    const variantMap: Record<string, 'success' | 'muted' | 'info' | 'warning' | 'error'> = {
+      success: 'success',
+      muted: 'muted',
+      info: 'info',
+      warning: 'warning',
+      error: 'error',
     };
 
-    if (status === 'missing') {
-      return data_exists
-        ? { variant: 'warning', text: '⚠️ Missing (Recoverable)' }
-        : { variant: 'destructive', text: '⚠️ Orphaned' };
-    }
+    // Add icons based on status
+    const iconMap: Record<string, string> = {
+      running: '✓ ',
+      stopped: '⏸ ',
+      creating: '⏳ ',
+      deleting: '⏳ ',
+      failed: '❌ ',
+      deleted: '🗑️ ',
+      agent_offline: '⚠️ ',
+      missing: '⚠️ ',
+    };
 
-    return badgeMap[status] || { variant: 'secondary', text: status };
+    const icon = iconMap[displayStatus.status] || '';
+
+    return {
+      variant: variantMap[displayStatus.variant] || 'muted',
+      text: `${icon}${displayStatus.label}`,
+    };
   };
 
   const isOperationPending = (): boolean => {
@@ -522,6 +528,94 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
   const getServerFromContainerId = (containerId: string): Server | undefined => {
     return serversData?.servers.find((s) => s.container_id === containerId);
+  };
+
+  // Unified data structure for containers and servers
+  type UnifiedItem = {
+    id: string;
+    type: 'managed' | 'unmanaged';
+    name: string;
+    status: string;
+    container?: Container;
+    server?: Server;
+    isIssue: boolean; // true for missing/deleted servers
+  };
+
+  const getUnifiedList = (): { normal: UnifiedItem[]; issues: UnifiedItem[] } => {
+    const unified: UnifiedItem[] = [];
+    const issues: UnifiedItem[] = [];
+
+    // Add all containers (both managed and unmanaged)
+    data?.containers.forEach((container) => {
+      const server = getServerFromContainerId(container.id);
+
+      if (server) {
+        // Managed server with container
+        // Only include if not in issue state (missing, deleted)
+        if (server.status !== 'missing' && server.status !== 'deleted') {
+          unified.push({
+            id: server.id,
+            type: 'managed',
+            name: server.name,
+            status: server.status,
+            container,
+            server,
+            isIssue: false,
+          });
+        }
+      } else {
+        // Unmanaged container
+        unified.push({
+          id: container.id,
+          type: 'unmanaged',
+          name: getContainerName(container),
+          status: container.state,
+          container,
+          isIssue: false,
+        });
+      }
+    });
+
+    // Add managed servers without containers (missing, deleted, creating, failed)
+    serversData?.servers.forEach((server) => {
+      // Skip if already added (has container)
+      const hasContainer = data?.containers.some((c) => c.id === server.container_id);
+      if (hasContainer && server.status !== 'missing' && server.status !== 'deleted') {
+        return; // Already in the list
+      }
+
+      // Separate missing and deleted into issues
+      if (server.status === 'missing' || (server.status === 'deleted' && showDeletedServers)) {
+        issues.push({
+          id: server.id,
+          type: 'managed',
+          name: server.name,
+          status: server.status,
+          server,
+          isIssue: true,
+        });
+      } else if (server.status !== 'deleted') {
+        // Normal managed server without container (creating, failed, etc.)
+        unified.push({
+          id: server.id,
+          type: 'managed',
+          name: server.name,
+          status: server.status,
+          server,
+          isIssue: false,
+        });
+      }
+    });
+
+    // Sort: managed first, then unmanaged
+    unified.sort((a, b) => {
+      if (a.type === b.type) {
+        return a.name.localeCompare(b.name);
+      }
+      return a.type === 'managed' ? -1 : 1;
+    });
+
+    return { normal: unified, issues };
   };
 
   if (isLoading) {
@@ -592,7 +686,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
           <Button variant="secondary" onClick={onBack} className="mb-4">
             ← Back to Agents
           </Button>
-          <h1 className="text-3xl font-bold">Containers on {agentName}</h1>
+          <h1 className="text-3xl font-bold">Zomboid Servers on {agentName}</h1>
         </div>
         <div className="flex gap-4">
           <Button onClick={() => setShowServerForm(true)} size="lg">
@@ -619,366 +713,388 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         </Alert>
       )}
 
-      <div className="mb-4">
-        <strong>Total Containers:</strong> {data?.count ?? 0}
-        {serversData && serversData.servers.length > 0 && (
-          <span className="ml-4 text-muted-foreground">
-            (Managed Servers: {serversData.servers.length})
-          </span>
-        )}
-      </div>
+      {(() => {
+        const { normal, issues } = getUnifiedList();
+        const managedCount = normal.filter(item => item.type === 'managed').length;
+        const unmanagedCount = normal.filter(item => item.type === 'unmanaged').length;
 
-      {data?.containers.length === 0 ? (
-        <div className="p-8 text-center bg-muted rounded-md">
-          No containers found on this agent
-        </div>
-      ) : (
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Image</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.containers.map((container) => (
-                <TableRow key={container.id}>
-                  <TableCell>{getContainerName(container)}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {container.image}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStateVariant(container.state)}>
-                      {container.state}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {container.status}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2 flex-wrap">
-                      {container.state.toLowerCase() !== 'running' && (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          onClick={() => handleStart(container.id)}
-                          disabled={isOperationPending()}
-                        >
-                          {isOperationPending() ? 'Working...' : 'Start'}
-                        </Button>
-                      )}
-                      {container.state.toLowerCase() === 'running' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleStop(container.id)}
-                            disabled={isOperationPending()}
-                          >
-                            {isOperationPending() ? 'Working...' : 'Stop'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="info"
-                            onClick={() => handleRestart(container.id)}
-                            disabled={isOperationPending()}
-                          >
-                            {isOperationPending() ? 'Working...' : 'Restart'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => onViewLogs(container.id, getContainerName(container))}
-                          >
-                            View Logs
-                          </Button>
-                          {getServerFromContainerId(container.id) && (
-                            <Button
-                              size="sm"
-                              variant="warning"
-                              onClick={() => {
-                                const server = getServerFromContainerId(container.id);
-                                if (server) {
-                                  setRconServer(server);
-                                }
-                              }}
-                            >
-                              🎮 RCON
-                            </Button>
-                          )}
-                        </>
-                      )}
-                      {getServerFromContainerId(container.id) && (
-                        <>
-                          {getServerFromContainerId(container.id)?.status === 'failed' && (
-                            <Button
-                              size="sm"
-                              variant="warning"
-                              onClick={() => {
-                                const server = getServerFromContainerId(container.id);
-                                if (server) {
-                                  handleEditServer(server);
-                                }
-                              }}
-                            >
-                              Edit & Retry
-                            </Button>
-                          )}
-                          {getServerFromContainerId(container.id)?.status === 'running' && (
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                const server = getServerFromContainerId(container.id);
-                                if (server) {
-                                  handleRebuildServer(server.id, server.name);
-                                }
-                              }}
-                              disabled={rebuildServerMutation.isPending}
-                            >
-                              {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              const server = getServerFromContainerId(container.id);
-                              if (server) {
-                                handleDeleteServer(server.id, server.name);
-                              }
-                            }}
-                            disabled={deleteServerMutation.isPending}
-                          >
-                            {deleteServerMutation.isPending ? 'Deleting...' : 'Delete Server'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                    {operationStatus && operationStatus.containerId === container.id && (
-                      <Alert variant={operationStatus.type === 'success' ? 'success' : 'destructive'} className="mt-2">
-                        <AlertDescription className="text-xs">{operationStatus.message}</AlertDescription>
-                      </Alert>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* All Servers Section */}
-      {serversData && serversData.servers.length > 0 && (
-        <div className="mt-12">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">All Servers (Manager Database)</h2>
-            <div className="flex gap-4 items-center">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showDeletedServers}
-                  onChange={(e) => setShowDeletedServers(e.target.checked)}
-                />
-                Show Deleted Servers
-              </label>
+        return (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <div>
+                <strong>Total:</strong> {normal.length} servers
+                <span className="ml-4 text-muted-foreground">
+                  ({managedCount} managed, {unmanagedCount} unmanaged)
+                </span>
+              </div>
               <Button
-                variant="info"
+                variant="ghost"
+                size="sm"
                 onClick={handleSyncServers}
                 disabled={syncServersMutation.isPending}
+                className="h-8 w-8 p-0"
+                title="Sync server status"
               >
-                {syncServersMutation.isPending ? '🔄 Syncing...' : '🔄 Sync Status'}
+                <RotateCw className={`h-4 w-4 ${syncServersMutation.isPending ? 'animate-spin' : ''}`} />
               </Button>
             </div>
-          </div>
 
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Server Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ports (Game/UDP)</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {serversData.servers
-                  .filter((server) => showDeletedServers || server.status !== 'deleted')
-                  .map((server) => {
-                    const badge = getServerStatusBadge(server);
-                    return (
-                      <TableRow
-                        key={server.id}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/servers/${server.id}`)}
-                      >
-                        <TableCell className="font-semibold">{server.name}</TableCell>
-                        <TableCell>
-                          <Badge variant={badge.variant}>{badge.text}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {server.game_port}/{server.udp_port}
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex gap-2 flex-wrap">
-                            {/* Running: Stop, Rebuild, Delete */}
-                            {server.status === 'running' && (
+            {normal.length === 0 ? (
+              <div className="p-8 text-center bg-muted rounded-md">
+                No servers or containers found on this agent
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {normal.map((item) => {
+                  const isManaged = item.type === 'managed';
+                  const container = item.container;
+                  const server = item.server;
+                  const isRunning = container ? container.state.toLowerCase() === 'running' : server?.status === 'running';
+
+                  // Get border color
+                  const getBorderColor = () => {
+                    if (container) {
+                      switch (container.state.toLowerCase()) {
+                        case 'running': return '#22c55e';
+                        case 'exited': return '#ef4444';
+                        case 'paused': return '#f59e0b';
+                        case 'restarting': return '#3b82f6';
+                        default: return '#6b7280';
+                      }
+                    }
+                    if (server) {
+                      const displayStatus = getDisplayStatus(server);
+                      switch (displayStatus.variant) {
+                        case 'success': return '#22c55e';
+                        case 'error': return '#ef4444';
+                        case 'warning': return '#f59e0b';
+                        case 'info': return '#3b82f6';
+                        default: return '#6b7280';
+                      }
+                    }
+                    return '#6b7280';
+                  };
+
+                  // Get status badge
+                  const getStatusBadge = () => {
+                    if (container) {
+                      return <StatusBadge variant={getStateVariant(container.state)} iconOnly>{container.state}</StatusBadge>;
+                    }
+                    if (server) {
+                      const badge = getServerStatusBadge(server);
+                      return <StatusBadge variant={badge.variant} iconOnly>{badge.text}</StatusBadge>;
+                    }
+                    return null;
+                  };
+
+                  return (
+                    <Card
+                      key={item.id}
+                      className={`transition-all duration-200 border-l-4 ${
+                        isManaged && server
+                          ? 'cursor-pointer hover:shadow-lg hover:bg-accent/5 hover:scale-[1.01]'
+                          : 'hover:shadow-md'
+                      }`}
+                      style={{ borderLeftColor: getBorderColor() }}
+                      onClick={() => server && navigate(`/servers/${server.id}`)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          {/* Left: Badge + Info */}
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            {getStatusBadge()}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-lg truncate">{item.name}</div>
+                                {isManaged ? (
+                                  <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
+                                    Managed
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs border-2 text-muted-foreground">
+                                    Unmanaged
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {container && container.image}
+                                {server && !container && `Game: ${server.game_port} | UDP: ${server.udp_port} | RCON: ${server.rcon_port}`}
+                              </div>
+                              {container && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {container.status}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right: Quick Actions + Dropdown */}
+                          <div className="flex gap-2 items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* Quick action buttons for containers */}
+                            {container && !isRunning && (
+                              <Button
+                                size="sm"
+                                variant="success"
+                                onClick={() => handleStart(container.id)}
+                                disabled={isOperationPending()}
+                              >
+                                <Play className="h-4 w-4 mr-1" />
+                                Start
+                              </Button>
+                            )}
+                            {container && isRunning && (
                               <>
                                 <Button
                                   size="sm"
-                                  variant="warning"
-                                  onClick={() => handleServerStop(server.id, server.name)}
-                                  disabled={stopServerMutation.isPending}
+                                  variant="destructive"
+                                  onClick={() => handleStop(container.id)}
+                                  disabled={isOperationPending()}
                                 >
+                                  <Square className="h-4 w-4 mr-1" />
                                   Stop
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="info"
-                                  onClick={() => handleRebuildServer(server.id, server.name)}
-                                  disabled={rebuildServerMutation.isPending}
+                                  onClick={() => handleRestart(container.id)}
+                                  disabled={isOperationPending()}
                                 >
-                                  Rebuild
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleDeleteServer(server.id, server.name)}
-                                  disabled={deleteServerMutation.isPending}
-                                >
-                                  Delete
+                                  <RotateCw className="h-4 w-4 mr-1" />
+                                  Restart
                                 </Button>
                               </>
                             )}
 
-                            {/* Stopped: Start, Delete */}
-                            {server.status === 'stopped' && (
+                            {/* Quick action buttons for servers without containers */}
+                            {server && !container && (
                               <>
-                                <Button
-                                  size="sm"
-                                  variant="success"
-                                  onClick={() => handleServerStart(server.id, server.name)}
-                                  disabled={startServerMutation.isPending}
-                                >
-                                  Start
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleDeleteServer(server.id, server.name)}
-                                  disabled={deleteServerMutation.isPending}
-                                >
-                                  Delete
-                                </Button>
+                                {server.status === 'stopped' && (
+                                  <Button
+                                    size="sm"
+                                    variant="success"
+                                    onClick={() => handleServerStart(server.id, server.name)}
+                                    disabled={startServerMutation.isPending}
+                                  >
+                                    <Play className="h-4 w-4 mr-1" />
+                                    Start
+                                  </Button>
+                                )}
+                                {server.status === 'failed' && (
+                                  <Button
+                                    size="sm"
+                                    variant="warning"
+                                    onClick={() => {
+                                      setEditServer(server);
+                                      setShowServerForm(true);
+                                    }}
+                                  >
+                                    <Wrench className="h-4 w-4 mr-1" />
+                                    Edit & Retry
+                                  </Button>
+                                )}
                               </>
                             )}
 
-                            {/* Missing + Data Exists: Start (Recovery), Purge */}
-                            {server.status === 'missing' && server.data_exists && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="success"
-                                  onClick={() => handleServerStart(server.id, server.name)}
-                                  disabled={startServerMutation.isPending}
-                                  className="font-bold"
-                                >
-                                  ▶️ Start (Recovery)
+                            {/* More Actions Dropdown */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost">
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                  disabled={purgeServerMutation.isPending}
-                                >
-                                  🗑️ Purge
-                                </Button>
-                              </>
-                            )}
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {/* View Logs - always available if container exists */}
+                                {container && (
+                                  <DropdownMenuItem onClick={() => onViewLogs(container.id, item.name)}>
+                                    <Terminal className="h-4 w-4 mr-2" />
+                                    View Logs
+                                  </DropdownMenuItem>
+                                )}
 
-                            {/* Missing + No Data: Purge Only */}
-                            {server.status === 'missing' && !server.data_exists && (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleServerPurge(server.id, server.name, false)}
-                                disabled={purgeServerMutation.isPending}
-                              >
-                                🗑️ Purge (Orphaned)
-                              </Button>
-                            )}
+                                {/* Managed server actions */}
+                                {isManaged && server && (
+                                  <>
+                                    {isRunning && container && (
+                                      <DropdownMenuItem onClick={() => setRconServer(server)}>
+                                        <Gamepad2 className="h-4 w-4 mr-2" />
+                                        RCON
+                                      </DropdownMenuItem>
+                                    )}
+                                    {server.status === 'running' && (
+                                      <DropdownMenuItem
+                                        onClick={() => handleRebuildServer(server.id, server.name)}
+                                        disabled={rebuildServerMutation.isPending}
+                                      >
+                                        <Wrench className="h-4 w-4 mr-2" />
+                                        Rebuild
+                                      </DropdownMenuItem>
+                                    )}
+                                    {server.status === 'failed' && !container && (
+                                      <DropdownMenuItem onClick={() => handleEditServer(server)}>
+                                        <Wrench className="h-4 w-4 mr-2" />
+                                        Edit & Retry
+                                      </DropdownMenuItem>
+                                    )}
 
-                            {/* Deleted: Restore, Purge Now */}
-                            {server.status === 'deleted' && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="info"
-                                  onClick={() => handleServerRestore(server.id, server.name)}
-                                  disabled={restoreServerMutation.isPending}
-                                >
-                                  ↩️ Restore
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                  disabled={purgeServerMutation.isPending}
-                                >
-                                  🗑️ Purge Now
-                                </Button>
-                              </>
-                            )}
+                                    <DropdownMenuSeparator />
 
-                            {/* Failed: Edit & Retry, Purge */}
-                            {server.status === 'failed' && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setEditServer(server);
-                                    setShowServerForm(true);
-                                  }}
-                                >
-                                  Edit & Retry
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleServerPurge(server.id, server.name, true)}
-                                  disabled={purgeServerMutation.isPending}
-                                >
-                                  🗑️ Purge
-                                </Button>
-                              </>
-                            )}
-
-                            {/* Creating/Deleting: No actions */}
-                            {(server.status === 'creating' || server.status === 'deleting') && (
-                              <span className="text-sm text-muted-foreground italic">
-                                Operation in progress...
-                              </span>
-                            )}
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => handleDeleteServer(server.id, server.name)}
+                                      disabled={deleteServerMutation.isPending}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete Server
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </div>
+                        </div>
 
-          {serversData.servers.filter((s) => s.status === 'deleted').length > 0 && !showDeletedServers && (
-            <div className="mt-4 p-3 bg-muted rounded-md text-sm text-muted-foreground">
-              💡 {serversData.servers.filter((s) => s.status === 'deleted').length} deleted server(s) hidden. Check "Show Deleted Servers" to view them.
-            </div>
-          )}
+                        {/* Operation status feedback */}
+                        {container && operationStatus && operationStatus.containerId === container.id && (
+                          <Alert variant={operationStatus.type === 'success' ? 'success' : 'destructive'} className="mt-3">
+                            <AlertDescription className="text-xs">{operationStatus.message}</AlertDescription>
+                          </Alert>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
         </div>
       )}
+
+            {/* Issues & Recovery Section */}
+            {issues.length > 0 && (
+              <div className="mt-12">
+                <div
+                  className="flex justify-between items-center mb-4 cursor-pointer"
+                  onClick={() => setShowIssues(!showIssues)}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    Issues & Recovery
+                    <Badge variant="destructive" className="text-xs">
+                      {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
+                    </Badge>
+                  </h2>
+                  <Button variant="ghost" size="sm">
+                    {showIssues ? '▼ Collapse' : '▶ Expand'}
+                  </Button>
+                </div>
+
+                {showIssues && (
+                  <>
+                    <div className="mb-4 flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showDeletedServers}
+                          onChange={(e) => setShowDeletedServers(e.target.checked)}
+                        />
+                        <span className="text-sm">Show Deleted Servers</span>
+                      </label>
+                    </div>
+
+                    <div className="space-y-3">
+                      {issues.map((item) => {
+                        const server = item.server!;
+                        const badge = getServerStatusBadge(server);
+
+                        const getBorderColor = () => {
+                          const displayStatus = getDisplayStatus(server);
+                          switch (displayStatus.variant) {
+                            case 'success': return '#22c55e';
+                            case 'error': return '#ef4444';
+                            case 'warning': return '#f59e0b';
+                            case 'info': return '#3b82f6';
+                            default: return '#6b7280';
+                          }
+                        };
+
+                        return (
+                          <Card
+                            key={server.id}
+                            className="transition-all duration-200 border-l-4 cursor-pointer hover:shadow-lg hover:bg-accent/5 hover:scale-[1.01]"
+                            style={{ borderLeftColor: getBorderColor() }}
+                            onClick={() => navigate(`/servers/${server.id}`)}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                  <StatusBadge variant={badge.variant} iconOnly>
+                                    {badge.text}
+                                  </StatusBadge>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <div className="font-semibold text-lg truncate">{server.name}</div>
+                                      <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
+                                        Managed
+                                      </Badge>
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      Game: {server.game_port} | UDP: {server.udp_port} | RCON: {server.rcon_port}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  {server.status === 'missing' && server.data_exists && (
+                                    <Button
+                                      size="sm"
+                                      variant="success"
+                                      onClick={() => handleServerStart(server.id, server.name)}
+                                      disabled={startServerMutation.isPending}
+                                      className="font-bold"
+                                    >
+                                      <Play className="h-4 w-4 mr-1" />
+                                      Start (Recovery)
+                                    </Button>
+                                  )}
+
+                                  {server.status === 'deleted' && (
+                                    <Button
+                                      size="sm"
+                                      variant="info"
+                                      onClick={() => handleServerRestore(server.id, server.name)}
+                                      disabled={restoreServerMutation.isPending}
+                                    >
+                                      Restore
+                                    </Button>
+                                  )}
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="ghost">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                        disabled={purgeServerMutation.isPending}
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Purge Server
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Purge Confirmation Dialog */}
       <Dialog open={!!confirmPurge} onOpenChange={() => setConfirmPurge(null)}>

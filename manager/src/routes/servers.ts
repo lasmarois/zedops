@@ -38,7 +38,8 @@ servers.get('/', async (c) => {
     const result = await c.env.DB.prepare(
       `SELECT
         s.*,
-        a.name as agent_name
+        a.name as agent_name,
+        a.status as agent_status
       FROM servers s
       LEFT JOIN agents a ON s.agent_id = a.id
       ORDER BY s.created_at DESC`
@@ -57,6 +58,7 @@ servers.get('/', async (c) => {
       id: row.id,
       agent_id: row.agent_id,
       agent_name: row.agent_name || 'Unknown', // Fallback if agent deleted
+      agent_status: row.agent_status || 'offline', // Agent connectivity status
       name: row.name,
       container_id: row.container_id,
       config: row.config,
@@ -100,7 +102,8 @@ servers.get('/:id', async (c) => {
     const server = await c.env.DB.prepare(
       `SELECT
         s.*,
-        a.name as agent_name
+        a.name as agent_name,
+        a.status as agent_status
       FROM servers s
       LEFT JOIN agents a ON s.agent_id = a.id
       WHERE s.id = ?`
@@ -124,6 +127,7 @@ servers.get('/:id', async (c) => {
       id: server.id,
       agent_id: server.agent_id,
       agent_name: server.agent_name || 'Unknown', // Fallback if agent deleted
+      agent_status: server.agent_status || 'offline', // Agent connectivity status
       name: server.name,
       container_id: server.container_id,
       config: server.config, // Full config (ENV vars)

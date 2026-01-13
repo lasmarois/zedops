@@ -145,34 +145,41 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// Read index.html content (must match dist/index.html exactly)
-const indexHtmlContent = `<!doctype html>
+/**
+ * Catch-all route for SPA - serve index.html for client-side routes
+ *
+ * For non-API, non-asset routes, serve index.html to enable React Router.
+ * NOTE: This HTML content must be kept in sync with frontend/dist/index.html
+ * after each build. Consider automating this with a build script if it becomes
+ * an issue.
+ */
+app.get('*', async (c) => {
+  const path = new URL(c.req.url).pathname;
+
+  // If it's a static asset, let Cloudflare's asset handler serve it
+  if (path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/) || path.startsWith('/assets/')) {
+    return c.notFound();
+  }
+
+  // For all other routes, serve index.html (copied from frontend/dist/index.html)
+  return c.html(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-    <script type="module" crossorigin src="/assets/index-C8kK7RS2.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-WvvdXZei.css">
+    <title>ZedOps</title>
+    <!-- Google Fonts - Multiple options for testing -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/assets/index-DAKVbIUs.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CG2o4jqB.css">
   </head>
   <body>
     <div id="root"></div>
   </body>
-</html>`;
-
-// Catch-all route for SPA - serve index.html for non-API/ws routes
-// Only match paths that don't start with /api/, /ws, or /health
-app.get('*', (c) => {
-  const path = new URL(c.req.url).pathname;
-
-  // If it's an API route, return 404 (don't serve HTML)
-  if (path.startsWith('/api/') || path === '/ws' || path === '/health') {
-    return c.json({ error: 'Not found' }, 404);
-  }
-
-  // For all other routes, serve the React SPA
-  return c.html(indexHtmlContent);
+</html>`);
 });
 
 export default app;

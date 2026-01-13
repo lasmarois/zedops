@@ -7,13 +7,69 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogViewer } from "@/components/LogViewer"
 import { RconTerminal } from "@/components/RconTerminal"
-import { useServerById } from "@/hooks/useServers"
+import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer } from "@/hooks/useServers"
+import { useRestartContainer } from "@/hooks/useContainers"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
+import { getDisplayStatus } from "@/lib/server-status"
 
 export function ServerDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: serverData, isLoading, error } = useServerById(id || null)
+
+  // Mutation hooks for server actions
+  const startServerMutation = useStartServer()
+  const stopServerMutation = useStopServer()
+  const restartContainerMutation = useRestartContainer()
+  const rebuildServerMutation = useRebuildServer()
+  const deleteServerMutation = useDeleteServer()
+
+  // Handler functions for button clicks
+  const handleStart = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
+    startServerMutation.mutate({ agentId, serverId: id })
+  }
+
+  const handleStop = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
+    stopServerMutation.mutate({ agentId, serverId: id })
+  }
+
+  const handleRestart = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    const containerId = serverData?.server?.container_id
+    if (!agentId || !containerId) return
+    restartContainerMutation.mutate({ agentId, containerId })
+  }
+
+  const handleRebuild = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
+    if (!confirm('Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable.')) return
+    rebuildServerMutation.mutate({ agentId, serverId: id })
+  }
+
+  const handleDelete = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    const serverName = serverData?.server?.name
+    if (!agentId) return
+    if (!confirm(`Delete server "${serverName}"? This will stop and remove the container. Server data will be preserved for 24 hours.`)) return
+    deleteServerMutation.mutate(
+      { agentId, serverId: id, removeVolumes: false },
+      {
+        onSuccess: () => {
+          navigate('/servers')
+        }
+      }
+    )
+  }
 
   if (isLoading) {
     return (
@@ -51,6 +107,9 @@ export function ServerDetail() {
   const containerID = server.container_id || ''
   const rconPort = server.rcon_port
 
+  // Compute display status considering agent connectivity
+  const displayStatus = getDisplayStatus(server)
+
   // Parse config to get RCON password
   const config = server.config ? JSON.parse(server.config) : {}
   const rconPassword = config.RCON_PASSWORD || config.ADMIN_PASSWORD || ''
@@ -78,10 +137,14 @@ export function ServerDetail() {
             on {agentName}
           </span>
           <StatusBadge
-            variant={status === 'running' ? 'success' : status === 'stopped' ? 'muted' : 'error'}
-            icon={status === 'running' ? 'pulse' : status === 'stopped' ? 'dot' : 'cross'}
+            variant={displayStatus.variant}
+            icon={
+              displayStatus.status === 'running' ? 'pulse' :
+              displayStatus.status === 'agent_offline' ? 'cross' :
+              displayStatus.status === 'stopped' ? 'dot' : 'cross'
+            }
           >
-            {status === 'running' ? 'Running' : status === 'stopped' ? 'Stopped' : 'Failed'}
+            {displayStatus.label}
           </StatusBadge>
           {status === 'running' && (
             <span className="text-sm text-muted-foreground">
@@ -92,30 +155,30 @@ export function ServerDetail() {
 
         <div className="flex gap-2">
           {status === 'stopped' && (
-            <Button variant="success">
+            <Button variant="success" onClick={handleStart} disabled={startServerMutation.isPending}>
               <PlayCircle className="h-4 w-4" />
-              Start
+              {startServerMutation.isPending ? 'Starting...' : 'Start'}
             </Button>
           )}
           {status === 'running' && (
             <>
-              <Button variant="warning">
+              <Button variant="warning" onClick={handleStop} disabled={stopServerMutation.isPending}>
                 <StopCircle className="h-4 w-4" />
-                Stop
+                {stopServerMutation.isPending ? 'Stopping...' : 'Stop'}
               </Button>
-              <Button variant="info">
+              <Button variant="info" onClick={handleRestart} disabled={restartContainerMutation.isPending}>
                 <RefreshCw className="h-4 w-4" />
-                Restart
+                {restartContainerMutation.isPending ? 'Restarting...' : 'Restart'}
               </Button>
             </>
           )}
-          <Button variant="info">
+          <Button variant="info" onClick={handleRebuild} disabled={rebuildServerMutation.isPending}>
             <Wrench className="h-4 w-4" />
-            Rebuild
+            {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
           </Button>
-          <Button variant="destructive">
+          <Button variant="destructive" onClick={handleDelete} disabled={deleteServerMutation.isPending}>
             <Trash2 className="h-4 w-4" />
-            Delete
+            {deleteServerMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </div>
       </div>
@@ -267,13 +330,24 @@ export function ServerDetail() {
           <div>
             <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline">Restart Server</Button>
-              <Button variant="outline">Save World</Button>
-              <Button variant="outline">Backup Now</Button>
-              <Button variant="outline">Broadcast Message</Button>
-              <Button variant="outline">View Players</Button>
-              <Button variant="outline" className="text-error hover:text-error">
-                Emergency Stop
+              <Button
+                variant="outline"
+                onClick={handleRestart}
+                disabled={status !== 'running' || restartContainerMutation.isPending}
+              >
+                {restartContainerMutation.isPending ? 'Restarting...' : 'Restart Server'}
+              </Button>
+              <Button variant="outline" disabled>Save World (TODO)</Button>
+              <Button variant="outline" disabled>Backup Now</Button>
+              <Button variant="outline" disabled>Broadcast Message</Button>
+              <Button variant="outline" disabled>View Players</Button>
+              <Button
+                variant="outline"
+                className="text-error hover:text-error"
+                onClick={handleStop}
+                disabled={stopServerMutation.isPending || status !== 'running'}
+              >
+                {stopServerMutation.isPending ? 'Stopping...' : 'Emergency Stop'}
               </Button>
             </div>
           </div>
@@ -321,35 +395,26 @@ export function ServerDetail() {
 
         {/* RCON Tab */}
         <TabsContent value="rcon" className="space-y-6">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">RCON Console: {serverName}</h2>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">Players</Button>
-                <Button variant="outline" size="sm">Save</Button>
-                <Button variant="outline" size="sm">Broadcast Message</Button>
-              </div>
-            </div>
-            {agentId && containerID ? (
-              <RconTerminal
-                agentId={agentId}
-                serverId={serverId}
-                serverName={serverName}
-                containerID={containerID}
-                rconPort={rconPort}
-                rconPassword={rconPassword}
-                onClose={() => {}} // Not used in tab context
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">
-                    Server must be running to use RCON
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {agentId && containerID ? (
+            <RconTerminal
+              agentId={agentId}
+              serverId={serverId}
+              serverName={serverName}
+              containerID={containerID}
+              rconPort={rconPort}
+              rconPassword={rconPassword}
+              onClose={() => {}}
+              embedded={true}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">
+                  Server must be running to use RCON
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Performance Tab */}

@@ -28,6 +28,7 @@ interface RconTerminalProps {
   rconPort: number;
   rconPassword: string;   // Server's RCON_PASSWORD for RCON connection
   onClose: () => void;
+  embedded?: boolean;     // If true, renders inline; if false/undefined, renders as overlay
 }
 
 export function RconTerminal({
@@ -38,6 +39,7 @@ export function RconTerminal({
   rconPort,
   rconPassword,
   onClose,
+  embedded = false,
 }: RconTerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -465,19 +467,20 @@ export function RconTerminal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/80">
-      <div className="bg-[#1e1e1e] rounded-lg w-full max-w-[1200px] h-[80vh] flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="p-4 px-6 border-b border-[#333] flex justify-between items-center bg-[#252526] rounded-t-lg">
-          <div>
-            <h2 className="m-0 text-xl text-[#e5e5e5]">
-              RCON Console - {serverName}
-            </h2>
-            <div className="mt-1 text-sm">
-              {getConnectionBadge()}
-            </div>
+  // Main content JSX (used in both embedded and overlay modes)
+  const terminalContent = (
+    <>
+      {/* Header */}
+      <div className="p-4 px-6 border-b border-[#333] flex justify-between items-center bg-[#252526] rounded-t-lg">
+        <div>
+          <h2 className="m-0 text-xl text-[#e5e5e5]">
+            RCON Console - {serverName}
+          </h2>
+          <div className="mt-1 text-sm">
+            {getConnectionBadge()}
           </div>
+        </div>
+        {!embedded && (
           <Button
             variant="ghost"
             size="sm"
@@ -486,7 +489,8 @@ export function RconTerminal({
           >
             ✕
           </Button>
-        </div>
+        )}
+      </div>
 
         {/* Quick Actions & Player List */}
         <div className="p-4 px-6 bg-[#1e1e1e] border-b border-[#333] max-h-[200px] overflow-y-auto">
@@ -568,14 +572,31 @@ export function RconTerminal({
           className="flex-1 p-4 overflow-hidden min-h-0"
         />
 
-        {/* Footer */}
-        <div className="p-3 px-6 border-t border-[#333] bg-[#252526] text-sm text-muted-foreground rounded-b-lg">
-          <div className="flex justify-between">
-            <span>Press Ctrl+L to clear | Ctrl+C to cancel</span>
-            <span>↑↓ for command history</span>
-          </div>
+      {/* Footer */}
+      <div className="p-3 px-6 border-t border-[#333] bg-[#252526] text-sm text-muted-foreground rounded-b-lg">
+        <div className="flex justify-between">
+          <span>Press Ctrl+L to clear | Ctrl+C to cancel</span>
+          <span>↑↓ for command history</span>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        // Embedded mode: renders inline in parent container
+        <div className="bg-[#1e1e1e] rounded-lg w-full h-[calc(100vh-300px)] flex flex-col shadow-lg">
+          {terminalContent}
+        </div>
+      ) : (
+        // Overlay mode: full-screen fixed overlay with backdrop
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/80">
+          <div className="bg-[#1e1e1e] rounded-lg w-full max-w-[1200px] h-[80vh] flex flex-col shadow-2xl">
+            {terminalContent}
+          </div>
+        </div>
+      )}
 
       {/* Broadcast Message Dialog */}
       <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
@@ -621,6 +642,6 @@ export function RconTerminal({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

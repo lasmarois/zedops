@@ -9,8 +9,10 @@ import { useAgents } from "@/hooks/useAgents"
 import { useAllServers } from "@/hooks/useServers"
 import { useUsers } from "@/hooks/useUsers"
 import { useAuditLogs } from "@/hooks/useAuditLogs"
-import { Server, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
+import { Server as ServerIcon, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { getDisplayStatus } from "@/lib/server-status"
+import type { Server } from "@/lib/api"
 
 export function Dashboard() {
   const navigate = useNavigate()
@@ -26,7 +28,11 @@ export function Dashboard() {
 
   // Count total servers across all agents
   const totalServers = serversData?.count || 0
-  const runningServers = serversData?.servers?.filter((s: any) => s.status === 'running').length || 0
+  // Count servers that are actually running (agent must be online)
+  const runningServers = serversData?.servers?.filter((s: Server) => {
+    const displayStatus = getDisplayStatus(s)
+    return displayStatus.status === 'running'
+  }).length || 0
 
   const totalUsers = usersData?.users.length || 0
 
@@ -87,7 +93,7 @@ export function Dashboard() {
               <>
                 <div className="text-3xl font-bold">{totalAgents}</div>
                 <div className="mt-2 space-y-1">
-                  <div className="text-sm text-success">{onlineAgents} online</div>
+                  <div className={`text-sm ${onlineAgents > 0 ? 'text-success' : 'text-muted-foreground'}`}>{onlineAgents} online</div>
                   <div className="text-sm text-muted-foreground">{offlineAgents} offline</div>
                 </div>
                 <Button
@@ -109,7 +115,7 @@ export function Dashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Servers
             </CardTitle>
-            <Server className="h-4 w-4 text-muted-foreground" />
+            <ServerIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {serversLoading ? (
@@ -118,7 +124,7 @@ export function Dashboard() {
               <>
                 <div className="text-3xl font-bold">{totalServers}</div>
                 <div className="mt-2 space-y-1">
-                  <div className="text-sm text-success">{runningServers} running</div>
+                  <div className={`text-sm ${runningServers > 0 ? 'text-success' : 'text-muted-foreground'}`}>{runningServers} running</div>
                   <div className="text-sm text-muted-foreground">{totalServers - runningServers} stopped</div>
                 </div>
                 <Button

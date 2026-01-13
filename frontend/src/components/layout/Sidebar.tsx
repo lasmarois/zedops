@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { useUser } from "@/contexts/UserContext"
 
 interface NavItem {
   label: string
@@ -38,12 +39,20 @@ const managementItems: NavItem[] = [
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation()
+  const { user, logout } = useUser()
 
   const handleNavClick = () => {
     // Close mobile menu when navigating
     if (onMobileClose) {
       onMobileClose()
     }
+  }
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user?.email) return "U"
+    const emailParts = user.email.split("@")[0]
+    return emailParts.charAt(0).toUpperCase()
   }
 
   return (
@@ -124,18 +133,18 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       <div className="p-4">
         <div className="flex items-center gap-3 mb-3">
           <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 ring-2 ring-primary/20">
-            <span className="text-sm font-semibold text-primary">A</span>
+            <span className="text-sm font-semibold text-primary">{getUserInitials()}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">admin</div>
-            <div className="text-xs text-muted-foreground truncate">admin@zedops.local</div>
+            <div className="text-sm font-medium text-foreground truncate">{user?.role || 'User'}</div>
+            <div className="text-xs text-muted-foreground truncate">{user?.email || 'No email'}</div>
           </div>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="ghost" className="flex-1" title="Settings">
             <Settings className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="ghost" className="flex-1" title="Logout">
+          <Button size="sm" variant="ghost" className="flex-1" title="Logout" onClick={logout}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

@@ -970,9 +970,15 @@ agents.get('/:id/servers', async (c) => {
       return c.json({ error: 'Agent not found' }, 404);
     }
 
-    // Query all servers for this agent
+    // Query all servers for this agent with agent status
     const result = await c.env.DB.prepare(
-      `SELECT * FROM servers WHERE agent_id = ? ORDER BY created_at DESC`
+      `SELECT
+        s.*,
+        a.status as agent_status
+      FROM servers s
+      JOIN agents a ON s.agent_id = a.id
+      WHERE s.agent_id = ?
+      ORDER BY s.created_at DESC`
     )
       .bind(agentId)
       .all();
@@ -989,6 +995,7 @@ agents.get('/:id/servers', async (c) => {
     const servers = serverRows.map((row: any) => ({
       id: row.id,
       agent_id: row.agent_id,
+      agent_status: row.agent_status || 'offline', // Agent connectivity status
       name: row.name,
       container_id: row.container_id,
       config: row.config,
@@ -1584,41 +1591,45 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
       return c.json({ error: 'Server not found' }, 404);
     }
 
-    // If server has a container, remove it
-    if (server.container_id) {
-      // Get agent name for Durable Object
-      const agent = await c.env.DB.prepare(
-        `SELECT name FROM agents WHERE id = ?`
-      )
-        .bind(agentId)
-        .first();
+    // Remove container and/or data from agent (if agent is online)
+    // Get agent info
+    const agent = await c.env.DB.prepare(
+      `SELECT name, status FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
 
-      if (agent) {
-        // Get Durable Object for this agent
-        const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
-        const stub = c.env.AGENT_CONNECTION.get(id);
+    if (agent && agent.status === 'online') {
+      // Get Durable Object for this agent
+      const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+      const stub = c.env.AGENT_CONNECTION.get(id);
 
-        // Forward server.delete message to Durable Object
-        try {
-          const response = await stub.fetch(`http://do/servers/${serverId}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              containerId: server.container_id,
-              removeVolumes: removeData, // Remove data if requested
-            }),
-          });
+      // Forward server.delete message to Durable Object
+      // IMPORTANT: Always send if removeData=true, even if container doesn't exist
+      try {
+        const response = await stub.fetch(`http://do/servers/${serverId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            containerId: server.container_id || '', // Empty string if no container
+            serverName: server.name, // Pass server name so agent can remove data without container
+            removeVolumes: removeData, // Remove data if requested
+          }),
+        });
 
-          if (!response.ok) {
-            console.error(`[Purge] Failed to remove container for server ${serverId}`);
-            // Continue with DB deletion even if container removal fails
-          } else {
-            console.log(`[Purge] Container removed for server ${serverId} (data removed: ${removeData})`);
-          }
-        } catch (error) {
-          console.error(`[Purge] Error removing container for server ${serverId}:`, error);
-          // Continue with DB deletion
+        if (!response.ok) {
+          console.error(`[Purge] Failed to remove container/data for server ${serverId}`);
+          // Continue with DB deletion even if removal fails
+        } else {
+          console.log(`[Purge] Server ${server.name} removed (container: ${!!server.container_id}, data: ${removeData})`);
         }
+      } catch (error) {
+        console.error(`[Purge] Error removing container/data for server ${serverId}:`, error);
+        // Continue with DB deletion
+      }
+    } else {
+      if (removeData) {
+        console.warn(`[Purge] Agent offline - cannot remove data for server ${server.name}. Data will remain on host.`);
       }
     }
 

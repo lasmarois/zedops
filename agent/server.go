@@ -166,48 +166,58 @@ func (dc *DockerClient) CreateServer(ctx context.Context, config ServerConfig) (
 }
 
 // DeleteServer removes a server container and optionally its volumes
-func (dc *DockerClient) DeleteServer(ctx context.Context, containerID string, removeVolumes bool) error {
-	log.Printf("Deleting server container: %s (removeVolumes: %v)", containerID, removeVolumes)
+// If containerID is empty, only removes data directories (for purging soft-deleted servers)
+func (dc *DockerClient) DeleteServer(ctx context.Context, containerID string, serverName string, removeVolumes bool) error {
+	log.Printf("Deleting server: containerID=%s, serverName=%s, removeVolumes=%v", containerID, serverName, removeVolumes)
 
-	// Inspect container to get server name from labels
-	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return fmt.Errorf("failed to inspect container: %w", err)
+	// If containerID is provided, try to remove container
+	if containerID != "" {
+		// Inspect container to get server name from labels (if not provided)
+		if serverName == "" {
+			inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+			if err != nil {
+				log.Printf("Warning: failed to inspect container (may not exist): %v", err)
+			} else {
+				serverName = inspect.Config.Labels["zedops.server.name"]
+			}
+		}
+
+		if serverName != "" {
+			log.Printf("Removing container for server: %s", serverName)
+		}
+
+		// Stop container if running
+		log.Printf("Stopping container: %s", containerID)
+		timeout := 10
+		if err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+			log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
+		}
+
+		// Remove container
+		log.Printf("Removing container: %s", containerID)
+		if err := dc.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+			Force:         true,
+			RemoveVolumes: false, // We manage volumes manually
+		}); err != nil {
+			log.Printf("Warning: failed to remove container (may not exist): %v", err)
+		} else {
+			log.Printf("Container removed successfully: %s", containerID)
+		}
 	}
-
-	serverName := inspect.Config.Labels["zedops.server.name"]
-	if serverName == "" {
-		return fmt.Errorf("container missing zedops.server.name label")
-	}
-
-	// Stop container if running
-	log.Printf("Stopping container: %s", containerID)
-	timeout := 10
-	if err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
-		log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
-	}
-
-	// Remove container
-	log.Printf("Removing container: %s", containerID)
-	if err := dc.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
-		Force:         true,
-		RemoveVolumes: false, // We manage volumes manually
-	}); err != nil {
-		return fmt.Errorf("failed to remove container: %w", err)
-	}
-
-	log.Printf("Container removed successfully: %s", containerID)
 
 	// Remove volume directories if requested
-	if removeVolumes {
+	// IMPORTANT: This works even if container doesn't exist (for purging soft-deleted servers)
+	if removeVolumes && serverName != "" {
 		basePath := fmt.Sprintf("/var/lib/zedops/servers/%s", serverName)
 		log.Printf("Removing volume directories: %s", basePath)
 		if err := os.RemoveAll(basePath); err != nil {
 			return fmt.Errorf("failed to remove volumes: %w", err)
 		}
 		log.Printf("Volumes removed successfully")
-	} else {
+	} else if serverName != "" {
 		log.Printf("Volumes preserved at: /var/lib/zedops/servers/%s", serverName)
+	} else {
+		log.Printf("Warning: Cannot determine server name, skipping volume removal")
 	}
 
 	return nil
@@ -345,6 +355,7 @@ type ServerCreateRequest struct {
 // ServerDeleteRequest represents a server.delete message payload
 type ServerDeleteRequest struct {
 	ContainerID   string `json:"containerId"`
+	ServerName    string `json:"serverName"`    // NEW: Server name for data removal without container
 	RemoveVolumes bool   `json:"removeVolumes"`
 }
 

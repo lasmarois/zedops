@@ -14,5 +14,6 @@ export function useAgents() {
     queryFn: () => fetchAgents(),
     enabled: isAuthenticated,
     refetchInterval: 5000, // Refetch every 5 seconds
+    refetchIntervalInBackground: true, // Continue refetching even when tab not focused
   });
 }

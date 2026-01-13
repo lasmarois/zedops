@@ -262,6 +262,8 @@ export async function restartContainer(
 export interface Server {
   id: string;
   agent_id: string;
+  agent_name: string;
+  agent_status: 'online' | 'offline';
   name: string;
   container_id: string | null;
   config: string; // JSON string of ENV variables

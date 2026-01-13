@@ -265,9 +265,12 @@ export function usePurgeServer() {
       removeData: boolean;
     }) => purgeServer(agentId, serverId, removeData),
     onSuccess: (_, variables) => {
-      // Invalidate both servers and containers queries to refetch
+      // Invalidate all server queries to refetch
       queryClient.invalidateQueries({
         queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['servers', 'all'], // IMPORTANT: For global server list (ServerList page)
       });
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],

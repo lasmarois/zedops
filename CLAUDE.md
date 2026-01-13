@@ -61,6 +61,11 @@ sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --nam
 # For production: Install as systemd service
 sudo ./scripts/install.sh  # Installs systemd service, starts agent
 
+# TEMPORARY: Agent currently running from project directory (not systemd)
+# Located at: ./agent/bin/zedops-agent
+# TODO: Migrate to systemd service deployment (future milestone)
+./agent/bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver
+
 # Deploy (full-stack: frontend + manager)
 cd frontend && npm run build
 cd ../manager && wrangler deploy

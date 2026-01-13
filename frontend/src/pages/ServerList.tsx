@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAllServers } from "@/hooks/useServers"
-import { Plus, Search } from "lucide-react"
+import { useAllServers, usePurgeServer } from "@/hooks/useServers"
+import { Plus, Search, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { getDisplayStatus } from "@/lib/server-status"
+import type { Server } from "@/lib/api"
 
 interface ServerWithAgent {
   id: string
@@ -15,6 +17,7 @@ interface ServerWithAgent {
   status: string
   agentId: string
   agentName: string
+  agentStatus: 'online' | 'offline'
   gamePort: number
   udpPort: number
   rconPort: number
@@ -27,14 +30,17 @@ export function ServerList() {
   const { data: serversData, isLoading } = useAllServers()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [showDeletedServers, setShowDeletedServers] = useState(false)
+  const purgeServerMutation = usePurgeServer()
 
   // Map API data to component format
-  const allServers: ServerWithAgent[] = serversData?.servers?.map((server: any) => ({
+  const allServers: ServerWithAgent[] = serversData?.servers?.map((server: Server) => ({
     id: server.id,
     name: server.name,
     status: server.status,
     agentId: server.agent_id,
     agentName: server.agent_name,
+    agentStatus: server.agent_status,
     gamePort: server.game_port,
     udpPort: server.udp_port,
     rconPort: server.rcon_port,
@@ -42,13 +48,43 @@ export function ServerList() {
     createdAt: server.created_at,
   })) || []
 
-  // Filter servers
-  const filteredServers = allServers.filter(server => {
+  // Separate active and deleted servers
+  const activeServers = allServers.filter(server => server.status !== 'deleted')
+  const deletedServers = allServers.filter(server => server.status === 'deleted')
+
+  // Filter active servers
+  const filteredServers = activeServers.filter(server => {
     const matchesSearch = server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          server.agentName.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || server.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  // Handler for purging deleted servers
+  const handlePurge = (server: ServerWithAgent) => {
+    const removeData = confirm(
+      `Permanently purge server "${server.name}"?\n\n` +
+      `This will remove the server record and container.\n\n` +
+      `⚠️ Click OK to also DELETE SERVER DATA (saves, mods, configs)\n` +
+      `Click Cancel to keep the data on disk`
+    )
+
+    if (removeData !== null) { // User didn't cancel first prompt
+      const finalConfirm = confirm(
+        removeData
+          ? `⚠️ FINAL WARNING: Delete "${server.name}" AND all its data? This cannot be undone!`
+          : `Purge "${server.name}" record but keep data on disk?`
+      )
+
+      if (finalConfirm) {
+        purgeServerMutation.mutate({
+          agentId: server.agentId,
+          serverId: server.id,
+          removeData: removeData,
+        })
+      }
+    }
+  }
 
   return (
     <div className="p-8 space-y-6">
@@ -114,28 +150,54 @@ export function ServerList() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredServers.map(server => (
+          {filteredServers.map(server => {
+            // Compute display status based on agent connectivity
+            // Note: We don't have all Server fields in ServerWithAgent, but getDisplayStatus
+            // only needs agent_status and status fields
+            const displayStatus = getDisplayStatus({
+              id: server.id,
+              name: server.name,
+              status: server.status as any,
+              agent_id: server.agentId,
+              agent_name: server.agentName,
+              agent_status: server.agentStatus,
+              game_port: server.gamePort,
+              udp_port: server.udpPort,
+              rcon_port: server.rconPort,
+              image_tag: server.imageTag,
+              created_at: server.createdAt,
+              container_id: null,
+              config: '',
+              data_exists: false,
+              deleted_at: null,
+              updated_at: server.createdAt,
+            });
+
+            // Border color based on display status
+            const borderColor =
+              displayStatus.variant === 'success' ? '#3DDC97' :
+              displayStatus.variant === 'warning' ? '#FFA500' :
+              displayStatus.variant === 'error' ? '#F75555' : '#6c757d';
+
+            // Icon based on display status
+            const icon =
+              displayStatus.status === 'running' ? 'pulse' :
+              displayStatus.status === 'agent_offline' ? 'cross' :
+              displayStatus.status === 'stopped' ? 'dot' : 'cross';
+
+            return (
             <Card
               key={server.id}
               className="hover:shadow-md transition-all duration-200 cursor-pointer border-l-4"
-              style={{
-                borderLeftColor: server.status === 'running' ? '#3DDC97' :
-                                server.status === 'stopped' ? '#6c757d' : '#F75555'
-              }}
+              style={{ borderLeftColor: borderColor }}
               onClick={() => navigate(`/servers/${server.id}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <StatusBadge
-                      variant={
-                        server.status === 'running' ? 'success' :
-                        server.status === 'stopped' ? 'muted' : 'error'
-                      }
-                      icon={
-                        server.status === 'running' ? 'pulse' :
-                        server.status === 'stopped' ? 'dot' : 'cross'
-                      }
+                      variant={displayStatus.variant}
+                      icon={icon}
                       iconOnly
                     />
                     <div className="flex-1 min-w-0">
@@ -159,7 +221,8 @@ export function ServerList() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -167,8 +230,80 @@ export function ServerList() {
       {filteredServers.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div>
-            Showing {filteredServers.length} server{filteredServers.length !== 1 ? 's' : ''}
+            Showing {filteredServers.length} active server{filteredServers.length !== 1 ? 's' : ''}
           </div>
+        </div>
+      )}
+
+      {/* Deleted Servers Section */}
+      {deletedServers.length > 0 && (
+        <div className="pt-8 border-t border-border">
+          <div
+            className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => setShowDeletedServers(!showDeletedServers)}
+          >
+            <div>
+              <h2 className="text-2xl font-bold">Deleted Servers</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {deletedServers.length} server{deletedServers.length !== 1 ? 's' : ''} pending purge (data preserved for 24h)
+              </p>
+            </div>
+            <Button variant="ghost" size="sm">
+              {showDeletedServers ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </Button>
+          </div>
+
+          {showDeletedServers && (
+            <div className="space-y-3 mt-6">
+              {deletedServers.map(server => (
+                <Card
+                  key={server.id}
+                  className="border-l-4 border-l-muted-foreground bg-muted/20"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1">
+                        <StatusBadge variant="muted" icon="cross" iconOnly />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-lg truncate text-muted-foreground">
+                            {server.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Agent: {server.agentName} | Tag: {server.imageTag}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 items-center flex-shrink-0">
+                        <div className="text-sm text-muted-foreground flex gap-4">
+                          <div>
+                            <span className="font-medium">Game:</span> {server.gamePort}
+                          </div>
+                          <div>
+                            <span className="font-medium">UDP:</span> {server.udpPort}
+                          </div>
+                          <div>
+                            <span className="font-medium">RCON:</span> {server.rconPort}
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePurge(server)
+                          }}
+                          disabled={purgeServerMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {purgeServerMutation.isPending ? 'Purging...' : 'Purge'}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

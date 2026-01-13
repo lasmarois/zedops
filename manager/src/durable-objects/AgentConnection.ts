@@ -1662,10 +1662,13 @@ export class AgentConnection extends DurableObject {
       });
     }
 
-    const { containerId, removeVolumes } = body;
-    if (!containerId) {
+    const { containerId, serverName, removeVolumes } = body;
+    // containerId and serverName are both optional now
+    // - If containerId exists, try to remove container first
+    // - If serverName exists and removeVolumes=true, remove data directories
+    if (!containerId && !serverName) {
       return new Response(JSON.stringify({
-        error: "Missing containerId",
+        error: "Missing containerId or serverName",
       }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -1694,7 +1697,8 @@ export class AgentConnection extends DurableObject {
     this.send({
       subject: "server.delete",
       data: {
-        containerId,
+        containerId: containerId || '',
+        serverName: serverName || '',
         removeVolumes: removeVolumes ?? false,
       },
       reply: inbox,
