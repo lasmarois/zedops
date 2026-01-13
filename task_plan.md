@@ -74,24 +74,31 @@
 
 ---
 
-### 0.2 Install shadcn/ui & Tailwind CSS
+### 0.2 Install shadcn/ui & Tailwind CSS ✅
+
+**Status:** ✅ complete
 
 **Tasks:**
-- [ ] Navigate to frontend directory
-- [ ] Install Tailwind CSS: `npm install -D tailwindcss postcss autoprefixer`
-- [ ] Initialize Tailwind: `npx tailwindcss init -p`
-- [ ] Install shadcn/ui: `npx shadcn-ui@latest init`
-- [ ] Configure shadcn/ui (components directory, import alias, etc.)
-- [ ] Update `tailwind.config.js` with design tokens
-- [ ] Add Tailwind directives to CSS entry point
+- [x] Navigate to frontend directory
+- [x] Install Tailwind CSS v4 + PostCSS plugin
+- [x] Install clsx + tailwind-merge for cn() utility
+- [x] Configure shadcn/ui manually (components.json)
+- [x] Update `tailwind.config.js` with shadcn theme tokens
+- [x] Add Tailwind v4 import to index.css
+- [x] Configure path aliases (@/ → src/)
+- [x] Create lib/utils.ts with cn() function
+- [x] Test build - PASSED ✅
 
-**Files to Create:**
-- `frontend/tailwind.config.js`
-- `frontend/postcss.config.js`
-- `frontend/components.json` (shadcn config)
+**Files Created:**
+- `frontend/tailwind.config.js` ✅
+- `frontend/postcss.config.js` ✅
+- `frontend/components.json` ✅
+- `frontend/src/lib/utils.ts` ✅
 
-**Files to Modify:**
-- `frontend/src/index.css` or entry CSS file
+**Files Modified:**
+- `frontend/src/index.css` ✅
+- `frontend/vite.config.ts` ✅
+- `frontend/tsconfig.app.json` ✅
 
 ---
 
