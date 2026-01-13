@@ -13,6 +13,7 @@ import { Dashboard } from './pages/Dashboard';
 import { AgentsPage } from './pages/AgentsPage';
 import { AgentDetail } from './pages/AgentDetail';
 import { ServerList } from './pages/ServerList';
+import { ServerDetail } from './pages/ServerDetail';
 import { UsersPage } from './pages/UsersPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 
@@ -44,6 +45,7 @@ function AppContent() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="agents/:id" element={<AgentDetail />} />
         <Route path="servers" element={<ServerList />} />
+        <Route path="servers/:id" element={<ServerDetail />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="permissions" element={<div className="p-8">Permissions Page (Phase 3)</div>} />
         <Route path="audit-logs" element={<AuditLogsPage />} />

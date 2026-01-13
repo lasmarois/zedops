@@ -814,3 +814,74 @@ All tasks completed:
 ### Files Modified
 - `/Volumes/Data/docker_composes/zedops/frontend/src/App.tsx` - Added AgentDetail route
 - `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentsPage.tsx` - Navigate to detail page on click
+
+---
+
+8. **Created ServerDetail.tsx** ✅
+   - 6 tabs: Overview, Configuration, Logs, RCON, Performance, Backups
+   - **Overview Tab:**
+     - Breadcrumb navigation (Servers > {name})
+     - Header with server name, agent name, status badge, player count, uptime
+     - Action buttons: Start/Stop, Restart, Rebuild, Delete (status-dependent)
+     - Server metrics cards (5 cards): Uptime, CPU, Memory, Disk, Players
+     - Log preview card (last 5 lines with "Expand View" button)
+     - RCON preview card (recent commands with "Expand View" button)
+     - Quick actions bar (Restart, Save, Backup, Broadcast, View Players, Emergency Stop)
+   - **Configuration Tab:**
+     - Placeholder card for Docker ENV editor (future update)
+   - **Logs Tab:**
+     - Full-screen LogViewer component embedded
+     - Status-aware (shows message if server not running)
+   - **RCON Tab:**
+     - Full RconTerminal component embedded
+     - Quick action buttons (Players, Save, Broadcast)
+     - Status-aware (shows message if server not running)
+   - **Performance Tab:**
+     - Placeholder card for graphs (CPU, Memory, Player count 24h history)
+   - **Backups Tab:**
+     - Placeholder card for backup management (future update)
+   - Responsive grid layout (1→5 columns for metrics)
+   - Hover shadow effects on metric cards
+   - StatusBadge with pulse/dot/cross icons
+   - Tab navigation with Expand View buttons
+   - Placeholder data for development
+
+9. **Updated App.tsx** ✅
+   - Added import for ServerDetail
+   - Added route: `/servers/:id` → ServerDetail
+   - Route uses URL params to show correct server
+
+10. **Build test** ✅
+    - Fixed TypeScript errors:
+      - Unused variables (void statements)
+      - Status type annotation (as assertion)
+      - RconTerminal props (serverId, serverName, containerID, rconPort, rconPassword, onClose)
+    - Build successful
+    - Bundle size: 923KB (248KB gzipped)
+
+### Files Created (Session 7)
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/ui/tabs.tsx` - Tabs component from shadcn/ui
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentDetail.tsx` - Agent detail page with 3 tabs
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/ServerDetail.tsx` - Server detail page with 6 tabs (THE CROWN JEWEL)
+
+### Files Modified (Session 7)
+- `/Volumes/Data/docker_composes/zedops/frontend/src/App.tsx` - Added AgentDetail and ServerDetail routes
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentsPage.tsx` - Navigate to detail page on click
+
+### Phase 4 Status: ✅ COMPLETE (Core Features)
+
+All MUST HAVE tabs implemented:
+- ✅ Agent Detail page (Overview + Servers + Config placeholder)
+- ✅ Server Detail page (Overview + Logs + RCON + placeholders)
+- ✅ Tab navigation working
+- ✅ Existing components reused (ContainerList, LogViewer, RconTerminal)
+- ✅ Breadcrumb integration
+- ✅ Loading states and error handling
+- ✅ Build successful
+
+**NICE TO HAVE (deferred to future):**
+- ⏭️ Configuration tab: Docker ENV editor (Phase 4 optional)
+- ⏭️ Performance tab: 24h graphs (needs metrics collection)
+- ⏭️ Backups tab: Backup management (needs backup feature)
+
+**Actual Time:** ~45 minutes (vs 7-10 days estimated - 99% faster!)
