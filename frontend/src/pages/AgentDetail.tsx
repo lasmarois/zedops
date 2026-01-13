@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgents } from "@/hooks/useAgents"
-import { Laptop, Server, HardDrive, Plus } from "lucide-react"
+import { Laptop, Server, HardDrive } from "lucide-react"
 import { AgentServerList } from "@/components/AgentServerList"
 
 export function AgentDetail() {
@@ -202,14 +202,6 @@ export function AgentDetail() {
 
           {/* Servers on This Agent */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Servers on This Agent</h2>
-              <Button onClick={() => navigate('/agents')}>
-                <Plus className="h-4 w-4" />
-                Create Server
-              </Button>
-            </div>
-
             {/* Embed AgentServerList for this agent */}
             <AgentServerList
               agentId={agent.id}
