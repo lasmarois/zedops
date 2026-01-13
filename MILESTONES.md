@@ -515,52 +515,61 @@ After completing the foundational UI styling (M7.5), create a cohesive visual de
 
 ---
 
-## Milestone 9: Visual Redesign - Implementation Phase ⏳ Planned
+## Milestone 9: Visual Redesign - Implementation Phase 🚧 In Progress
 
 **Goal:** Implement the visual redesign from M8 into production-ready code
 
-**Duration:** 2-3 weeks
+**Duration:** 2-3 weeks (22-30 days estimated)
+
+**Started:** 2026-01-13
 
 **Rationale:**
 Transform design artifacts from M8 into a fully functional, polished UI. This complex implementation phase requires careful attention to detail, performance, and maintaining existing functionality.
 
 **Deliverables:**
-- **Template Implementation**
-  - New navigation structure (sidebar/header)
-  - Redesigned page layouts
-  - Responsive grid implementation
-  - Mobile navigation patterns
+- **Phase 1: Foundation (3-5 days)**
+  - Midnight blue color system update
+  - New components (StatusBadge, ActivityTimeline, LogViewer)
+  - Design system testing
 
-- **Component Updates**
-  - Visual refinements to shadcn components
-  - Custom component variants
-  - Icon integration
-  - Animation and transition implementations
+- **Phase 2: Navigation & Layout (4-5 days)**
+  - Sidebar navigation with sections
+  - Main layout (sidebar + content area)
+  - Breadcrumb component
 
-- **Page Redesigns**
-  - Dashboard/home page (new)
-  - All 10 existing pages with new template
-  - Improved data visualizations
-  - Enhanced user flows
+- **Phase 3: Dashboard & Lists (5-6 days)**
+  - Dashboard page (stats cards, agent table, activity)
+  - Enhanced Agent List (filters, clickable rows)
+  - Global Server List (all servers across agents)
 
-- **Performance & Polish**
-  - Lazy loading for heavy components
-  - Image optimization
-  - Animation performance tuning
-  - Cross-browser testing
+- **Phase 4: Detail Pages (7-10 days)**
+  - Agent Detail page (3 tabs: Overview, Servers, Configuration)
+  - Server Detail page (6 tabs: Overview, Config, Logs, RCON, Performance, Backups)
+  - Preview panels (collapsible → navigate to tab)
+
+- **Phase 5: Polish & Testing (3-4 days)**
+  - Responsive layouts (mobile, tablet, desktop)
+  - Animations and transitions
+  - Testing and bug fixes
 
 **Success Criteria:**
-- All pages match design specifications
-- Responsive layouts work perfectly on mobile, tablet, desktop
-- Smooth animations and transitions
-- No regressions in functionality
-- Performance metrics maintained or improved
-- Accessible (WCAG AA maintained)
+- All MUST HAVE items implemented (11 core features)
+- All pages render with midnight blue theme
+- Navigation works (sidebar, breadcrumbs, links)
+- Dashboard shows stats, agents, activity
+- Agent Detail has 2-3 tabs working
+- Server Detail has 3-4 tabs working (Overview, Logs, RCON, Config)
+- Preview panels collapse/expand correctly
+- Mobile sidebar works (hamburger menu)
+- No visual regressions from M7.5
+- WCAG AA compliance maintained
 - Production deployed and validated
 
 **Dependencies:** Milestone 8 (Visual Redesign - Design Phase)
 
-**Planning:** *(not started)*
+**Planning:** [task_plan.md](task_plan.md) | [findings.md](findings.md) | [progress.md](progress.md)
+
+**Design References:** [planning-history/milestone-8-visual-redesign-design/](planning-history/milestone-8-visual-redesign-design/)
 
 ---
 
@@ -702,7 +711,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 **Progress:** 8/11 core milestones complete (73%) 🎉
 
-**Next Focus:** M9 (Visual Redesign - Implementation Phase)
+**Active Milestone:** M9 (Visual Redesign - Implementation Phase) 🚧
 
 **Total to MVP:** ~12 weeks estimated → ~2.5 weeks actual (current pace: 80% under estimate!)
 
@@ -712,7 +721,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** Milestone 9 (Visual Redesign - Implementation Phase) ⏳
+**Active Milestone:** Milestone 9 (Visual Redesign - Implementation Phase) 🚧
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -732,16 +741,17 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
   - ✅ All 6 phases complete (1 day, 6 sessions)
   - Design system, page layouts, implementation guide created
 
-**Next Up:**
-- **Milestone 8** - Visual Redesign - Design Phase (design artifacts & specifications)
-- **Milestone 9** - Visual Redesign - Implementation (code implementation of designs)
+**In Progress:**
+- 🚧 **Milestone 9 - Visual Redesign - Implementation Phase** (Started: 2026-01-13)
+  - Phase 1: Foundation (⏳ Pending)
+  - Design artifacts ready for implementation
 
 **Deferred:**
 - **Milestone 10** - Agent Deployment & Polish (after M9)
 - **Milestone 11** - Testing & Verification (after M9)
 - **Documentation** - Comprehensive API and user documentation (after M11)
 
-**Current Planning:** M8 complete and archived! Ready to start M9 implementation.
+**Current Planning:** M9 planning files created! Starting Phase 1: Foundation.
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
