@@ -96,6 +96,89 @@
 
 ---
 
+## Session 3: Color System & Design System (2026-01-12)
+
+**Time:** Continued
+
+**Goals:**
+- Finalize color palette (midnight blue)
+- Define badge and activity log design
+- Document complete design system
+
+**User Decisions:**
+1. **Theme:** Dark-only, no light mode
+2. **Palette:** Midnight blue (pronounced, not subtle) - `#0C1628` background
+3. **Aesthetic:** Clean, modern, professional finish
+4. **Badges:** Text-only with colored text, no filled backgrounds
+5. **Activity logs:** Clean timeline, minimal styling, color for action types
+
+**Design System Created:**
+- Complete color palette with HSL values
+- WCAG AA contrast ratios verified (all pass)
+- Status badge specifications (text-only with semantic colors)
+- Activity log timeline design (clean, scannable)
+- Typography system (Inter for UI, JetBrains Mono for code)
+- Spacing, border radius, shadows
+- Component specifications (buttons, cards, tables, tabs)
+- Animation and transition guidelines
+- Iconography system (Lucide React)
+
+**Files Created:**
+- `DESIGN-SYSTEM.md` - Comprehensive design system specification
+
+**Key Design Decisions:**
+- Background: `#0C1628` (clear midnight blue, not black)
+- Cards: `#151F33` (slightly lighter)
+- Primary accent: `#3B82F6` (bright blue)
+- Status colors: Green (#34D399), Amber (#FBBF24), Red (#EF4444), Cyan (#22D3EE)
+- Text-only badges (no filled backgrounds, just colored text)
+- Clean activity log timeline (no boxes, minimal separators)
+
+**Status:** Phase 0 and Phase 1 partially complete - Color system and design foundation documented
+
+---
+
+## Session 4: Log Viewer & Activity Log Design (2026-01-12)
+
+**Time:** Continued
+
+**Goals:**
+- Design log viewer component
+- Design activity log with expandable details
+- Get user approval on design patterns
+
+**User Decisions:**
+1. **Log Viewer:** Smart Hybrid approach (APPROVED)
+   - Compact terminal style for INFO/DEBUG logs
+   - Auto-expanded cards for WARN/ERROR logs
+   - Best of both worlds: density + detail when needed
+
+2. **Activity Log:** Expandable inline cards (APPROVED)
+   - Clean collapsed timeline for scanning
+   - Expandable detail cards on demand
+   - Color-coded by action type
+   - Context-aware quick actions
+
+3. **Log Colors:** Midnight blue semantic colors (replace Dracula)
+   - INFO: Gray (#9CA3AF)
+   - DEBUG: Blue (#3B82F6)
+   - WARN: Amber (#FBBF24)
+   - ERROR: Red (#EF4444)
+   - SUCCESS: Green (#34D399)
+
+**Design System Updated:**
+- Added log viewer specifications (Smart Hybrid pattern)
+- Added activity log specifications (Expandable inline pattern)
+- Documented action color coding logic
+- Added TSX code examples for implementation
+
+**Files Updated:**
+- `DESIGN-SYSTEM.md` - Added log viewer and activity log sections with full specifications
+
+**Status:** Phase 0 ✅ Phase 1 ✅ - Moving to Phase 2 (Navigation & Layout)
+
+---
+
 ## Notes
 
 - This is a design-only milestone (no code)

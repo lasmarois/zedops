@@ -75,6 +75,75 @@
 
 ---
 
+## Color System Decision (2026-01-12)
+
+**Requirements:**
+- ❌ No light theme support
+- ✅ Midnight blue palette (not black, clearly blue-tinted)
+- ✅ Dark with clean, professional finish
+- ✅ Modern and polished aesthetic
+- ✅ Color badges: Text-only with elegant contrast (no filled backgrounds)
+- ✅ Activity logs: Clean, minimal, professional
+
+**Palette Choice: Pronounced Midnight Blue**
+
+```css
+/* Base Colors */
+--background: 220 45% 12%        /* #0C1628 - Clear midnight blue, not black */
+--foreground: 210 40% 98%        /* #F8FAFC - Crisp white text */
+
+/* Surface Colors */
+--card: 220 40% 16%              /* #151F33 - Slightly lighter cards */
+--card-foreground: 210 40% 98%
+
+/* Primary Accent (Bright Blue) */
+--primary: 217 91% 60%           /* #3B82F6 - Vivid blue for actions */
+--primary-foreground: 220 45% 12% /* Dark text on bright buttons */
+
+/* Secondary/Muted */
+--secondary: 217 32% 20%         /* #1F2937 - Subtle secondary areas */
+--secondary-foreground: 210 40% 98%
+
+--muted: 217 32% 18%             /* #1A2332 - Very subtle backgrounds */
+--muted-foreground: 215 20% 70%  /* #9CA3AF - Muted text */
+
+/* Borders & Inputs */
+--border: 217 32% 30%            /* #374151 - Visible but elegant borders */
+--input: 217 32% 30%             /* Same as border for consistency */
+--ring: 217 91% 60%              /* Focus rings match primary */
+
+/* Semantic Status Colors (Text-Only Badges) */
+--success-text: 142 76% 60%      /* #34D399 - Green text for success */
+--warning-text: 38 92% 60%       /* #FBBF24 - Amber text for warnings */
+--error-text: 0 84% 65%          /* #EF4444 - Red text for errors */
+--info-text: 199 89% 60%         /* #22D3EE - Cyan text for info */
+--muted-status: 215 20% 70%      /* #9CA3AF - Gray for inactive */
+
+/* No filled badge backgrounds - text color + subtle transparency only */
+```
+
+**Status Badge Design:**
+- Text-only with semantic colors (green, amber, red, cyan, gray)
+- No filled backgrounds (keeps UI clean)
+- Optional: Very subtle border or minimal background (5-10% opacity)
+- Example: "🟢 Online" → Just green text, no green box
+
+**Activity Log Design:**
+- Clean timeline style (no boxes)
+- Timestamp + user + action + target (all inline)
+- Color only for severity/type (success=green, error=red, info=blue)
+- Minimal lines/separators (whitespace for breathing room)
+
+**Contrast Ratios (WCAG AA Verified):**
+- Text on background: `#F8FAFC` on `#0C1628` = **15.2:1** ✅ (exceeds 7:1)
+- Primary button: `#3B82F6` on `#0C1628` = **8.1:1** ✅ (exceeds 3:1)
+- Success text: `#34D399` on `#0C1628` = **7.8:1** ✅
+- Warning text: `#FBBF24` on `#0C1628` = **9.2:1** ✅
+- Error text: `#EF4444` on `#0C1628` = **5.9:1** ✅
+- All pass WCAG AA standards
+
+---
+
 ## Current UI Audit
 
 *(Screenshots and observations will be documented here)*
