@@ -5,6 +5,16 @@
 import { useAgents } from '../hooks/useAgents';
 import { useUser } from '../contexts/UserContext';
 import type { Agent } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface AgentListProps {
   onSelectAgent: (agent: Agent) => void;
@@ -12,10 +22,10 @@ interface AgentListProps {
   onViewAuditLogs: () => void;
 }
 
-function getMetricColor(value: number, thresholds: [number, number]): string {
-  if (value < thresholds[0]) return '#28a745'; // Green
-  if (value < thresholds[1]) return '#ffc107'; // Yellow
-  return '#dc3545'; // Red
+function getMetricVariant(value: number, thresholds: [number, number]): 'success' | 'warning' | 'destructive' {
+  if (value < thresholds[0]) return 'success';
+  if (value < thresholds[1]) return 'warning';
+  return 'destructive';
 }
 
 function MetricBadge({ label, value, unit = '%', thresholds = [70, 85] }: {
@@ -26,30 +36,17 @@ function MetricBadge({ label, value, unit = '%', thresholds = [70, 85] }: {
 }) {
   if (value === null || value === undefined) {
     return (
-      <span style={{
-        padding: '0.25rem 0.5rem',
-        borderRadius: '4px',
-        fontSize: '0.75rem',
-        backgroundColor: '#6c757d',
-        color: 'white',
-      }}>
+      <Badge variant="secondary">
         {label}: N/A
-      </span>
+      </Badge>
     );
   }
 
-  const color = getMetricColor(value, thresholds);
+  const variant = getMetricVariant(value, thresholds);
   return (
-    <span style={{
-      padding: '0.25rem 0.5rem',
-      borderRadius: '4px',
-      fontSize: '0.75rem',
-      backgroundColor: color,
-      color: 'white',
-      fontWeight: 'bold',
-    }}>
+    <Badge variant={variant}>
       {label}: {value.toFixed(1)}{unit}
-    </span>
+    </Badge>
   );
 }
 
@@ -63,205 +60,121 @@ export function AgentList({ onSelectAgent, onViewUsers, onViewAuditLogs }: Agent
   };
 
   if (isLoading) {
-    return <div style={{ padding: '2rem' }}>Loading agents...</div>;
+    return <div className="p-8">Loading agents...</div>;
   }
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', color: '#dc3545' }}>
-        Error: {error.message}
-        <br />
-        <button
-          onClick={handleLogout}
-          style={{
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <p className="text-destructive mb-4">
+          Error: {error.message}
+        </p>
+        <Button variant="destructive" onClick={handleLogout}>
           Re-login
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '2rem',
-      }}>
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1>ZedOps Agents</h1>
-          <p style={{ color: '#888', fontSize: '0.875rem', margin: '0.5rem 0 0 0' }}>
+          <h1 className="text-3xl font-bold">ZedOps Agents</h1>
+          <p className="text-sm text-muted-foreground mt-2">
             Logged in as: {user?.email} ({user?.role})
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex gap-2">
           {user?.role === 'admin' && (
             <>
-              <button
-                onClick={onViewUsers}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
+              <Button onClick={onViewUsers}>
                 Manage Users
-              </button>
-              <button
-                onClick={onViewAuditLogs}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#17a2b8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
+              </Button>
+              <Button variant="info" onClick={onViewAuditLogs}>
                 Audit Logs
-              </button>
+              </Button>
             </>
           )}
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="secondary" onClick={handleLogout}>
             Logout
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="mb-4">
         <strong>Total Agents:</strong> {data?.count ?? 0}
       </div>
 
       {data?.agents.length === 0 ? (
-        <div style={{
-          padding: '2rem',
-          textAlign: 'center',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '4px',
-        }}>
+        <div className="p-8 text-center bg-muted rounded-md">
           No agents registered yet
         </div>
       ) : (
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          backgroundColor: 'white',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f8f9fa' }}>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Name
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Status
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Resources
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Last Seen
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                Created
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.agents.map((agent) => (
-              <tr
-                key={agent.id}
-                onClick={() => agent.status === 'online' && onSelectAgent(agent)}
-                style={{
-                  borderBottom: '1px solid #dee2e6',
-                  cursor: agent.status === 'online' ? 'pointer' : 'default',
-                  backgroundColor: 'white',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  if (agent.status === 'online') {
-                    e.currentTarget.style.backgroundColor = '#f8f9fa';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'white';
-                }}
-              >
-                <td style={{ padding: '1rem' }}>
-                  {agent.name}
-                  {agent.status === 'online' && (
-                    <span style={{ marginLeft: '0.5rem', color: '#6c757d', fontSize: '0.875rem' }}>
-                      →
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '0.25rem 0.75rem',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                    fontWeight: 'bold',
-                    backgroundColor: agent.status === 'online' ? '#28a745' : '#6c757d',
-                    color: 'white',
-                  }}>
-                    {agent.status === 'online' ? '● Online' : '○ Offline'}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem' }}>
-                  {agent.status === 'online' && agent.metadata?.metrics ? (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <MetricBadge
-                        label="CPU"
-                        value={agent.metadata.metrics.cpuPercent}
-                      />
-                      <MetricBadge
-                        label="MEM"
-                        value={(agent.metadata.metrics.memoryUsedMB / agent.metadata.metrics.memoryTotalMB) * 100}
-                      />
-                      <MetricBadge
-                        label="DSK"
-                        value={agent.metadata.metrics.diskPercent}
-                      />
-                    </div>
-                  ) : (
-                    <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>
-                      {agent.status === 'offline' ? 'Offline' : 'Collecting...'}
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '1rem', color: '#6c757d' }}>
-                  {new Date(agent.lastSeen * 1000).toLocaleString()}
-                </td>
-                <td style={{ padding: '1rem', color: '#6c757d' }}>
-                  {new Date(agent.createdAt * 1000).toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Resources</TableHead>
+                <TableHead>Last Seen</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.agents.map((agent) => (
+                <TableRow
+                  key={agent.id}
+                  onClick={() => agent.status === 'online' && onSelectAgent(agent)}
+                  className={agent.status === 'online' ? 'cursor-pointer hover:bg-muted' : 'cursor-default'}
+                >
+                  <TableCell>
+                    {agent.name}
+                    {agent.status === 'online' && (
+                      <span className="ml-2 text-muted-foreground text-sm">
+                        →
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={agent.status === 'online' ? 'success' : 'secondary'}>
+                      {agent.status === 'online' ? '● Online' : '○ Offline'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {agent.status === 'online' && agent.metadata?.metrics ? (
+                      <div className="flex gap-2 flex-wrap">
+                        <MetricBadge
+                          label="CPU"
+                          value={agent.metadata.metrics.cpuPercent}
+                        />
+                        <MetricBadge
+                          label="MEM"
+                          value={(agent.metadata.metrics.memoryUsedMB / agent.metadata.metrics.memoryTotalMB) * 100}
+                        />
+                        <MetricBadge
+                          label="DSK"
+                          value={agent.metadata.metrics.diskPercent}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        {agent.status === 'offline' ? 'Offline' : 'Collecting...'}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(agent.lastSeen * 1000).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(agent.createdAt * 1000).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );
