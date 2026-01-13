@@ -8,6 +8,17 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { useRcon } from '../hooks/useRcon';
 import '@xterm/xterm/css/xterm.css';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface RconTerminalProps {
   agentId: string;
@@ -444,192 +455,108 @@ export function RconTerminal({
     }
   }, [isConnected, handleRefreshPlayers]);
 
+  const getConnectionBadge = () => {
+    if (isConnected) {
+      return <Badge variant="success">● Connected</Badge>;
+    } else if (error) {
+      return <Badge variant="destructive">● Disconnected</Badge>;
+    } else {
+      return <Badge variant="warning">● Connecting...</Badge>;
+    }
+  };
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      zIndex: 1000,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-    }}>
-      <div style={{
-        backgroundColor: '#1e1e1e',
-        borderRadius: '8px',
-        width: '100%',
-        maxWidth: '1200px',
-        height: '80vh',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.5)',
-      }}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/80">
+      <div className="bg-[#1e1e1e] rounded-lg w-full max-w-[1200px] h-[80vh] flex flex-col shadow-2xl">
         {/* Header */}
-        <div style={{
-          padding: '1rem 1.5rem',
-          borderBottom: '1px solid #333',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: '#252526',
-          borderTopLeftRadius: '8px',
-          borderTopRightRadius: '8px',
-        }}>
+        <div className="p-4 px-6 border-b border-[#333] flex justify-between items-center bg-[#252526] rounded-t-lg">
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#e5e5e5' }}>
+            <h2 className="m-0 text-xl text-[#e5e5e5]">
               RCON Console - {serverName}
             </h2>
-            <div style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#888' }}>
-              {isConnected ? (
-                <span style={{ color: '#0dbc79' }}>● Connected</span>
-              ) : error ? (
-                <span style={{ color: '#f14c4c' }}>● Disconnected</span>
-              ) : (
-                <span style={{ color: '#e5e510' }}>● Connecting...</span>
-              )}
+            <div className="mt-1 text-sm">
+              {getConnectionBadge()}
             </div>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: '#e5e5e5',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              padding: '0.25rem 0.5rem',
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.color = '#f14c4c')}
-            onMouseOut={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+            className="text-2xl hover:text-destructive"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Quick Actions & Player List */}
-        <div style={{
-          padding: '1rem 1.5rem',
-          backgroundColor: '#1e1e1e',
-          borderBottom: '1px solid #333',
-          maxHeight: '200px',
-          overflowY: 'auto',
-        }}>
+        <div className="p-4 px-6 bg-[#1e1e1e] border-b border-[#333] max-h-[200px] overflow-y-auto">
           {/* Quick Action Buttons */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <button
+          <div className="flex gap-2 mb-4 flex-wrap">
+            <Button
+              variant="info"
+              size="sm"
               onClick={handleRefreshPlayers}
               disabled={!isConnected}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: isConnected ? '#17a2b8' : '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isConnected ? 'pointer' : 'not-allowed',
-                fontSize: '0.875rem',
-                fontWeight: 'bold',
-              }}
             >
               🔄 Refresh Players
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="success"
+              size="sm"
               onClick={handleSaveWorld}
               disabled={!isConnected}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: isConnected ? '#28a745' : '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isConnected ? 'pointer' : 'not-allowed',
-                fontSize: '0.875rem',
-                fontWeight: 'bold',
-              }}
             >
               💾 Save World
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="warning"
+              size="sm"
               onClick={() => setShowBroadcastModal(true)}
               disabled={!isConnected}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: isConnected ? '#fd7e14' : '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isConnected ? 'pointer' : 'not-allowed',
-                fontSize: '0.875rem',
-                fontWeight: 'bold',
-              }}
             >
               📢 Broadcast Message
-            </button>
+            </Button>
           </div>
 
           {/* Player List */}
           {players.length > 0 ? (
             <div>
-              <div style={{ marginBottom: '0.5rem', color: '#888', fontSize: '0.875rem' }}>
+              <div className="mb-2 text-muted-foreground text-sm">
                 Players Online ({players.length}):
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div className="flex flex-col gap-2">
                 {players.map((player, index) => (
                   <div
                     key={index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.5rem',
-                      backgroundColor: '#252526',
-                      borderRadius: '4px',
-                    }}
+                    className="flex justify-between items-center p-2 bg-[#252526] rounded"
                   >
-                    <span style={{ color: '#e5e5e5', fontSize: '0.875rem' }}>{player}</span>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
+                    <span className="text-[#e5e5e5] text-sm">{player}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="warning"
+                        size="sm"
                         onClick={() => handleKickPlayer(player)}
                         disabled={!isConnected}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: isConnected ? '#ffc107' : '#666',
-                          color: '#000',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: isConnected ? 'pointer' : 'not-allowed',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                        }}
+                        className="h-7 px-3 text-xs"
                       >
                         Kick
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={() => handleBanPlayer(player)}
                         disabled={!isConnected}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: isConnected ? '#dc3545' : '#666',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: isConnected ? 'pointer' : 'not-allowed',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                        }}
+                        className="h-7 px-3 text-xs"
                       >
                         Ban
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div style={{ color: '#888', fontSize: '0.875rem', textAlign: 'center' }}>
+            <div className="text-muted-foreground text-sm text-center">
               No players online
             </div>
           )}
@@ -638,117 +565,62 @@ export function RconTerminal({
         {/* Terminal */}
         <div
           ref={terminalRef}
-          style={{
-            flex: 1,
-            padding: '1rem',
-            overflow: 'hidden',
-            minHeight: 0, // Important for flex child to shrink correctly
-          }}
+          className="flex-1 p-4 overflow-hidden min-h-0"
         />
 
         {/* Footer */}
-        <div style={{
-          padding: '0.75rem 1.5rem',
-          borderTop: '1px solid #333',
-          backgroundColor: '#252526',
-          fontSize: '0.875rem',
-          color: '#888',
-          borderBottomLeftRadius: '8px',
-          borderBottomRightRadius: '8px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div className="p-3 px-6 border-t border-[#333] bg-[#252526] text-sm text-muted-foreground rounded-b-lg">
+          <div className="flex justify-between">
             <span>Press Ctrl+L to clear | Ctrl+C to cancel</span>
             <span>↑↓ for command history</span>
           </div>
         </div>
       </div>
 
-      {/* Broadcast Message Modal */}
-      {showBroadcastModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          zIndex: 2000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <div style={{
-            backgroundColor: '#252526',
-            borderRadius: '8px',
-            padding: '2rem',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.5)',
-          }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: '#e5e5e5' }}>Broadcast Message</h3>
-            <input
-              type="text"
-              value={broadcastMessage}
-              onChange={(e) => setBroadcastMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleBroadcast();
-                } else if (e.key === 'Escape') {
-                  setShowBroadcastModal(false);
-                  setBroadcastMessage('');
-                }
+      {/* Broadcast Message Dialog */}
+      <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
+        <DialogContent className="bg-[#252526] text-[#e5e5e5] max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-[#e5e5e5]">Broadcast Message</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Send a message to all players on the server
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={broadcastMessage}
+            onChange={(e) => setBroadcastMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleBroadcast();
+              } else if (e.key === 'Escape') {
+                setShowBroadcastModal(false);
+                setBroadcastMessage('');
+              }
+            }}
+            placeholder="Enter message to broadcast to all players..."
+            autoFocus
+            className="bg-[#1e1e1e] text-[#e5e5e5] border-[#333]"
+          />
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowBroadcastModal(false);
+                setBroadcastMessage('');
               }}
-              placeholder="Enter message to broadcast to all players..."
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                fontSize: '1rem',
-                backgroundColor: '#1e1e1e',
-                color: '#e5e5e5',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                marginBottom: '1rem',
-              }}
-            />
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowBroadcastModal(false);
-                  setBroadcastMessage('');
-                }}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBroadcast}
-                disabled={!broadcastMessage.trim()}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: broadcastMessage.trim() ? '#fd7e14' : '#666',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: broadcastMessage.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: '0.875rem',
-                  fontWeight: 'bold',
-                }}
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="warning"
+              onClick={handleBroadcast}
+              disabled={!broadcastMessage.trim()}
+            >
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
