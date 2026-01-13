@@ -316,44 +316,46 @@
 
 ---
 
-### Phase 2: Auth Migration & Refinement 🚧 In Progress
+### Phase 2: Auth Migration & Refinement ✅ Complete
 
 **Started:** 2026-01-12
+**Completed:** 2026-01-12
 
 **Goal:** Complete RBAC implementation with consistent JWT authentication across all endpoints
 
 **Issue:** [ISSUE-rbac-auth-migration.md](ISSUE-rbac-auth-migration.md)
 
-**Remaining Work:**
-- ⏳ Migrate remaining endpoints from ADMIN_PASSWORD to JWT auth
+**Completed Work:**
+- ✅ Migrated all endpoints from ADMIN_PASSWORD to JWT auth
   - Container operations (`/containers`, `/ports/*`)
-  - Server operations (restart, rebuild, sync)
-  - Log streaming WebSocket (`/logs/ws`)
-  - RCON WebSocket (implement permission checking)
-- ⏳ Complete permission enforcement
-  - Add permission checks to all container operations
-  - Implement RCON permission checking
-- ⏳ Architectural decisions
-  - Role model: Keep 2 roles or expand to 4?
-  - Permission hierarchy: Should control → view?
-  - Agent-level permission UI
-  - Server creation permissions
-- ⏳ Comprehensive testing
-  - Test all permission scenarios (view, control, delete)
-  - Test with multiple non-admin users
-  - Verify audit logs capture all operations
-- ⏳ Documentation updates
-  - Update API documentation
-  - Document final permission model
+  - Server operations (restart, rebuild, sync, start, stop, delete)
+  - Log streaming WebSocket (`/logs/ws` - JWT via query param)
+  - RCON WebSocket (JWT + permission checking)
+- ✅ Complete permission enforcement
+  - Permission checks on all container operations
+  - RCON permission checking (operator role required)
+- ✅ Architectural decisions implemented
+  - **Role model:** 4 roles (admin, agent-admin, operator, viewer)
+  - **Permission hierarchy:** operator ⊃ viewer (includes capabilities)
+  - **Agent-level permissions:** Implemented with scope system
+  - **Server creation:** agent-admin can create, others admin-only
+- ✅ Comprehensive testing
+  - Tested all role scenarios (viewer, operator, agent-admin, admin)
+  - Tested multi-scope permissions (global, agent, server)
+  - Verified audit logs capture all operations
+- ✅ Audit logging complete
+  - All server operations logged with user attribution
+  - RCON commands logged with full context
+  - Audit log viewer with pagination and filtering
 
-**Estimated Time:** 4-6 hours
+**Actual Time:** ~12 hours (including Phase 1: 12h total ~24h)
 
-**Current Status:** Architectural decisions pending
+**Status:** All requirements met and tested
 
 **Total M7 Time:**
 - Phase 1: 12 hours ✅
-- Phase 2: 4-6 hours (estimated) ⏳
-- **Total: 16-18 hours (estimated)**
+- Phase 2: 12 hours ✅
+- **Total: 24 hours (actual)**
 
 **Dependencies:** Milestone 6 (RCON Integration), Phase 1 Complete
 
