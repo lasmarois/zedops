@@ -176,11 +176,8 @@ planning-history/
 
 1. **Start Sub-Milestone (e.g., M9.8.6)**
    ```bash
-   # Create planning files in a dedicated directory
-   mkdir -p manager/  # or another subdirectory
-   cd manager/
-
-   # Create planning files with parent milestone prefix
+   # Create planning files in ROOT directory (same as regular milestones)
+   # Use parent milestone prefix for clarity
    # Format: task_plan_<parent>.md, findings_<parent>.md, progress_<parent>.md
    touch task_plan_m98.md findings_m98.md progress_m98.md
    ```
@@ -194,9 +191,9 @@ planning-history/
    ```bash
    # IMMEDIATELY after completion, archive the sub-milestone
    mkdir -p planning-history/m9.8.6-descriptive-name/
-   mv manager/task_plan_m98.md planning-history/m9.8.6-descriptive-name/task_plan.md
-   mv manager/findings_m98.md planning-history/m9.8.6-descriptive-name/findings.md
-   mv manager/progress_m98.md planning-history/m9.8.6-descriptive-name/progress.md
+   mv task_plan_m98.md planning-history/m9.8.6-descriptive-name/task_plan.md
+   mv findings_m98.md planning-history/m9.8.6-descriptive-name/findings.md
+   mv progress_m98.md planning-history/m9.8.6-descriptive-name/progress.md
 
    # Move any completion summaries
    mv M986-COMPLETE.md planning-history/m9.8.6-descriptive-name/
@@ -208,14 +205,18 @@ planning-history/
 
 4. **Start Next Sub-Milestone (M9.8.7)**
    ```bash
-   # Working directory is now clean, create fresh planning files
-   cd manager/
+   # Root directory is now clean, create fresh planning files
    touch task_plan_m98.md findings_m98.md progress_m98.md
    # Start fresh - do NOT reuse old numbered files (task_plan_m98_7.md ❌)
    ```
 
 **Sub-Milestone Archive Structure:**
 ```
+Root: (active work - ONLY current sub-milestone)
+├── task_plan_m98.md   # M9.8.7 work (example)
+├── findings_m98.md
+└── progress_m98.md
+
 planning-history/
 ├── m9.8.1-server-status-offline/
 │   ├── task_plan.md
@@ -230,11 +231,6 @@ planning-history/
 │   ├── progress.md
 │   └── M986-COMPLETE.md
 └── ...
-
-manager/  # Active work area - ONLY current sub-milestone
-├── task_plan_m98.md   # M9.8.7 work (example)
-├── findings_m98.md
-└── progress_m98.md
 ```
 
 **Critical Rules:**
@@ -244,7 +240,7 @@ manager/  # Active work area - ONLY current sub-milestone
 | Create numbered files (task_plan_m98_1.md, task_plan_m98_2.md, etc.) | Use same filename, archive after each sub-milestone |
 | Bundle multiple sub-milestones in one massive tracking file | One planning session per sub-milestone, archive immediately |
 | Keep completed sub-milestone files in working directory | Archive to planning-history/m9.8.X-name/ right after completion |
-| Scatter planning files across multiple directories (root, manager, etc.) | Choose one working directory (manager/ recommended for ZedOps) |
+| Put planning files in subdirectories (manager/, frontend/, etc.) | Always use ROOT directory for active planning files |
 
 **Parent Milestone Tracking:**
 - Keep high-level tracking in root: `MILESTONE-M98.md`
