@@ -13,6 +13,7 @@ import { LogViewer } from './components/LogViewer';
 import { UserList } from './components/UserList';
 import { RoleAssignmentsManager } from './components/RoleAssignmentsManager';
 import { AuditLogViewer } from './components/AuditLogViewer';
+import { ComponentShowcase } from './components/ComponentShowcase';
 import type { Agent, UserAccount } from './lib/api';
 
 const queryClient = new QueryClient();
@@ -75,6 +76,12 @@ function AppContent() {
     setCurrentView('agents');
     setSelectedUser(null);
   };
+
+  // Check if we're viewing the component showcase (for M9 Phase 1 testing)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('showcase') === 'true') {
+    return <ComponentShowcase />;
+  }
 
   // Check if we're on the registration page
   if (window.location.pathname === '/register') {

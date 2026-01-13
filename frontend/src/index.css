@@ -36,11 +36,11 @@
   --destructive: 0 84% 60%;         /* #DC2626 - Delete/danger buttons */
   --destructive-foreground: 210 40% 98%;
 
-  /* Semantic Status Colors (Text-Only) */
-  --success: 142 76% 60%;           /* #34D399 - Green for success/online */
-  --warning: 38 92% 60%;            /* #FBBF24 - Amber for warnings */
-  --error: 0 84% 65%;               /* #EF4444 - Red for errors/offline */
-  --info: 199 89% 60%;              /* #22D3EE - Cyan for info */
+  /* Semantic Status Colors (Polished/Vibrant) */
+  --success: 142 71% 65%;           /* #3DDC97 - Vibrant emerald green */
+  --warning: 38 95% 65%;            /* #FFC952 - Polished gold/amber */
+  --error: 0 88% 68%;               /* #F75555 - Vibrant red */
+  --info: 199 92% 65%;              /* #33E1FF - Electric cyan */
 
   /* Borders & Inputs */
   --border: 217 32% 30%;            /* #374151 - Visible borders */
@@ -65,9 +65,14 @@
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Monospace font for code, logs, terminals */
+code,
+pre,
+.font-mono {
+  font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
 }

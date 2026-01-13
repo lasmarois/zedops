@@ -101,19 +101,14 @@ export default {
       },
       fontFamily: {
         sans: [
+          'Outfit',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',
-          'Roboto',
-          'Oxygen',
-          'Ubuntu',
-          'Cantarell',
-          '"Fira Sans"',
-          '"Droid Sans"',
-          '"Helvetica Neue"',
           'sans-serif',
         ],
         mono: [
+          '"JetBrains Mono"',
           '"Courier New"',
           'Courier',
           'monospace',
