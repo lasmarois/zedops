@@ -179,6 +179,89 @@
 
 ---
 
+## Session 5: Page Layout Specifications (2026-01-12)
+
+**Time:** Continued
+
+**Goals:**
+- Design complete navigation structure
+- Specify all page layouts (Dashboard, Agent Detail, Server Detail, Lists)
+- Document tab structures and preview panels
+- Define responsive behavior
+
+**Pages Designed:**
+
+1. **Global Navigation** (Sidebar)
+   - 240px fixed width with sections (Infrastructure, Management)
+   - Collapsible on mobile (hamburger → overlay drawer)
+   - Active state styling with border-l-2 border-primary
+
+2. **Dashboard** (Global Overview)
+   - 4 stats cards (Agents, Servers, Users, Players)
+   - Agent status table (condensed top 3-5)
+   - Recent activity timeline (last 5-10 events)
+   - Quick actions bar
+
+3. **Agent List** (Enhanced)
+   - Keep table format (user approved)
+   - Clickable rows → Agent Detail page
+   - Filters: Status dropdown, search box
+   - [+ Add Agent] button
+
+4. **Agent Detail** (NEW - Hypervisor Style)
+   - 3 tabs: Overview, Servers, Configuration
+   - Overview: Host metrics (current + future graphs), Server list (condensed)
+   - Servers: Full server table with filters
+   - Configuration: Agent settings (future)
+
+5. **Server List** (Global - Enhanced)
+   - All servers across all agents
+   - Filters: Agent dropdown, status dropdown, search
+   - Pagination for many servers
+   - Clickable rows → Server Detail page
+
+6. **Server Detail** (THE CROWN JEWEL)
+   - 6 tabs: Overview, Configuration, Logs, RCON, Performance, Backups
+   - **Overview Tab:**
+     - Server metrics cards (5 cards)
+     - Log preview (collapsible, last 5-10 lines)
+     - RCON preview (collapsible, last 2-3 commands)
+     - Quick actions bar
+   - **Configuration Tab:**
+     - Sub-tabs: Docker ENV, Server INI (future), Mods (future), Advanced
+     - Docker ENV: Form with all ENV vars, port conflict detection
+   - **Logs Tab:** Full-screen log viewer (Smart Hybrid pattern)
+   - **RCON Tab:** Full xterm.js terminal with quick actions
+   - **Performance Tab (Future):** Graphs (CPU, memory, players - 24h)
+   - **Backups Tab (Future):** Backup list with actions
+
+**Key Design Decisions:**
+
+1. **Preview Panels:** Click "Expand" → Navigate to tab (not modal)
+   - Cleaner UX, no nested scrolling
+   - Preview for quick glance only
+
+2. **Tab Structure:**
+   - Agent Detail: 3 tabs (Overview, Servers, Configuration)
+   - Server Detail: 6 tabs (4 now, 2 future)
+
+3. **Responsive Behavior:**
+   - Mobile: Sidebar collapses to hamburger, tables convert to cards
+   - Tablet: Sidebar icons-only, 2-column layouts
+   - Desktop: Full layout, all columns visible
+
+4. **Implementation Priority:**
+   - M9 Core: Sidebar, Dashboard, Agent Detail (2 tabs), Server Detail (3 tabs)
+   - M9 Polish: Configuration tabs
+   - Future: Performance, Backups, Server INI editor
+
+**Files Created:**
+- `PAGE-LAYOUTS.md` - Complete page layout specifications with ASCII diagrams
+
+**Status:** Phase 0-3 ✅ Complete - Moving to Phase 4-5 (UX enhancements & responsive specs)
+
+---
+
 ## Notes
 
 - This is a design-only milestone (no code)
