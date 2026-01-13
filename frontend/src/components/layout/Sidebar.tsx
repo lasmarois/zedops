@@ -20,6 +20,11 @@ interface NavItem {
   count?: number
 }
 
+interface SidebarProps {
+  mobileOpen?: boolean
+  onMobileClose?: () => void
+}
+
 const infrastructureItems: NavItem[] = [
   { label: "Agents", href: "/agents", icon: Laptop },
   { label: "Servers", href: "/servers", icon: Server },
@@ -31,11 +36,26 @@ const managementItems: NavItem[] = [
   { label: "Audit Logs", href: "/audit-logs", icon: FileText },
 ]
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation()
 
+  const handleNavClick = () => {
+    // Close mobile menu when navigating
+    if (onMobileClose) {
+      onMobileClose()
+    }
+  }
+
   return (
-    <div className="flex flex-col h-full w-60 bg-card border-r border-border">
+    <div
+      className={cn(
+        "flex flex-col h-full w-60 bg-card border-r border-border",
+        // Mobile: fixed position, slide in from left
+        "md:relative fixed inset-y-0 left-0 z-50",
+        "transition-transform duration-300 ease-in-out",
+        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}
+    >
       {/* Logo */}
       <div className="p-6">
         <Link to="/dashboard" className="group">
@@ -57,6 +77,7 @@ export function Sidebar() {
             icon={LayoutDashboard}
             label="Dashboard"
             active={location.pathname === "/dashboard" || location.pathname === "/"}
+            onClick={handleNavClick}
           />
         </div>
 
@@ -72,6 +93,7 @@ export function Sidebar() {
                 label={item.label}
                 count={item.count}
                 active={location.pathname.startsWith(item.href)}
+                onClick={handleNavClick}
               />
             ))}
           </div>
@@ -89,6 +111,7 @@ export function Sidebar() {
                 label={item.label}
                 count={item.count}
                 active={location.pathname.startsWith(item.href)}
+                onClick={handleNavClick}
               />
             ))}
           </div>
@@ -135,12 +158,14 @@ interface NavLinkProps {
   label: string
   count?: number
   active?: boolean
+  onClick?: () => void
 }
 
-function NavLink({ href, icon: Icon, label, count, active }: NavLinkProps) {
+function NavLink({ href, icon: Icon, label, count, active, onClick }: NavLinkProps) {
   return (
     <Link
       to={href}
+      onClick={onClick}
       className={cn(
         "group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
         active
