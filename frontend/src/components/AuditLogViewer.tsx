@@ -6,6 +6,25 @@ import { useState } from 'react';
 import { useAuditLogs } from '../hooks/useAuditLogs';
 import { useUsers } from '../hooks/useUsers';
 import type { AuditLogsQuery } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AuditLogViewerProps {
   onBack: () => void;
@@ -50,358 +69,202 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
       .join(' ');
   };
 
-  const getActionColor = (action: string) => {
-    if (action.includes('delete') || action.includes('revoke')) return '#dc3545';
-    if (action.includes('create') || action.includes('grant')) return '#28a745';
-    if (action.includes('update') || action.includes('modify')) return '#ffc107';
-    return '#007bff';
+  const getActionVariant = (action: string): 'destructive' | 'success' | 'warning' | 'default' => {
+    if (action.includes('delete') || action.includes('revoke')) return 'destructive';
+    if (action.includes('create') || action.includes('grant')) return 'success';
+    if (action.includes('update') || action.includes('modify')) return 'warning';
+    return 'default';
   };
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   if (isLoading) {
-    return <div style={{ padding: '2rem' }}>Loading audit logs...</div>;
+    return <div className="p-8">Loading audit logs...</div>;
   }
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', color: '#dc3545' }}>
-        Error: {error.message}
-        <br />
-        <button
-          onClick={onBack}
-          style={{
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+      <div className="p-8">
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Error: {error.message}</AlertDescription>
+        </Alert>
+        <Button variant="secondary" onClick={onBack}>
           Back
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
-        }}
-      >
-        <div>
-          <button
-            onClick={onBack}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginRight: '1rem',
-            }}
-          >
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" onClick={onBack}>
             ← Back
-          </button>
-          <h1 style={{ display: 'inline' }}>Audit Logs</h1>
+          </Button>
+          <h1 className="text-3xl font-bold">Audit Logs</h1>
         </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+        <Button onClick={() => setShowFilters(!showFilters)}>
           {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
+        </Button>
       </div>
 
       {showFilters && (
-        <div
-          style={{
-            backgroundColor: '#2d2d2d',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Filters</h2>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1rem',
-            }}
-          >
-            <div>
-              <label
-                htmlFor="userId"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+        <div className="bg-[#2d2d2d] p-6 rounded-lg mb-8">
+          <h2 className="text-xl font-bold mb-4 mt-0">Filters</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="userId" className="text-gray-300">
                 User
-              </label>
-              <select
-                id="userId"
+              </Label>
+              <Select
                 value={filters.userId || ''}
-                onChange={(e) => handleFilterChange('userId', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
+                onValueChange={(val) => handleFilterChange('userId', val)}
               >
-                <option value="">All Users</option>
-                {usersData?.users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.email}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="userId" className="bg-[#1a1a1a] border-[#444] text-white">
+                  <SelectValue placeholder="All Users" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Users</SelectItem>
+                  {usersData?.users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div>
-              <label
-                htmlFor="action"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+            <div className="space-y-2">
+              <Label htmlFor="action" className="text-gray-300">
                 Action
-              </label>
-              <select
-                id="action"
+              </Label>
+              <Select
                 value={filters.action || ''}
-                onChange={(e) => handleFilterChange('action', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
+                onValueChange={(val) => handleFilterChange('action', val)}
               >
-                <option value="">All Actions</option>
-                <option value="user_login">User Login</option>
-                <option value="user_logout">User Logout</option>
-                <option value="user_created">User Created</option>
-                <option value="user_deleted">User Deleted</option>
-                <option value="permission_granted">Permission Granted</option>
-                <option value="permission_revoked">Permission Revoked</option>
-                <option value="server_created">Server Created</option>
-                <option value="server_deleted">Server Deleted</option>
-                <option value="server_started">Server Started</option>
-                <option value="server_stopped">Server Stopped</option>
-              </select>
+                <SelectTrigger id="action" className="bg-[#1a1a1a] border-[#444] text-white">
+                  <SelectValue placeholder="All Actions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="user_login">User Login</SelectItem>
+                  <SelectItem value="user_logout">User Logout</SelectItem>
+                  <SelectItem value="user_created">User Created</SelectItem>
+                  <SelectItem value="user_deleted">User Deleted</SelectItem>
+                  <SelectItem value="permission_granted">Permission Granted</SelectItem>
+                  <SelectItem value="permission_revoked">Permission Revoked</SelectItem>
+                  <SelectItem value="server_created">Server Created</SelectItem>
+                  <SelectItem value="server_deleted">Server Deleted</SelectItem>
+                  <SelectItem value="server_started">Server Started</SelectItem>
+                  <SelectItem value="server_stopped">Server Stopped</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div>
-              <label
-                htmlFor="targetType"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  color: '#ccc',
-                }}
-              >
+            <div className="space-y-2">
+              <Label htmlFor="targetType" className="text-gray-300">
                 Target Type
-              </label>
-              <select
-                id="targetType"
+              </Label>
+              <Select
                 value={filters.targetType || ''}
-                onChange={(e) => handleFilterChange('targetType', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '4px',
-                  color: '#fff',
-                }}
+                onValueChange={(val) => handleFilterChange('targetType', val)}
               >
-                <option value="">All Types</option>
-                <option value="user">User</option>
-                <option value="server">Server</option>
-                <option value="agent">Agent</option>
-                <option value="permission">Permission</option>
-              </select>
+                <SelectTrigger id="targetType" className="bg-[#1a1a1a] border-[#444] text-white">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="server">Server</SelectItem>
+                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="permission">Permission</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <button
-            onClick={clearFilters}
-            style={{
-              marginTop: '1rem',
-              padding: '0.5rem 1rem',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="secondary" onClick={clearFilters} className="mt-4">
             Clear Filters
-          </button>
+          </Button>
         </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem',
-        }}
-      >
-        <p style={{ color: '#888' }}>
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-muted-foreground">
           Showing {data?.logs.length || 0} of {data?.total || 0} logs
         </p>
         {totalPages > 1 && (
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button
+          <div className="flex gap-2 items-center">
+            <Button
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              style={{
-                padding: '0.25rem 0.5rem',
-                backgroundColor: page === 1 ? '#444' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
-              }}
             >
               Previous
-            </button>
-            <span style={{ color: '#ccc' }}>
+            </Button>
+            <span className="text-muted-foreground">
               Page {page} of {totalPages}
             </span>
-            <button
+            <Button
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              style={{
-                padding: '0.25rem 0.5rem',
-                backgroundColor: page === totalPages ? '#444' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: page === totalPages ? 'not-allowed' : 'pointer',
-              }}
             >
               Next
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {data?.logs && data.logs.length > 0 ? (
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              backgroundColor: '#2d2d2d',
-              borderRadius: '8px',
-              overflow: 'hidden',
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: '#1a1a1a' }}>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Timestamp</th>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>User</th>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Action</th>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Target</th>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>Details</th>
-                <th style={{ padding: '1rem', textAlign: 'left', color: '#ccc' }}>IP Address</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="border rounded-md overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>IP Address</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.logs.map((log) => (
-                <tr key={log.id} style={{ borderTop: '1px solid #444' }}>
-                  <td
-                    style={{
-                      padding: '1rem',
-                      color: '#ccc',
-                      fontSize: '0.875rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                <TableRow key={log.id}>
+                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
                     {formatDate(log.timestamp)}
-                  </td>
-                  <td style={{ padding: '1rem', color: '#fff' }}>{log.user_email}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <span
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        backgroundColor: getActionColor(log.action),
-                        color: 'white',
-                        borderRadius: '4px',
-                        fontSize: '0.875rem',
-                      }}
-                    >
+                  </TableCell>
+                  <TableCell>{log.user_email}</TableCell>
+                  <TableCell>
+                    <Badge variant={getActionVariant(log.action)}>
                       {formatAction(log.action)}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem', color: '#ccc', fontSize: '0.875rem' }}>
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
                     {log.target_type && log.target_id ? (
                       <>
-                        <span style={{ color: '#888' }}>{log.target_type}:</span>{' '}
+                        <span className="text-muted-foreground">{log.target_type}:</span>{' '}
                         {log.target_id.substring(0, 8)}...
                       </>
                     ) : (
                       '-'
                     )}
-                  </td>
-                  <td
-                    style={{
-                      padding: '1rem',
-                      color: '#ccc',
-                      fontSize: '0.875rem',
-                      maxWidth: '300px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm max-w-[300px] overflow-hidden overflow-ellipsis">
                     {log.details || '-'}
-                  </td>
-                  <td style={{ padding: '1rem', color: '#888', fontSize: '0.875rem' }}>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
                     {log.ip_address}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '2rem',
-            color: '#888',
-            backgroundColor: '#2d2d2d',
-            borderRadius: '8px',
-          }}
-        >
+        <div className="text-center p-8 bg-muted rounded-md">
           No audit logs found.
         </div>
       )}
