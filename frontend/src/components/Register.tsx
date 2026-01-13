@@ -4,6 +4,11 @@
 
 import { useState, useEffect } from 'react';
 import { acceptInvitation, verifyInvitationToken } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function Register() {
   const [token, setToken] = useState<string | null>(null);
@@ -84,227 +89,123 @@ export function Register() {
     }
   };
 
+  // Loading state
   if (isVerifying) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-          backgroundColor: '#0d1117',
-        }}
-      >
-        <div style={{ textAlign: 'center', color: '#fff' }}>
+      <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
+        <div className="text-center text-white">
           <p>Verifying invitation...</p>
         </div>
       </div>
     );
   }
 
+  // Success state
   if (isSuccess) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-          backgroundColor: '#0d1117',
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: '#161b22',
-            padding: '2rem',
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
-            width: '400px',
-            textAlign: 'center',
-          }}
-        >
-          <h2 style={{ color: '#28a745', marginBottom: '1rem' }}>✓ Account Created!</h2>
-          <p style={{ color: '#ccc' }}>Your account has been created successfully.</p>
-          <p style={{ color: '#ccc' }}>Redirecting to login...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
+        <Card className="w-full max-w-md bg-[#161b22] border-[#30363d]">
+          <CardContent className="pt-6 text-center space-y-2">
+            <h2 className="text-2xl font-bold text-success">✓ Account Created!</h2>
+            <p className="text-gray-300">Your account has been created successfully.</p>
+            <p className="text-gray-300">Redirecting to login...</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // Invalid invitation state
   if (error && !token) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-          backgroundColor: '#0d1117',
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: '#161b22',
-            padding: '2rem',
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
-            width: '400px',
-            textAlign: 'center',
-          }}
-        >
-          <h2 style={{ color: '#dc3545', marginBottom: '1rem' }}>Invalid Invitation</h2>
-          <p style={{ color: '#ccc', marginBottom: '1.5rem' }}>{error}</p>
-          <button
-            onClick={() => (window.location.href = '/')}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Go to Login
-          </button>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
+        <Card className="w-full max-w-md bg-[#161b22] border-[#30363d]">
+          <CardContent className="pt-6 text-center space-y-4">
+            <h2 className="text-2xl font-bold text-destructive">Invalid Invitation</h2>
+            <p className="text-gray-300">{error}</p>
+            <Button onClick={() => (window.location.href = '/')}>
+              Go to Login
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // Registration form
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        backgroundColor: '#0d1117',
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: '#161b22',
-          padding: '2rem',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
-          width: '400px',
-        }}
-      >
-        <h2 style={{ color: '#fff', marginBottom: '0.5rem' }}>Complete Registration</h2>
-        <p style={{ color: '#8b949e', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
-          You've been invited to join ZedOps
-        </p>
+    <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
+      <Card className="w-full max-w-md bg-[#161b22] border-[#30363d]">
+        <CardHeader>
+          <CardTitle className="text-white">Complete Registration</CardTitle>
+          <CardDescription className="text-gray-400">
+            You've been invited to join ZedOps
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {email && (
+            <div className="p-3 bg-[#0d1117] rounded-md space-y-2">
+              <div>
+                <p className="text-xs text-gray-400">Email:</p>
+                <p className="text-white font-bold">{email}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Role:</p>
+                <p className="text-info font-bold capitalize">{role}</p>
+              </div>
+            </div>
+          )}
 
-        {email && (
-          <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: '#0d1117', borderRadius: '4px' }}>
-            <p style={{ color: '#8b949e', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Email:</p>
-            <p style={{ color: '#fff', fontWeight: 'bold' }}>{email}</p>
-            <p style={{ color: '#8b949e', fontSize: '0.875rem', marginTop: '0.5rem', marginBottom: '0.25rem' }}>
-              Role:
-            </p>
-            <p style={{ color: '#58a6ff', fontWeight: 'bold', textTransform: 'capitalize' }}>{role}</p>
-          </div>
-        )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        {error && (
-          <div
-            style={{
-              padding: '0.75rem',
-              marginBottom: '1rem',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              borderRadius: '4px',
-            }}
-          >
-            {error}
-          </div>
-        )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-gray-300">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="Enter your password (min 8 characters)"
+                className="bg-[#0d1117] border-[#30363d] text-gray-300"
+              />
+            </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label
-              htmlFor="password"
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                color: '#c9d1d9',
-                fontSize: '0.875rem',
-              }}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-gray-300">
+                Confirm Password
+              </Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="Confirm your password"
+                className="bg-[#0d1117] border-[#30363d] text-gray-300"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              variant="success"
+              className="w-full"
             >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="Enter your password (min 8 characters)"
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                backgroundColor: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                color: '#c9d1d9',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label
-              htmlFor="confirmPassword"
-              style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                color: '#c9d1d9',
-                fontSize: '0.875rem',
-              }}
-            >
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="Confirm your password"
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                backgroundColor: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                color: '#c9d1d9',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              backgroundColor: isLoading ? '#6c757d' : '#238636',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isLoading ? 'Creating Account...' : 'Create Account'}
-          </button>
-        </form>
-      </div>
+              {isLoading ? 'Creating Account...' : 'Create Account'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
