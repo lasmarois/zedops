@@ -144,3 +144,98 @@ Agents Page → /agents/:id → AgentDetail → /servers/:id → ServerDetail
 ### Status: ✅ M9.5 COMPLETE
 
 **Actual Time:** ~2 hours (vs 4-6 hours estimated - 50% faster!)
+
+---
+
+## Session 3: M9.6 Investigation & M9.7 Implementation (2026-01-13)
+
+**Date:** 2026-01-13
+**Goal:** Investigate inconsistencies after M9.5, then fix them
+
+### M9.6: Investigation Phase ✅
+
+**Duration:** ~1 hour
+
+**Actions Taken:**
+1. Created M9.6 planning files (task_plan_m96.md, findings_m96.md, progress_m96.md)
+2. Investigated UI/UX inconsistencies between design and implementation
+3. Documented 9 findings with priority levels
+4. User clarified RCON requirements
+5. Created M9.7 implementation plan
+
+**Key Findings:**
+- Finding #0 (CRITICAL): RCON password bug in ServerDetail
+- Finding #1 (HIGH): Agent server list rows not clickable
+- Finding #2 (MEDIUM): ContainerList component misnamed
+- Finding #3 (MEDIUM): Visual design inconsistency
+- Finding #4 (RESOLVED): RCON port is internal-only
+- Finding #5-8: Lower priority polish items
+
+### M9.7: Implementation Phase ✅
+
+**Duration:** ~2 hours
+**Status:** ✅ COMPLETE & DEPLOYED
+
+**Phase 0: RCON Password Fix** ✅ (5 min)
+- Fixed ServerDetail.tsx line 56
+- Changed from `config.SERVER_RCON_PASSWORD` (doesn't exist)
+- Changed to `config.RCON_PASSWORD || config.ADMIN_PASSWORD`
+- RCON now works from ServerDetail page
+
+**Phase 1: Navigation Fix** ✅ (30 min)
+- Made agent server list rows clickable
+- Added `useNavigate` hook to ContainerList/AgentServerList
+- Added onClick handler to TableRow
+- Added hover styling for visual feedback
+- Added stopPropagation to action buttons
+
+**Phase 2: Component Rename** ✅ (20 min)
+- Renamed ContainerList.tsx → AgentServerList.tsx
+- Updated component name: ContainerList → AgentServerList
+- Updated interface: ContainerListProps → AgentServerListProps
+- Updated all imports in AgentDetail.tsx (3 locations)
+
+**Phase 3: Button Styling** ✅ (10 min)
+- Standardized button variants in ServerDetail.tsx
+- Start: success (green)
+- Stop: warning (yellow)
+- Restart: info (blue)
+- Rebuild: info (blue)
+- Delete: destructive (red)
+- Now consistent with AgentServerList
+
+**Build & Deploy** ✅
+- TypeScript compilation: SUCCESS
+- Frontend build: SUCCESS (5.72s)
+- Deployment: SUCCESS
+- Version: 530041f1-6f72-48a3-872b-313aa8c811ff
+- URL: https://zedops.mail-bcf.workers.dev
+
+### Status: ✅ M9.7 COMPLETE
+
+**Actual Time:** ~2 hours (vs 4-6 hours estimated - 67% faster!)
+**All Success Criteria Met:**
+- [x] RCON password bug fixed
+- [x] Agent server list navigable
+- [x] Component renamed correctly
+- [x] Button styling consistent
+- [x] TypeScript errors: 0
+- [x] Build successful
+- [x] Deployed to production
+
+**Files Created:**
+- M97-COMPLETE.md - Implementation summary
+- task_plan_m97.md - Implementation plan
+- findings_m96.md - Investigation findings
+- progress_m96.md - Investigation progress
+
+---
+
+## Overall M9 Status: ✅ COMPLETE
+
+**M9:** Design & Component Library ✅
+**M9.5:** Bridge Design to Functionality ✅
+**M9.6:** Investigation ✅
+**M9.7:** Fix UI/UX Inconsistencies ✅
+
+**Next Milestone:** M10 (Future enhancements - metrics, backups, etc.)

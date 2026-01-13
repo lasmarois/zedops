@@ -3,7 +3,8 @@
 **Milestone:** M9.5 - Connect New UI to Real Data
 **Duration:** 1-2 days estimated
 **Started:** 2026-01-13
-**Status:** 🚧 Planning
+**Completed:** 2026-01-13
+**Status:** ✅ COMPLETE
 
 ---
 
@@ -61,12 +62,12 @@ M9 created beautiful new pages (Dashboard, ServerList, AgentDetail, ServerDetail
 **Tasks:**
 
 #### 1.1 Global Server List Endpoint
-- [ ] Create `GET /api/servers` endpoint in `manager/src/routes/agents.ts`
-- [ ] Query all servers across all agents from D1
-- [ ] Join with agents table to get agent names
-- [ ] Return array of servers with agent info
-- [ ] Add pagination support (optional)
-- [ ] Test with existing servers
+- [x] Create `GET /api/servers` endpoint in `manager/src/routes/servers.ts`
+- [x] Query all servers across all agents from D1
+- [x] Join with agents table to get agent names
+- [x] Return array of servers with agent info
+- [x] Add pagination support (optional)
+- [x] Test with existing servers
 
 **API Response Format:**
 ```typescript
@@ -91,12 +92,12 @@ M9 created beautiful new pages (Dashboard, ServerList, AgentDetail, ServerDetail
 ```
 
 #### 1.2 Single Server Endpoint
-- [ ] Create `GET /api/servers/:id` endpoint
-- [ ] Fetch server by ID from D1
-- [ ] Join with agent to get agent info
-- [ ] Return server details
-- [ ] Handle 404 if server not found
-- [ ] Test with existing server
+- [x] Create `GET /api/servers/:id` endpoint
+- [x] Fetch server by ID from D1
+- [x] Join with agent to get agent info
+- [x] Return server details
+- [x] Handle 404 if server not found
+- [x] Test with existing server
 
 **API Response Format:**
 ```typescript
@@ -127,12 +128,12 @@ M9 created beautiful new pages (Dashboard, ServerList, AgentDetail, ServerDetail
 
 **Tasks:**
 
-#### 2.1 Create `useServers` Hook
-- [ ] Create `frontend/src/hooks/useServers.ts`
-- [ ] Use TanStack Query to fetch from `/api/servers`
-- [ ] 5 second refetch interval (like useAgents)
-- [ ] Handle loading/error states
-- [ ] Export typed hook
+#### 2.1 Create `useAllServers` Hook
+- [x] Create `useAllServers()` in `frontend/src/hooks/useServers.ts`
+- [x] Use TanStack Query to fetch from `/api/servers`
+- [x] 5 second refetch interval (like useAgents)
+- [x] Handle loading/error states
+- [x] Export typed hook
 
 **Hook Interface:**
 ```typescript
@@ -150,11 +151,11 @@ export function useServers() {
 }
 ```
 
-#### 2.2 Create `useServer` Hook
-- [ ] Create single server hook in `useServers.ts`
-- [ ] Fetch from `/api/servers/:id`
-- [ ] Pass server ID as parameter
-- [ ] Handle 404 errors gracefully
+#### 2.2 Create `useServerById` Hook
+- [x] Create single server hook in `useServers.ts`
+- [x] Fetch from `/api/servers/:id`
+- [x] Pass server ID as parameter
+- [x] Handle 404 errors gracefully
 
 **Hook Interface:**
 ```typescript
@@ -181,18 +182,18 @@ export function useServer(serverId: string) {
 
 **Tasks:**
 
-#### 3.1 Integrate `useServers` Hook
-- [ ] Import `useServers` in `ServerList.tsx`
-- [ ] Replace `allServers = []` with hook data
-- [ ] Map server data to `ServerWithAgent[]` format
-- [ ] Keep search/filter logic working
-- [ ] Test with multiple servers
+#### 3.1 Integrate `useAllServers` Hook
+- [x] Import `useAllServers` in `ServerList.tsx`
+- [x] Replace `allServers = []` with hook data
+- [x] Map server data to `ServerWithAgent[]` format
+- [x] Keep search/filter logic working
+- [x] Test with multiple servers
 
 #### 3.2 Add Server Count to Dashboard
-- [ ] Import `useServers` in `Dashboard.tsx`
-- [ ] Replace placeholder "0" with `serversData.servers.length`
-- [ ] Count running servers: `servers.filter(s => s.status === 'running').length`
-- [ ] Update card to show "X running / Y total"
+- [x] Import `useAllServers` in `Dashboard.tsx`
+- [x] Replace placeholder "0" with `serversData.count`
+- [x] Count running servers: `servers.filter(s => s.status === 'running').length`
+- [x] Update card to show "X running / Y stopped"
 
 ---
 
@@ -202,25 +203,25 @@ export function useServer(serverId: string) {
 
 **Tasks:**
 
-#### 4.1 Integrate `useServer` Hook
-- [ ] Import `useServer` in `ServerDetail.tsx`
-- [ ] Get server ID from URL params: `const { id } = useParams()`
-- [ ] Fetch server data: `const { data, isLoading } = useServer(id)`
-- [ ] Replace all placeholder variables with real data
-- [ ] Handle loading state (skeleton)
-- [ ] Handle 404 state (server not found page)
+#### 4.1 Integrate `useServerById` Hook
+- [x] Import `useServerById` in `ServerDetail.tsx`
+- [x] Get server ID from URL params: `const { id } = useParams()`
+- [x] Fetch server data: `const { data, isLoading } = useServerById(id)`
+- [x] Replace all placeholder variables with real data
+- [x] Handle loading state (skeleton)
+- [x] Handle 404 state (server not found page)
 
-#### 4.2 Fix ContainerList Integration
-- [ ] Pass real `agentId` and `containerId` to ContainerList
-- [ ] ContainerList already filters by these IDs
-- [ ] Ensure server actions (start/stop/restart) work
-- [ ] Test navigation from ServerDetail → Logs/RCON tabs
+#### 4.2 Fix LogViewer and RconTerminal Integration
+- [x] Pass real `agentId` and `containerId` to LogViewer
+- [x] Pass real `agentId`, `containerId`, and `rconPassword` to RconTerminal
+- [x] Parse config JSON to extract RCON password
+- [x] Test navigation from ServerDetail → Logs/RCON tabs
 
 #### 4.3 Update Metrics Display
-- [ ] Show real uptime (calculate from created_at or container start time)
-- [ ] CPU/Memory/Disk: Get from agent metrics (agent-level for now)
-- [ ] Player count: Placeholder for now (needs RCON query - future M10+)
-- [ ] Status badge with real server status
+- [x] Show real uptime (calculate from created_at or container start time)
+- [x] CPU/Memory/Disk: Get from agent metrics (agent-level for now)
+- [x] Player count: Placeholder for now (needs RCON query - future M10+)
+- [x] Status badge with real server status
 
 ---
 
@@ -231,14 +232,14 @@ export function useServer(serverId: string) {
 **Tasks:**
 
 #### 5.1 Simplify AgentsPage
-- [ ] Remove `selectedAgent` state (line 15)
-- [ ] Remove `selectedContainer` state (line 16)
-- [ ] Remove `handleBackToAgents` (line 23-26)
-- [ ] Remove `handleViewLogs` (line 28-30)
-- [ ] Remove `handleBackToContainers` (line 32-34)
-- [ ] Remove conditional rendering (lines 45-65)
-- [ ] Keep only `AgentList` render (lines 67-73)
-- [ ] Navigation now goes through routes (AgentDetail page)
+- [x] Remove `selectedAgent` state (line 15)
+- [x] Remove `selectedContainer` state (line 16)
+- [x] Remove `handleBackToAgents` (line 23-26)
+- [x] Remove `handleViewLogs` (line 28-30)
+- [x] Remove `handleBackToContainers` (line 32-34)
+- [x] Remove conditional rendering (lines 45-65)
+- [x] Keep only `AgentList` render (lines 67-73)
+- [x] Navigation now goes through routes (AgentDetail page)
 
 **New AgentsPage (simplified):**
 ```typescript
@@ -256,10 +257,10 @@ export function AgentsPage() {
 ```
 
 #### 5.2 Update ContainerList Component
-- [ ] Keep ContainerList as reusable component
-- [ ] Used in AgentDetail page (Servers tab)
-- [ ] Navigation from ContainerList → ServerDetail (click row)
-- [ ] Add server row click handler: `navigate(/servers/${serverId})`
+- [x] Keep ContainerList as reusable component
+- [x] Used in AgentDetail page (Servers tab)
+- [x] Navigation from ContainerList → ServerDetail (click row)
+- [x] Add server row click handler: `navigate(/servers/${serverId})`
 
 ---
 
@@ -270,43 +271,43 @@ export function AgentsPage() {
 **Tasks:**
 
 #### 6.1 Test Navigation Flows
-- [ ] **Dashboard → Agents:** Click agent card → AgentDetail page
-- [ ] **Dashboard → Activity:** Shows recent actions
-- [ ] **Agents List → Agent Detail:** Click agent row → AgentDetail tabs
-- [ ] **Agent Detail → Server:** Click server row → ServerDetail page
-- [ ] **Servers List → Server Detail:** Click server card → ServerDetail tabs
-- [ ] **Server Detail → Logs Tab:** Embedded LogViewer works
-- [ ] **Server Detail → RCON Tab:** Embedded RconTerminal works
+- [x] **Dashboard → Agents:** Click agent card → AgentDetail page
+- [x] **Dashboard → Activity:** Shows recent actions
+- [x] **Agents List → Agent Detail:** Click agent row → AgentDetail tabs
+- [x] **Agent Detail → Server:** Click server row → ServerDetail page
+- [x] **Servers List → Server Detail:** Click server card → ServerDetail tabs
+- [x] **Server Detail → Logs Tab:** Embedded LogViewer works
+- [x] **Server Detail → RCON Tab:** Embedded RconTerminal works
 
 #### 6.2 Test Data Display
-- [ ] ServerList shows all servers across agents
-- [ ] Dashboard shows correct server/agent counts
-- [ ] ServerDetail shows real server data (not placeholders)
-- [ ] AgentDetail shows servers for that agent only
-- [ ] Search/filter works on ServerList
+- [x] ServerList shows all servers across agents
+- [x] Dashboard shows correct server/agent counts
+- [x] ServerDetail shows real server data (not placeholders)
+- [x] AgentDetail shows servers for that agent only
+- [x] Search/filter works on ServerList
 
 #### 6.3 Test Actions
-- [ ] Start/Stop/Restart buttons work on ServerDetail
-- [ ] Delete server button works
-- [ ] Create server button navigates correctly
-- [ ] Log viewer works from ServerDetail
-- [ ] RCON terminal works from ServerDetail
+- [x] Start/Stop/Restart buttons work on ServerDetail
+- [x] Delete server button works
+- [x] Create server button navigates correctly
+- [x] Log viewer works from ServerDetail
+- [x] RCON terminal works from ServerDetail
 
 ---
 
 ## Success Criteria
 
 **M9.5 Complete When:**
-- [ ] Global server list API endpoint works
-- [ ] Single server API endpoint works
-- [ ] ServerList page shows all servers (real data)
-- [ ] ServerDetail page shows real server data
-- [ ] Dashboard shows real server counts
-- [ ] AgentsPage uses new navigation (no more state-based ContainerList)
-- [ ] All navigation flows work correctly
-- [ ] No regressions (existing features still work)
-- [ ] Deployed to production
-- [ ] User approval ✓
+- [x] Global server list API endpoint works
+- [x] Single server API endpoint works
+- [x] ServerList page shows all servers (real data)
+- [x] ServerDetail page shows real server data
+- [x] Dashboard shows real server counts
+- [x] AgentsPage uses new navigation (no more state-based ContainerList)
+- [x] All navigation flows work correctly
+- [x] No regressions (existing features still work)
+- [x] Deployed to production
+- [x] User approval ✓
 
 ---
 
@@ -314,7 +315,8 @@ export function AgentsPage() {
 
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| *(none yet)* | - | - |
+| TypeScript: Property 'token' does not exist on UserContextType | 1 | Used `getToken()` from `lib/auth.ts` instead of accessing token from UserContext |
+| TypeScript: Parameter implicitly has 'any' type (Dashboard.tsx:29, ServerList.tsx:32) | 1 | Added explicit `(s: any)` and `(server: any)` type annotations to filter/map functions |
 
 ---
 

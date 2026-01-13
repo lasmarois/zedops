@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgents } from "@/hooks/useAgents"
 import { Laptop, Server, HardDrive, Plus } from "lucide-react"
-import { ContainerList } from "@/components/ContainerList"
+import { AgentServerList } from "@/components/AgentServerList"
 
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -210,8 +210,8 @@ export function AgentDetail() {
               </Button>
             </div>
 
-            {/* Embed ContainerList for this agent */}
-            <ContainerList
+            {/* Embed AgentServerList for this agent */}
+            <AgentServerList
               agentId={agent.id}
               agentName={agent.name}
               onBack={() => navigate('/agents')}
@@ -224,7 +224,7 @@ export function AgentDetail() {
         <TabsContent value="servers" className="space-y-6">
           <div>
             <h2 className="text-xl font-semibold mb-4">All Servers</h2>
-            <ContainerList
+            <AgentServerList
               agentId={agent.id}
               agentName={agent.name}
               onBack={() => navigate('/agents')}

@@ -53,7 +53,7 @@ export function ServerDetail() {
 
   // Parse config to get RCON password
   const config = server.config ? JSON.parse(server.config) : {}
-  const rconPassword = config.SERVER_RCON_PASSWORD || ''
+  const rconPassword = config.RCON_PASSWORD || config.ADMIN_PASSWORD || ''
 
   // Placeholder for metrics (TODO: Get from agent metrics)
   const uptime = "N/A" // TODO: Calculate from container start time
@@ -92,28 +92,28 @@ export function ServerDetail() {
 
         <div className="flex gap-2">
           {status === 'stopped' && (
-            <Button variant="default">
+            <Button variant="success">
               <PlayCircle className="h-4 w-4" />
               Start
             </Button>
           )}
           {status === 'running' && (
             <>
-              <Button variant="outline">
+              <Button variant="warning">
                 <StopCircle className="h-4 w-4" />
                 Stop
               </Button>
-              <Button variant="outline">
+              <Button variant="info">
                 <RefreshCw className="h-4 w-4" />
                 Restart
               </Button>
             </>
           )}
-          <Button variant="outline">
+          <Button variant="info">
             <Wrench className="h-4 w-4" />
             Rebuild
           </Button>
-          <Button variant="outline" className="text-error hover:text-error">
+          <Button variant="destructive">
             <Trash2 className="h-4 w-4" />
             Delete
           </Button>

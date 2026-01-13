@@ -1,8 +1,9 @@
 /**
- * Container list component for a specific agent
+ * Agent Server List component - displays and manages servers for a specific agent
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useContainers,
   useStartContainer,
@@ -34,14 +35,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-interface ContainerListProps {
+interface AgentServerListProps {
   agentId: string;
   agentName: string;
   onBack: () => void;
   onViewLogs: (containerId: string, containerName: string) => void;
 }
 
-export function ContainerList({ agentId, agentName, onBack, onViewLogs }: ContainerListProps) {
+export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: AgentServerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
   const { data: serversData } = useServers(agentId);
   const startMutation = useStartContainer();
@@ -56,6 +57,7 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
   const purgeServerMutation = usePurgeServer();
   const restoreServerMutation = useRestoreServer();
   const syncServersMutation = useSyncServers();
+  const navigate = useNavigate();
 
   const [operationStatus, setOperationStatus] = useState<{
     containerId: string;
@@ -809,7 +811,11 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                   .map((server) => {
                     const badge = getServerStatusBadge(server);
                     return (
-                      <TableRow key={server.id}>
+                      <TableRow
+                        key={server.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/servers/${server.id}`)}
+                      >
                         <TableCell className="font-semibold">{server.name}</TableCell>
                         <TableCell>
                           <Badge variant={badge.variant}>{badge.text}</Badge>
@@ -817,7 +823,7 @@ export function ContainerList({ agentId, agentName, onBack, onViewLogs }: Contai
                         <TableCell>
                           {server.game_port}/{server.udp_port}
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-2 flex-wrap">
                             {/* Running: Stop, Rebuild, Delete */}
                             {server.status === 'running' && (
