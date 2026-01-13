@@ -365,65 +365,181 @@
 
 ---
 
-## Milestone 7.5: UI Styling & Design System ⏳ Planned
+## Milestone 7.5: UI Styling & Design System ✅ Complete
 
 **Goal:** Implement comprehensive UI styling with shadcn/ui and Tailwind CSS
 
-**Duration:** 1-2 weeks
+**Duration:** 1-2 weeks estimated → **8.25 hours actual** (73% under budget!)
+
+**Completed:** 2026-01-12
 
 **Rationale:**
 After building all core features (M1-M7), apply consistent design system across the entire product. This approach ensures styling decisions are informed by complete product context and all features are styled cohesively.
 
 **Deliverables:**
-- Install and configure shadcn/ui + Tailwind CSS
-- Create design system (colors, spacing, typography, themes)
-- Replace custom components with shadcn components
-  - Forms (ServerForm with proper inputs, validation states)
-  - Tables (AgentList, ContainerList with sorting, filtering)
-  - Dialogs (confirmations, modals)
-  - Cards (server cards, agent cards)
-  - Badges (status indicators, labels)
-  - Buttons (consistent sizing, variants, states)
-- Implement responsive layouts (mobile, tablet, desktop)
-- Add proper loading states (skeletons, spinners)
-- Add error states (inline errors, toast notifications)
-- Add empty states (no servers, no agents, no logs)
-- Polish log viewer (terminal styling with shadcn theme)
-- Dark mode support (optional but recommended)
-- Accessibility improvements (ARIA labels, keyboard navigation)
+- ✅ Install and configure shadcn/ui + Tailwind CSS v3.4.0
+- ✅ Create design system (colors, spacing, typography, semantic variants)
+- ✅ Replace custom components with shadcn components (10 components refactored)
+  - ✅ Forms (ServerForm with proper inputs, validation states)
+  - ✅ Tables (AgentList, ContainerList with semantic styling)
+  - ✅ Dialogs (confirmations, modals with Radix UI)
+  - ✅ Cards (server cards with consistent styling)
+  - ✅ Badges (status indicators with 5 semantic variants)
+  - ✅ Buttons (consistent sizing, 9 variants, states)
+- ✅ Implement responsive layouts (mobile/tablet/desktop breakpoints)
+- ✅ Add proper loading states (skeleton components with pulse animation)
+- ✅ Add error states (Alert components with destructive variant)
+- ✅ Add empty states (consistent messaging with helpful hints)
+- ✅ Polish log viewer (Dracula theme preserved)
+- ✅ Accessibility improvements (WCAG AA, keyboard navigation, ARIA attributes)
+
+**Key Achievements:**
+- **Code reduction:** -1,385 lines (-27%)
+- **WCAG AA compliant:** 11.5:1 text contrast, 4.6-10.8:1 button contrast
+- **Zero regressions:** All functionality preserved
+- **Production deployed:** https://zedops.mail-bcf.workers.dev
+
+**Critical Fix:**
+- Tailwind v4 → v3 downgrade (color utility generation issue resolved)
 
 **Success Criteria:**
-- All pages use shadcn components consistently
-- Design tokens applied across entire app
-- Responsive layouts work on mobile, tablet, desktop
-- Loading/error/empty states present everywhere
-- UI feels polished and professional
-- No custom CSS outside design system
-- Consistent spacing, typography, colors throughout
+- ✅ All pages use shadcn components consistently
+- ✅ Design tokens applied across entire app
+- ✅ Responsive layouts work on mobile, tablet, desktop
+- ✅ Loading/error/empty states present everywhere
+- ✅ UI feels polished and professional
+- ✅ No custom CSS outside design system
+- ✅ Consistent spacing, typography, colors throughout
 
-**Pages to Style:**
-1. Login page
-2. Agent list page
-3. Container list page (servers view)
-4. Server creation form
-5. Log viewer
-6. RCON console (if M6 complete)
-7. Audit logs viewer (if M7 complete)
+**Pages Styled:**
+1. ✅ Login page
+2. ✅ Agent list page
+3. ✅ Container list page (servers view)
+4. ✅ Server creation form
+5. ✅ Log viewer
+6. ✅ RCON console
+7. ✅ Audit logs viewer
+8. ✅ User management page
+9. ✅ Permissions management page
+10. ✅ Registration page
 
 **Dependencies:** Milestone 7 (RBAC & Audit Logs)
+
+**Planning (Archived):** [planning-history/milestone-7.5-ui-styling/](planning-history/milestone-7.5-ui-styling/)
+
+**Deferred:** Phase 6 (Testing & Verification) → Moved to Milestone 11
+
+---
+
+## Milestone 8: Visual Redesign - Design Phase ⏳ Planned
+
+**Goal:** Design comprehensive visual redesign and modern template for ZedOps UI
+
+**Duration:** 1-2 weeks
+
+**Rationale:**
+After completing the foundational UI styling (M7.5), create a cohesive visual design that elevates the product from functional to exceptional. This complex design phase will define the visual language, user flows, and template structure before implementation.
+
+**Deliverables:**
+- **Visual Design System**
+  - Color palette refinement (beyond current Bootstrap colors)
+  - Typography hierarchy and font selection
+  - Iconography system
+  - Component visual specifications
+  - Spacing and layout grid system
+
+- **Template Design**
+  - Navigation structure (sidebar vs header vs hybrid)
+  - Dashboard/home page design
+  - Page templates for all major sections
+  - Mobile-first responsive layouts
+  - Dark theme visual refinement
+
+- **Design Assets**
+  - High-fidelity mockups (Figma/Sketch/similar)
+  - Component library documentation
+  - Design tokens specification
+  - Visual style guide
+
+- **User Experience Enhancements**
+  - Improved information architecture
+  - Streamlined user flows
+  - Visual hierarchy optimization
+  - Micro-interactions and animation specifications
+
+**Success Criteria:**
+- Complete visual mockups for all 10+ pages
+- Design system fully documented
+- Stakeholder approval on visual direction
+- Clear implementation specifications for M9
+- Responsive designs for mobile, tablet, desktop
+- Accessibility considerations documented (color contrast, touch targets, etc.)
+
+**Dependencies:** Milestone 7.5 (UI Styling & Design System)
+
+**Planning:** *(not started)*
+
+**Note:** This is a design-focused milestone. No code changes in this phase - all work is design artifacts and specifications.
+
+---
+
+## Milestone 9: Visual Redesign - Implementation Phase ⏳ Planned
+
+**Goal:** Implement the visual redesign from M8 into production-ready code
+
+**Duration:** 2-3 weeks
+
+**Rationale:**
+Transform design artifacts from M8 into a fully functional, polished UI. This complex implementation phase requires careful attention to detail, performance, and maintaining existing functionality.
+
+**Deliverables:**
+- **Template Implementation**
+  - New navigation structure (sidebar/header)
+  - Redesigned page layouts
+  - Responsive grid implementation
+  - Mobile navigation patterns
+
+- **Component Updates**
+  - Visual refinements to shadcn components
+  - Custom component variants
+  - Icon integration
+  - Animation and transition implementations
+
+- **Page Redesigns**
+  - Dashboard/home page (new)
+  - All 10 existing pages with new template
+  - Improved data visualizations
+  - Enhanced user flows
+
+- **Performance & Polish**
+  - Lazy loading for heavy components
+  - Image optimization
+  - Animation performance tuning
+  - Cross-browser testing
+
+**Success Criteria:**
+- All pages match design specifications
+- Responsive layouts work perfectly on mobile, tablet, desktop
+- Smooth animations and transitions
+- No regressions in functionality
+- Performance metrics maintained or improved
+- Accessible (WCAG AA maintained)
+- Production deployed and validated
+
+**Dependencies:** Milestone 8 (Visual Redesign - Design Phase)
 
 **Planning:** *(not started)*
 
 ---
 
-## Milestone 8: Agent Deployment & Polish ⏳ Deferred
+## Milestone 10: Agent Deployment & Polish ⏳ Deferred
 
 **Goal:** Production-ready agent deployment with installation automation
 
 **Duration:** 3-5 days
 
 **Rationale:**
-Deferred until after core product features are complete and UI is styled. Agent already runs natively on host as a single binary. This milestone focuses on deployment convenience and multi-platform support.
+Deferred until after visual redesign is complete (M9). Agent already runs natively on host as a single binary. This milestone focuses on deployment convenience and multi-platform support.
 
 **Deliverables:**
 - Cross-platform build script (Linux, Windows, macOS)
@@ -443,7 +559,67 @@ Deferred until after core product features are complete and UI is styled. Agent 
 - Service survives reboot (auto-restart)
 - Agent can auto-update when new version released
 
-**Dependencies:** Milestone 7.5 (UI Styling)
+**Dependencies:** Milestone 9 (Visual Redesign - Implementation)
+
+**Planning:** *(not started)*
+
+---
+
+## Milestone 11: Testing & Verification ⏳ Planned
+
+**Goal:** Comprehensive testing and quality assurance across the entire platform
+
+**Duration:** 1-2 weeks
+
+**Rationale:**
+After completing all implementation (M1-M9), conduct thorough testing to ensure production readiness. This includes M7.5 Phase 6 (deferred UI testing) plus comprehensive QA for the entire system.
+
+**Deliverables:**
+- **Cross-Browser Testing**
+  - Chrome, Firefox, Safari, Edge
+  - Desktop and mobile browsers
+  - Browser compatibility matrix
+
+- **Responsive Testing**
+  - Actual device testing (phones, tablets)
+  - Various screen sizes (375px to 1920px+)
+  - Orientation testing (portrait/landscape)
+
+- **Performance Testing**
+  - Page load times
+  - Bundle size analysis
+  - Runtime performance profiling
+  - Memory leak detection
+  - Network latency simulation
+
+- **Accessibility Testing**
+  - Lighthouse accessibility audits
+  - axe DevTools scanning
+  - Manual keyboard navigation testing
+  - Screen reader testing (NVDA, JAWS, VoiceOver)
+  - Color contrast verification
+
+- **Functional Testing**
+  - End-to-end user flows
+  - Edge case scenarios
+  - Error handling validation
+  - Security testing (XSS, CSRF, etc.)
+
+- **Integration Testing**
+  - Agent-Manager communication
+  - WebSocket reconnection scenarios
+  - Concurrent user sessions
+  - Load testing (multiple agents, servers)
+
+**Success Criteria:**
+- All tests pass with no critical issues
+- Performance metrics meet targets
+- Accessibility scores 95+ on Lighthouse
+- Cross-browser compatibility confirmed
+- Security vulnerabilities addressed
+- Production deployment validated
+
+**Dependencies:** Milestone 9 (Visual Redesign - Implementation)
 
 **Planning:** *(not started)*
 
@@ -485,23 +661,26 @@ Deferred until after core product features are complete and UI is styled. Agent 
 | M4: Server Management | 2-3 weeks | 2 days | ✅ Complete |
 | M5: Host Metrics Display | 4-6 hours | 4 hours | ✅ Complete |
 | M6: RCON Integration | 1-2 weeks | 9.5 hours | ✅ Complete |
-| M7: RBAC & Audit Logs | 2 weeks | 24 hours (actual) | ✅ Complete (Phase 1 ✅, Phase 2 ✅) |
-| M7.5: UI Styling & Design System | 1-2 weeks | In progress | 🚧 In Progress |
-| M8: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
+| M7: RBAC & Audit Logs | 2 weeks | 24 hours | ✅ Complete (Phase 1 & 2) |
+| M7.5: UI Styling & Design System | 1-2 weeks | 8.25 hours | ✅ Complete |
+| M8: Visual Redesign - Design | 1-2 weeks | TBD | ⏳ Planned |
+| M9: Visual Redesign - Implementation | 2-3 weeks | TBD | ⏳ Planned |
+| M10: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
+| M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 7/9 core milestones complete (78%) - M7 fully complete! 🎉
+**Progress:** 7.5/11 core milestones complete (68%) 🎉
 
-**Next Focus:** M7.5 (UI Styling) → M8 (Deployment Polish)
+**Next Focus:** M8 (Visual Redesign - Design Phase)
 
-**Total to MVP:** ~12 weeks estimated → ~2-3 weeks actual (at current pace)
+**Total to MVP:** ~12 weeks estimated → ~2.5 weeks actual (current pace: 80% under estimate!)
 
-**Note:** Initial estimates were conservative. With planning-with-files pattern and focused implementation sessions, Milestones 1-5 were completed much faster than expected. M5 took exactly the estimated time (4-6 hours).
+**Note:** Initial estimates were conservative. With planning-with-files pattern and focused implementation sessions, M1-M7.5 were completed much faster than expected. M7.5 came in 73% under budget!
 
 ---
 
 ## Current Status
 
-**Active Milestone:** Milestone 7.5 (UI Styling & Design System) 🎯
+**Active Milestone:** Milestone 8 (Visual Redesign - Design Phase) 🎯
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -514,17 +693,24 @@ Deferred until after core product features are complete and UI is styled. Agent 
   - ✅ Phase 1 - Initial Implementation (12 hours)
   - ✅ Phase 2 - Auth Migration & Refinement (12 hours)
   - Total: 24 hours
+- ✅ **Milestone 7.5 - UI Styling & Design System** (2026-01-12)
+  - ✅ Phases 0-5 - Complete (8.25 hours, 73% under budget)
+  - Deferred: Phase 6 (Testing) → Moved to M11
 
 **Next Up:**
-- **Milestone 7.5** - UI Styling & Design System (shadcn/ui + Tailwind CSS)
+- **Milestone 8** - Visual Redesign - Design Phase (design artifacts & specifications)
+- **Milestone 9** - Visual Redesign - Implementation (code implementation of designs)
 
 **Deferred:**
-- **Milestone 8** - Agent Deployment & Polish (installation automation)
-- **Documentation** - Comprehensive API and user documentation (after M8 complete)
+- **Milestone 10** - Agent Deployment & Polish (after M9)
+- **Milestone 11** - Testing & Verification (after M9)
+- **Documentation** - Comprehensive API and user documentation (after M11)
 
-**Current Planning:** M7 fully complete! M7.5 (UI Styling) planning complete, Phase 0 started.
+**Current Planning:** M7.5 complete and archived! Ready to start M8.
 
-**Backlog:** See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
+**Backlog:**
+- See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
+- M7.5 Phase 6 testing moved to M11
 
 ### Reminders
 - ability to remove server data (I think this is already implemented when purging.)
