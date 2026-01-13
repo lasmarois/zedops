@@ -163,6 +163,94 @@ planning-history/
 └── ...
 ```
 
+### Sub-Milestone Pattern (M9.8.X Style)
+
+**When to Use:**
+- Parent milestone has many small, independent tasks (M9.8 = polish phase with 13+ fixes)
+- Each task is quick (10-60 minutes) but needs tracking
+- Tasks can be done iteratively based on user feedback
+
+**DO NOT bundle** all sub-milestones into one planning file. Each sub-milestone gets its own archive.
+
+**Sub-Milestone Workflow:**
+
+1. **Start Sub-Milestone (e.g., M9.8.6)**
+   ```bash
+   # Create planning files in a dedicated directory
+   mkdir -p manager/  # or another subdirectory
+   cd manager/
+
+   # Create planning files with parent milestone prefix
+   # Format: task_plan_<parent>.md, findings_<parent>.md, progress_<parent>.md
+   touch task_plan_m98.md findings_m98.md progress_m98.md
+   ```
+
+2. **Work on Sub-Milestone**
+   - Use planning files normally (track phases, findings, progress)
+   - Keep focused on ONLY current sub-milestone (M9.8.6)
+   - DO NOT add M9.8.7 tasks to M9.8.6 planning files
+
+3. **Complete & Archive Sub-Milestone**
+   ```bash
+   # IMMEDIATELY after completion, archive the sub-milestone
+   mkdir -p planning-history/m9.8.6-descriptive-name/
+   mv manager/task_plan_m98.md planning-history/m9.8.6-descriptive-name/task_plan.md
+   mv manager/findings_m98.md planning-history/m9.8.6-descriptive-name/findings.md
+   mv manager/progress_m98.md planning-history/m9.8.6-descriptive-name/progress.md
+
+   # Move any completion summaries
+   mv M986-COMPLETE.md planning-history/m9.8.6-descriptive-name/
+
+   # Commit immediately
+   git add planning-history/m9.8.6-descriptive-name/
+   git commit -m "Complete M9.8.6: Descriptive Name"
+   ```
+
+4. **Start Next Sub-Milestone (M9.8.7)**
+   ```bash
+   # Working directory is now clean, create fresh planning files
+   cd manager/
+   touch task_plan_m98.md findings_m98.md progress_m98.md
+   # Start fresh - do NOT reuse old numbered files (task_plan_m98_7.md ❌)
+   ```
+
+**Sub-Milestone Archive Structure:**
+```
+planning-history/
+├── m9.8.1-server-status-offline/
+│   ├── task_plan.md
+│   ├── findings.md
+│   └── progress.md
+├── m9.8.2-dashboard-color-coding/
+│   ├── task_plan.md
+│   ├── findings.md
+│   └── progress.md
+├── m9.8.6-server-action-buttons/
+│   ├── task_plan.md
+│   ├── progress.md
+│   └── M986-COMPLETE.md
+└── ...
+
+manager/  # Active work area - ONLY current sub-milestone
+├── task_plan_m98.md   # M9.8.7 work (example)
+├── findings_m98.md
+└── progress_m98.md
+```
+
+**Critical Rules:**
+
+| ❌ DON'T | ✅ DO |
+|----------|-------|
+| Create numbered files (task_plan_m98_1.md, task_plan_m98_2.md, etc.) | Use same filename, archive after each sub-milestone |
+| Bundle multiple sub-milestones in one massive tracking file | One planning session per sub-milestone, archive immediately |
+| Keep completed sub-milestone files in working directory | Archive to planning-history/m9.8.X-name/ right after completion |
+| Scatter planning files across multiple directories (root, manager, etc.) | Choose one working directory (manager/ recommended for ZedOps) |
+
+**Parent Milestone Tracking:**
+- Keep high-level tracking in root: `MILESTONE-M98.md`
+- Lists all sub-milestones with status (📋 Not Started, 🚧 In Progress, ✅ Complete)
+- Links to archived sub-milestones in planning-history/
+
 ### Making Changes
 
 **Coding Patterns to Follow:**
