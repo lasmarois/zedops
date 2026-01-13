@@ -748,3 +748,69 @@ All tasks completed:
 - [ ] Test Dashboard in browser
 - [ ] Commit Phase 3 changes
 - [ ] Begin Phase 4: Detail Pages (Agent Detail, Server Detail)
+
+---
+
+## Session 7: Phase 4 - Detail Pages (2026-01-13)
+
+**Date:** 2026-01-13
+**Duration:** In Progress
+**Goal:** Implement Agent Detail and Server Detail pages with tabbed interfaces
+
+### Actions Taken
+
+1. **Planning-with-files skill loaded** ✅
+   - Loaded skill at session start
+   - Ready to track Phase 4 progress
+
+2. **Read design specifications** ✅
+   - M9-IMPLEMENTATION-GUIDE.md Phase 4 specs (lines 649-730)
+   - PAGE-LAYOUTS.md Agent Detail layout (lines 212-316)
+   - PAGE-LAYOUTS.md Server Detail layout (lines 359+)
+
+3. **Installed Tabs component** ✅
+   - Ran `npx shadcn@latest add tabs`
+   - Moved from `@/components/ui/tabs.tsx` to `src/components/ui/tabs.tsx`
+   - Component ready for use
+
+4. **Created AgentDetail.tsx** ✅
+   - 3 tabs: Overview, Servers, Configuration
+   - **Overview Tab:**
+     - Breadcrumb navigation (Dashboard > Agents > {name})
+     - Header with agent name, status badge, last seen timestamp
+     - Actions: Configure, Disconnect buttons
+     - Host metrics cards (CPU, Memory, Disk) with colored progress bars
+     - Server list (embedded ContainerList)
+   - **Servers Tab:**
+     - Full server list for this agent
+     - Same as Overview but dedicated tab
+   - **Configuration Tab:**
+     - Placeholder card for future settings
+   - Responsive grid layout (1→3 columns)
+   - Color-coded progress bars (green < 60%, yellow < 80%, red ≥ 80%)
+   - Hover shadow effects on metric cards
+   - StatusBadge with pulse/cross icons
+   - Loading states (skeleton) and error handling (404 page)
+
+5. **Updated App.tsx** ✅
+   - Added import for AgentDetail
+   - Added route: `/agents/:id` → AgentDetail
+   - Route uses URL params to show correct agent
+
+6. **Updated AgentsPage.tsx** ✅
+   - Changed handleSelectAgent to navigate to `/agents/:id`
+   - Removed state-based navigation
+   - Now uses React Router for navigation
+
+7. **Build test** ✅
+   - Fixed TypeScript errors (ContainerList props)
+   - Build successful
+   - Bundle size: 913KB (246KB gzipped)
+
+### Files Created
+- `/Volumes/Data/docker_composes/zedops/frontend/src/components/ui/tabs.tsx` - Tabs component from shadcn/ui
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentDetail.tsx` - Agent detail page with 3 tabs
+
+### Files Modified
+- `/Volumes/Data/docker_composes/zedops/frontend/src/App.tsx` - Added AgentDetail route
+- `/Volumes/Data/docker_composes/zedops/frontend/src/pages/AgentsPage.tsx` - Navigate to detail page on click

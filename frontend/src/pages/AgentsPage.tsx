@@ -16,8 +16,8 @@ export function AgentsPage() {
   const [selectedContainer, setSelectedContainer] = useState<SelectedContainer | null>(null);
 
   const handleSelectAgent = (agent: Agent) => {
-    setSelectedAgent(agent);
-    setSelectedContainer(null);
+    // Navigate to agent detail page
+    navigate(`/agents/${agent.id}`);
   };
 
   const handleBackToAgents = () => {
