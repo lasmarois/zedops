@@ -28,10 +28,10 @@
 | 2. Permission Logic Rewrite | ✅ complete | Role-based checking with inheritance/override | 2 hours |
 | 3. Backend Auth Migration | ✅ complete | Migrate all endpoints to JWT + role checks | 2 hours |
 | 4. WebSocket Auth Migration | ✅ complete | Logs & RCON WebSocket use JWT | Included in Phase 3 |
-| 5. Frontend Updates | ✅ complete | Role assignment UI + agent/containers permissions | 3 hours |
+| 5. Frontend Updates | ✅ complete | JWT authentication in frontend, no password prompts | 1 hour |
 | 6. Audit Logging Completion | ✅ complete | Add audit logs for all server operations + RCON + API endpoint | 2 hours |
-| 6.5. RCON Console Fix | ✅ complete | Fixed WebSocket auth middleware conflict | 2 hours |
-| 7. Testing & Verification | ✅ complete | Test all role scenarios with 4-role RBAC | User-tested |
+| 6.5. RCON Console Fix | ✅ complete | Fixed WebSocket auth middleware conflict | 30 min |
+| 7. Testing & Verification | ✅ complete | Test all role scenarios with 4-role RBAC | 2 hours |
 | 8. Documentation | ⏳ planned | Update API docs, role model docs | 30 min |
 
 ---
@@ -108,9 +108,10 @@
 
 ---
 
-## Phase 1: Database Migration ⏳ Next
+## Phase 1: Database Migration ✅ Complete
 
-**Status:** ⏳ next (1 hour)
+**Status:** ✅ complete
+**Completed:** 2026-01-12
 
 **Goals:**
 - Create new `role_assignments` table for multi-scope role assignments
@@ -153,22 +154,22 @@ CREATE INDEX idx_role_assignments_scope_resource ON role_assignments(scope, reso
 **Tasks:**
 
 ### 1.1 Create Migration File
-- [ ] Create `manager/migrations/0009_role_based_rbac.sql`
-- [ ] Add DROP TABLE for old permissions table
-- [ ] Add CREATE TABLE statements for new schema
-- [ ] Add migration for existing users (admin role preserved, 'user' role → NULL)
-- [ ] Add indexes
+- [x] Create `manager/migrations/0009_role_based_rbac.sql`
+- [x] Add DROP TABLE for old permissions table
+- [x] Add CREATE TABLE statements for new schema
+- [x] Add migration for existing users (admin role preserved, 'user' role → NULL)
+- [x] Add indexes
 
 ### 1.2 Test Migration Locally
-- [ ] Run migration against local D1 database
-- [ ] Verify users table updated
-- [ ] Verify role_assignments table created
-- [ ] Verify existing admin users still have admin role
-- [ ] Verify existing 'user' role users now have NULL role
+- [x] Run migration against local D1 database
+- [x] Verify users table updated
+- [x] Verify role_assignments table created
+- [x] Verify existing admin users still have admin role
+- [x] Verify existing 'user' role users now have NULL role
 
 ### 1.3 Update TypeScript Interfaces
-- [ ] Update `manager/src/types.ts` or inline types in routes
-- [ ] Add RoleAssignment interface:
+- [x] Update `manager/src/types.ts` or inline types in routes
+- [x] Add RoleAssignment interface:
   ```typescript
   interface RoleAssignment {
     id: string;
@@ -179,31 +180,34 @@ CREATE INDEX idx_role_assignments_scope_resource ON role_assignments(scope, reso
     created_at: number;
   }
   ```
-- [ ] Update User interface to allow NULL role
-- [ ] Remove Permission interface (deprecated)
+- [x] Update User interface to allow NULL role
+- [x] Remove Permission interface (deprecated)
 
-**Files to Create:**
-- `manager/migrations/0009_role_based_rbac.sql` (NEW)
+**Files Created:**
+- `manager/migrations/0009_role_based_rbac.sql` ✅
 
-**Files to Modify:**
-- `manager/src/types.ts` or inline type definitions
+**Files Modified:**
+- `manager/src/types.ts` or inline type definitions ✅
 
-**Verification:**
-- Migration runs without errors
-- Existing admin users retain access
-- role_assignments table is empty (ready for new assignments)
-- Old permissions table is dropped
+**Verification:** ✅ All passed
+- Migration ran without errors
+- Existing admin users retained access
+- role_assignments table created (ready for new assignments)
+- 4-role RBAC system implemented (admin, agent-admin, operator, viewer)
 
 ---
 
-## Phase 2: Backend Auth Migration ⏳ Planned
+## Phase 2: Permission Logic Rewrite ✅ Complete
 
-**Status:** ⏳ planned
+**Status:** ✅ complete
+**Completed:** 2026-01-12
 
 **Goals:**
-- Replace all ADMIN_PASSWORD checks with requireAuth() + permission checks
-- Ensure all endpoints use JWT authentication
-- Maintain backward compatibility during rollout
+- Implement role-based permission checking with multi-scope assignments
+- Support permission hierarchy (operator ⊃ viewer)
+- Implement admin override (bypasses all checks)
+
+**Result:** Complete role-based permission system with inheritance
 
 **Affected Endpoints:**
 
@@ -217,454 +221,227 @@ CREATE INDEX idx_role_assignments_scope_resource ON role_assignments(scope, reso
 | POST /:id/servers/:serverId/restart | None | requireAuth() | canControlServer() |
 | POST /:id/servers/:serverId/rebuild | None | requireAuth() | Admin only (destructive) |
 
-### 2.1 Migrate Container Operations
+**Tasks Completed:**
 
-**Endpoint:** `GET /api/agents/:id/containers` (line ~121)
+### 2.1 Implement Permission Checking Functions
+- [x] Created `manager/src/lib/permissions.ts` with role-based permission functions
+- [x] Implemented `getUserRoleAssignments()` - Get all role assignments for user
+- [x] Implemented `canViewServer()` - Check if user can view server (viewer+ role)
+- [x] Implemented `canControlServer()` - Check if user can control server (operator+ role)
+- [x] Implemented `canDeleteServer()` - Check if user can delete server (agent-admin+ role)
+- [x] Implemented `canCreateServer()` - Check if user can create servers on agent
+- [x] Implemented scope resolution (server > agent > global)
 
-- [ ] Read current implementation
-- [ ] Remove ADMIN_PASSWORD check (lines 123-131)
-- [ ] Add `requireAuth()` middleware (already applied at line 28)
-- [ ] Add admin-only check:
-  ```typescript
-  const user = c.get('user');
-  if (user.role !== 'admin') {
-    return c.json({ error: 'Forbidden - requires admin role' }, 403);
-  }
-  ```
-- [ ] Test: Admin can fetch containers
-- [ ] Test: Non-admin gets 403
+### 2.2 Implement Permission Hierarchy
+- [x] Operator role includes viewer capabilities
+- [x] Agent-admin role includes operator capabilities
+- [x] Admin system role bypasses all checks
+- [x] Server-scope assignments override agent-scope assignments
 
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (line ~121-165)
+### 2.3 Integrate Permission Checks into Endpoints
+- [x] All server operations check appropriate permissions
+- [x] Container operations require admin or appropriate role
+- [x] Port operations require admin or create permission
+- [x] Start/stop/restart require operator role
+- [x] Delete/purge require agent-admin role
+- [x] RCON access requires operator role
 
----
+**Files Created:**
+- `manager/src/lib/permissions.ts` ✅
 
-### 2.2 Migrate Port Operations
+**Files Modified:**
+- `manager/src/routes/agents.ts` (all server endpoints) ✅
+- `manager/src/routes/permissions.ts` (role assignment API) ✅
 
-**Endpoints:**
-- `POST /api/agents/:id/ports/check` (line ~174)
-- `GET /api/agents/:id/ports/availability` (line ~239)
-
-- [ ] Remove ADMIN_PASSWORD checks
-- [ ] Add admin-only requirement (ports are global agent resource)
-- [ ] Consider: Should port checking be allowed for users with 'create' permission?
-- [ ] Test: Admin can check ports
-- [ ] Test: Non-admin gets 403
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (lines ~174-225, ~239-350)
-
----
-
-### 2.3 Migrate Server Creation
-
-**Endpoint:** `POST /api/agents/:id/servers` (line ~570)
-
-- [ ] Remove ADMIN_PASSWORD check
-- [ ] Implement based on Phase 0 Decision 4:
-  - **If admin-only:** Add `requireRole('admin')` check
-  - **If 'create' permission:** Add `canCreateServer()` check
-  - **If control-based:** Check if user has 'control' on agent
-- [ ] Test appropriate scenarios
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (line ~570-799)
-- `manager/src/lib/permissions.ts` (if adding canCreateServer())
+**Verification:** ✅ All passed
+- Permission checks work correctly across all scopes
+- Role hierarchy enforced
+- Admin override works
+- Non-admin users can use system with appropriate roles
 
 ---
 
-### 2.4 Migrate Server Sync
+## Phase 3: Backend Auth Migration ✅ Complete
 
-**Endpoint:** `POST /api/agents/:id/servers/sync` (line ~875)
-
-- [ ] Remove ADMIN_PASSWORD check
-- [ ] Add admin-only requirement (sync is administrative operation)
-- [ ] Test: Admin can sync
-- [ ] Test: Non-admin gets 403
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (line ~875-1035)
-
----
-
-### 2.5 Add Auth to Restart Endpoint
-
-**Endpoint:** `POST /:id/servers/:serverId/restart` (line ~460)
-
-- [ ] Read current implementation
-- [ ] Add `requireAuth()` check (already applied)
-- [ ] Add permission check:
-  ```typescript
-  const user = c.get('user');
-  const serverId = c.req.param('serverId');
-
-  const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
-  if (!hasPermission) {
-    return c.json({ error: 'Forbidden - requires control permission' }, 403);
-  }
-  ```
-- [ ] Test: User with 'control' can restart
-- [ ] Test: User without permission gets 403
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (line ~460-518)
-
----
-
-### 2.6 Add Auth to Rebuild Endpoint
-
-**Endpoint:** `POST /:id/servers/:serverId/rebuild` (line ~1100+)
-
-- [ ] Locate rebuild endpoint
-- [ ] Add `requireAuth()` check
-- [ ] Add admin-only OR 'delete' permission check (rebuild is destructive)
-  ```typescript
-  const user = c.get('user');
-  if (user.role !== 'admin') {
-    const canDelete = await canDeleteServer(c.env.DB, user.id, user.role, serverId);
-    if (!canDelete) {
-      return c.json({ error: 'Forbidden - requires delete permission' }, 403);
-    }
-  }
-  ```
-- [ ] Test scenarios
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts`
-
----
-
-**Verification:**
-- All endpoints return 401 without JWT token
-- All endpoints enforce appropriate permissions
-- Admin can access all endpoints
-- Non-admin with permissions can access allowed endpoints
-- Non-admin without permissions gets 403
-
----
-
-## Phase 3: WebSocket Auth Migration ⏳ Planned
-
-**Status:** ⏳ planned
+**Status:** ✅ complete
+**Completed:** 2026-01-12
 
 **Goals:**
-- Migrate WebSocket endpoints from password to JWT
-- Update log streaming WebSocket
-- Update RCON WebSocket (when implemented)
-- Implement permission checks for WebSocket connections
+- Migrate all endpoints from ADMIN_PASSWORD to JWT authentication
+- Update WebSocket endpoints (log streaming, RCON) to use JWT
+- Implement permission checks for all WebSocket connections
+
+**Result:** All endpoints now use JWT authentication, WebSockets support JWT via query param
+
+**Tasks Completed:**
 
 ### 3.1 Migrate Log Streaming WebSocket
+- [x] Updated `GET /api/agents/:id/logs/ws` to use JWT from query param
+- [x] Verify JWT token before WebSocket upgrade
+- [x] Added permission check using `canViewServer()`
+- [x] Pass user context to Durable Object via headers
+- [x] Test: WebSocket authentication works with JWT
 
-**Endpoint:** `GET /api/agents/:id/logs/ws` (line ~527)
-
-**Current:**
-```typescript
-const password = c.req.query('password');
-if (!password || password !== c.env.ADMIN_PASSWORD) {
-  return c.json({ error: 'Invalid or missing password' }, 401);
-}
-```
-
-**New Implementation:**
-```typescript
-// Extract JWT from query parameter
-const token = c.req.query('token');
-if (!token) {
-  return c.json({ error: 'Missing token' }, 401);
-}
-
-// Verify JWT
-const payload = await verifySessionToken(token, c.env.TOKEN_SECRET);
-if (!payload || payload.type !== 'user_session') {
-  return c.json({ error: 'Invalid token' }, 401);
-}
-
-// Load user
-const user = await c.env.DB.prepare(
-  'SELECT id, email, role FROM users WHERE id = ?'
-).bind(payload.userId).first();
-
-if (!user) {
-  return c.json({ error: 'User not found' }, 401);
-}
-
-// Check permission to view logs
-// Extract serverId from query or connection context
-const serverId = c.req.query('serverId');
-if (serverId) {
-  const hasPermission = await canViewServer(c.env.DB, user.id as string, user.role as string, serverId);
-  if (!hasPermission) {
-    return c.json({ error: 'Forbidden - no permission to view this server' }, 403);
-  }
-}
-
-// Pass user context to Durable Object
-// Forward WebSocket upgrade with user info
-```
-
-- [ ] Update authentication logic
-- [ ] Add permission check based on server being viewed
-- [ ] Pass user context to Durable Object for ongoing checks
-- [ ] Handle permission revocation (close socket if permission removed)
-
-**Files to Modify:**
-- `manager/src/routes/agents.ts` (line ~527-561)
-- `manager/src/durable-objects/AgentConnection.ts` (log stream handler)
+**Files Modified:**
+- `manager/src/routes/agents.ts` (log WebSocket upgrade) ✅
+- `manager/src/durable-objects/AgentConnection.ts` (user context tracking) ✅
 
 ---
 
-### 3.2 Update RCON WebSocket Auth
+### 3.2 Migrate RCON WebSocket Auth
+- [x] Updated RCON WebSocket to use JWT from query param
+- [x] Verify JWT token before RCON WebSocket upgrade
+- [x] Added permission check using `canControlServer()` (operator role required)
+- [x] Pass user ID to Durable Object for audit logging
+- [x] Test: RCON WebSocket authentication works
 
-**Endpoint:** RCON WebSocket (not yet implemented with JWT)
-
-- [ ] Locate RCON WebSocket upgrade handler
-- [ ] Implement JWT authentication (same as log streaming)
-- [ ] Add permission check based on Phase 0 Decision 5:
-  - **If 'control':** `canControlServer()`
-  - **If separate 'rcon':** `canUseRcon()` (new function)
-  - **If 'delete':** `canDeleteServer()`
-- [ ] Pass user context to Durable Object
-- [ ] Update RCON command handler to include user ID for audit logs
-
-**Files to Modify:**
-- `manager/src/durable-objects/AgentConnection.ts` (RCON handlers)
-- `manager/src/lib/permissions.ts` (if adding canUseRcon())
+**Files Modified:**
+- `manager/src/routes/agents.ts` (RCON WebSocket upgrade) ✅
+- `manager/src/durable-objects/AgentConnection.ts` (RCON auth + user tracking) ✅
 
 ---
 
-**Verification:**
+### 3.3 Remove ADMIN_PASSWORD from All Endpoints
+- [x] Removed all ADMIN_PASSWORD checks from endpoints
+- [x] Container operations now require JWT + admin/appropriate role
+- [x] Port operations require JWT + admin role
+- [x] Server sync requires JWT + admin role
+- [x] All operations return 401 without valid JWT
+
+**Verification:** ✅ All passed
 - WebSocket connections fail without valid JWT
-- WebSocket connections enforce permissions
+- WebSocket connections enforce role-based permissions
 - Users can only view/control servers they have permission for
-- Token expiration closes WebSocket gracefully
+- All endpoints use consistent JWT authentication
 
 ---
 
-## Phase 4: Audit Logging Completion ⏳ Planned
+## Phase 4: WebSocket Auth Migration ✅ Complete
 
-**Status:** ⏳ planned
+**Status:** ✅ complete
+**Completed:** 2026-01-12
+**Note:** Completed as part of Phase 3 (Backend Auth Migration)
 
 **Goals:**
-- Add audit logs for all operations currently missing them
-- Ensure comprehensive tracking of user actions
+- WebSocket endpoints use JWT authentication
+- Permission checks for all WebSocket connections
+- User context tracked for audit logging
 
-### 4.1 Add Missing Server Operation Logs
-
-**Operations Missing Audit Logs:**
-
-- [ ] Server restart (`POST /:id/servers/:serverId/restart`)
-  ```typescript
-  await logServerRestarted(c.env.DB, c, user.id, serverId);
-  ```
-
-- [ ] Server rebuild (`POST /:id/servers/:serverId/rebuild`)
-  ```typescript
-  await logServerRebuilt(c.env.DB, c, user.id, serverId);
-  ```
-
-- [ ] Server sync (`POST /api/agents/:id/servers/sync`)
-  ```typescript
-  await logServersSynced(c.env.DB, c, user.id, agentId);
-  ```
-
-**Files to Modify:**
-- `manager/src/lib/audit.ts` - Add new logging functions
-- `manager/src/routes/agents.ts` - Add audit calls after operations
+**Result:** Included in Phase 3 - all WebSocket endpoints migrated
 
 ---
 
-### 4.2 Add RCON Command Logging
+## Phase 5: Frontend Updates ✅ Complete
 
-- [ ] Create `logRconCommand()` function in audit.ts:
-  ```typescript
-  export async function logRconCommand(
-    db: D1Database,
-    c: Context,
-    userId: string,
-    serverId: string,
-    command: string
-  ) {
-    await logAudit(db, c, {
-      userId,
-      action: 'rcon.command',
-      resourceType: 'server',
-      resourceId: serverId,
-      details: JSON.stringify({ command }),
-    });
-  }
-  ```
-
-- [ ] Add audit call in RCON command handler
-- [ ] Test: RCON commands appear in audit logs
-
-**Files to Modify:**
-- `manager/src/lib/audit.ts` - Add logRconCommand()
-- `manager/src/durable-objects/AgentConnection.ts` - Add audit calls
-
----
-
-### 4.3 Optional: Log Viewing Tracking
-
-**Decision:** Should we log when users view logs/servers?
-
-**Pros:** Complete audit trail, security monitoring
-**Cons:** Very noisy, large audit log table
-
-**Recommendation:** Skip for MVP, add later if needed for compliance
-
----
-
-**Verification:**
-- All operations create audit log entries
-- Audit logs include user ID, action, resource, timestamp
-- Audit log viewer displays new entries
-
----
-
-## Phase 5: Frontend Updates ⏳ Planned
-
-**Status:** ⏳ planned
+**Status:** ✅ complete
+**Completed:** 2026-01-12
 
 **Goals:**
 - Update frontend to use JWT for WebSocket connections
 - Remove password prompts
-- Update API client if needed
+- Update API client for JWT authentication
 
-### 5.1 Update Log Streaming Hook
+**Result:** Frontend fully migrated to JWT, no password prompts remain
 
-**File:** `frontend/src/hooks/useLogStream.ts`
+**Tasks Completed:**
+- [x] Updated `useLogStream.ts` hook to use JWT instead of password
+- [x] Updated `useRcon.ts` hook to use JWT instead of password
+- [x] Removed all password input fields from UI
+- [x] Added serverId to WebSocket query params for permission checking
+- [x] Test: Log viewer works with JWT
+- [x] Test: RCON terminal works with JWT
+- [x] Test: No password prompts in UI
 
-**Current:**
-```typescript
-const password = adminPassword; // From parameter
-const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?password=${encodeURIComponent(password)}`;
-```
-
-**New:**
-```typescript
-import { getToken } from '../lib/auth';
-
-const token = getToken();
-if (!token) {
-  throw new Error('Not authenticated');
-}
-const wsUrl = `${protocol}//${wsHost}/api/agents/${agentId}/logs/ws?token=${encodeURIComponent(token)}&serverId=${serverId}`;
-```
-
-- [ ] Update useLogStream hook
-- [ ] Remove adminPassword parameter
-- [ ] Use getToken() from auth.ts
-- [ ] Add serverId to query params for permission check
-- [ ] Test: Log viewer works with JWT
-
-**Files to Modify:**
-- `frontend/src/hooks/useLogStream.ts`
+**Files Modified:**
+- `frontend/src/hooks/useLogStream.ts` ✅
+- `frontend/src/hooks/useRcon.ts` ✅
+- `frontend/src/components/*` (removed password prompts) ✅
 
 ---
 
-### 5.2 Update RCON Hook
+## Phase 6: Audit Logging Completion ✅ Complete
 
-**File:** `frontend/src/hooks/useRcon.ts`
-
-- [ ] Update similar to useLogStream
-- [ ] Use getToken() instead of adminPassword
-- [ ] Add serverId to query for permission check
-- [ ] Test: RCON terminal works with JWT
-
-**Files to Modify:**
-- `frontend/src/hooks/useRcon.ts`
-
----
-
-### 5.3 Remove Password Prompts
-
-**Files That May Still Reference Password:**
-
-- [ ] Search codebase for `adminPassword` references
-- [ ] Remove any remaining password input fields
-- [ ] Update components to rely on UserContext authentication
-- [ ] Test: No password prompts appear in UI
-
-**Files to Check:**
-- `frontend/src/components/ContainerList.tsx`
-- `frontend/src/components/LogViewer.tsx`
-- `frontend/src/components/RconTerminal.tsx`
-
----
-
-**Verification:**
-- All frontend operations use JWT tokens
-- No password prompts in UI
-- WebSocket connections work with JWT
-- Log viewer and RCON terminal functional
-
----
-
-## Phase 6: Agent-Level Permission UI ⏳ Optional
-
-**Status:** ⏳ optional (conditional on Phase 0 Decision 3)
+**Status:** ✅ complete
+**Completed:** 2026-01-12
 
 **Goals:**
-- Add UI for granting permissions at agent level
-- Update PermissionsManager component
-- Document agent-level vs server-level behavior
+- Add audit logs for all operations
+- Comprehensive tracking of user actions
+- RCON command logging with user attribution
 
-### 6.1 Update PermissionsManager Component
+**Result:** Complete audit trail for all server operations and RCON commands
 
-**File:** `frontend/src/components/PermissionsManager.tsx`
+**Tasks Completed:**
 
-**Current:** Only allows server-level grants
+### 6.1 Add Server Operation Audit Logs
+- [x] Server creation (`logServerCreated`)
+- [x] Server start (`logServerOperation` with 'server.started')
+- [x] Server stop (`logServerOperation` with 'server.stopped')
+- [x] Server restart (`logServerOperation` with 'server.restarted')
+- [x] Server rebuild (`logServerOperation` with 'server.rebuilt')
+- [x] Server delete (`logServerOperation` with 'server.deleted')
+- [x] Server purge (`logServerOperation` with 'server.purged')
+- [x] Server restore (`logServerOperation` with 'server.restored')
 
-**New:** Add selector for grant scope
-
-- [ ] Add radio buttons or dropdown:
-  ```typescript
-  [ ] Grant to specific server: [Server dropdown]
-  [ ] Grant to all servers on agent: [Agent dropdown]
-  ```
-
-- [ ] When "all servers on agent" selected:
-  - resourceType: 'agent'
-  - resourceId: agentId (not serverId)
-
-- [ ] Update grantPermission API call to support agent-level
-
-- [ ] Add explanation text:
-  "Agent-level permissions grant access to ALL servers on the agent, including future servers."
-
-**Files to Modify:**
-- `frontend/src/components/PermissionsManager.tsx`
+**Files Modified:**
+- `manager/src/lib/audit.ts` (logging functions) ✅
+- `manager/src/routes/agents.ts` (audit calls added) ✅
 
 ---
 
-### 6.2 Update Permission Display
+### 6.2 Add RCON Command Logging
+- [x] Created `logRconCommand()` function in audit.ts
+- [x] Added user tracking in Durable Object (uiWebSockets map)
+- [x] Pass user ID via X-User-Id header on WebSocket upgrade
+- [x] Audit log RCON commands with user attribution
+- [x] Test: RCON commands appear in audit logs with correct user
 
-- [ ] Show agent-level permissions differently:
-  - "Control access to agent home-lab (all servers)"
-  - vs
-  - "Control access to server zomboid-1"
-
-- [ ] Group permissions by scope (agent-level vs server-level)
-
----
-
-### 6.3 Update Backend Permission Routes
-
-**File:** `manager/src/routes/permissions.ts`
-
-- [ ] Verify agent-level grants work (already implemented, just needs testing)
-- [ ] Add validation: If resourceType='agent', verify agent exists
-- [ ] Test scenarios
+**Files Modified:**
+- `manager/src/lib/audit.ts` (logRconCommand function) ✅
+- `manager/src/durable-objects/AgentConnection.ts` (user tracking + audit) ✅
+- `manager/src/routes/agents.ts` (user ID header) ✅
 
 ---
 
-**Verification:**
-- Can grant agent-level permission from UI
-- Agent-level permission grants access to all servers on agent
-- Permission display clearly shows agent-level vs server-level
-- User with agent-level permission can access all servers
+### 6.3 Create Audit Logs API Endpoint
+- [x] Created `GET /api/audit` endpoint with pagination
+- [x] Added filtering by user, action, resource type, date range
+- [x] Joins users table to show email instead of user_id
+- [x] Admin-only access
+- [x] Test: Audit log viewer displays all operations correctly
 
-**Skip if:** User chooses not to add agent-level UI (Phase 0 Decision 3B)
+**Files Created:**
+- `manager/src/routes/audit.ts` ✅
+
+**Files Modified:**
+- `manager/src/index.ts` (mounted /api/audit route) ✅
+
+---
+
+**Verification:** ✅ All passed
+- All server operations create audit log entries
+- RCON commands logged with user attribution
+- Audit logs include user email, action, resource, timestamp
+- Audit log viewer displays entries with pagination and filtering
+- Complete audit trail for compliance
+
+---
+
+## Phase 6.5: RCON Console Fix ✅ Complete
+
+**Status:** ✅ complete
+**Completed:** 2026-01-12
+
+**Issue:** WebSocket auth middleware conflict with RCON console
+
+**Resolution:**
+- Fixed middleware ordering in WebSocket upgrade handlers
+- Ensured RCON WebSocket auth works correctly with JWT
+- Test: RCON terminal functional with JWT authentication
+
+**Files Modified:**
+- `manager/src/routes/agents.ts` (WebSocket middleware fix) ✅
+- `manager/src/durable-objects/AgentConnection.ts` ✅
 
 ---
 
@@ -960,18 +737,20 @@ VALUES (
 
 ## Success Criteria Checklist
 
-Before marking Phase 2 complete, verify:
+M7 Phase 2 completion requirements:
 
-- [ ] **All endpoints use JWT authentication** (no ADMIN_PASSWORD checks remain)
-- [ ] **All endpoints have permission checks** (except public routes like /api/invite/:token)
-- [ ] **Non-admin users can use the system** (with appropriate permissions granted)
-- [ ] **Permission hierarchy is clear** (documented in code and docs)
-- [ ] **All operations are audit logged** (no missing audit calls)
-- [ ] **Frontend works with JWT everywhere** (no password prompts)
-- [ ] **Tests pass for all scenarios** (view, control, delete, no permissions)
-- [ ] **WebSocket auth uses JWT** (logs and RCON)
-- [ ] **Documentation is updated** (API docs, permission model, deployment guides)
-- [ ] **Architectural decisions documented** (in progress.md and ISSUE file)
+- [x] **All endpoints use JWT authentication** (no ADMIN_PASSWORD checks remain) ✅
+- [x] **All endpoints have permission checks** (except public routes like /api/invite/:token) ✅
+- [x] **Non-admin users can use the system** (with appropriate role assignments granted) ✅
+- [x] **Role hierarchy is clear** (4-role model: admin > agent-admin > operator > viewer) ✅
+- [x] **All operations are audit logged** (server ops + RCON commands) ✅
+- [x] **Frontend works with JWT everywhere** (no password prompts) ✅
+- [x] **Tests pass for all scenarios** (viewer, operator, agent-admin, admin, global, mixed scopes) ✅
+- [x] **WebSocket auth uses JWT** (logs and RCON via query param) ✅
+- [ ] **Documentation is updated** (API docs, role model docs, deployment guides) ⏳ Phase 8
+- [x] **Architectural decisions documented** (in progress.md, findings.md, and ISSUE file) ✅
+
+**Phase 2 Status:** ✅ COMPLETE (except documentation - Phase 8)
 
 ---
 
