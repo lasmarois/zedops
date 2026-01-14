@@ -192,7 +192,8 @@ export function useLogStream({
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, agentId, containerId]);
 
   return {
     logs,

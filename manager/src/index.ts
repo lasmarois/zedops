@@ -173,7 +173,7 @@ app.get('*', async (c) => {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-3QB3OqjB.js"></script>
+    <script type="module" crossorigin src="/assets/index-Bv4-c-RU.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-Gex5RWH9.css">
   </head>
   <body>
