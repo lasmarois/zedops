@@ -232,31 +232,61 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
-### M9.8.8 - Fix Metrics Auto-Refresh on Agent Overview Page
-**Status:** 📋 Not Started
+### M9.8.8 - Fix Metrics Auto-Refresh on Agent Overview Page ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** MEDIUM (UX Issue)
+**Duration:** ~5 minutes
+**Completed:** 2026-01-13
 
-**Issue Reported:**
-> "metrics don't seem to auto refresh on agent overview page"
+**Issue Resolved:** Metrics now auto-refresh every 5 seconds even when tab not focused:
+- Added `refetchIntervalInBackground: true` to useAgents hook ✅
+- TanStack Query was pausing refresh when window not focused ✅
+- Metrics update continuously now ✅
 
-**Investigation Needed:**
-- Check if AgentDetail page has refetchInterval configured
-- Check if metrics query is set up for polling
-- Verify metrics data updates in API response
+**Solution:**
+- Frontend: Added `refetchIntervalInBackground: true` option to useAgents.ts
+- Simple one-line fix: TanStack Query default behavior was to pause polling when tab unfocused
+- Now polls every 5 seconds regardless of focus state
+
+**Deployment:**
+- Version: c7def356-eb84-47e0-8ae5-2633bbca1d3e
+- URL: https://zedops.mail-bcf.workers.dev
+
+**User Feedback:** "ok it works !" ✓
+
+**Files:**
+- `planning-history/m9.8.8-metrics-auto-refresh/task_plan.md` - Complete
+- `frontend/src/hooks/useAgents.ts` - Modified
 
 ---
 
-### M9.8.9 - Fix User Email Display in Sidebar
-**Status:** 📋 Not Started
+### M9.8.9 - Fix User Email Display in Sidebar ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** LOW (Display Issue)
+**Duration:** ~5 minutes
+**Completed:** 2026-01-13
 
-**Issue Reported:**
-> "my account is admin and is mail@nicomarois.com but the sidebar bottom shows me as admin@zedops.local"
+**Issue Resolved:** Sidebar now shows actual user email instead of hardcoded admin@zedops.local:
+- Connected Sidebar to UserContext ✅
+- Shows dynamic user email (mail@nicomarois.com) ✅
+- Shows dynamic role ✅
+- Logout button wired up ✅
 
-**Investigation Needed:**
-- Check where sidebar gets user email from (UserContext?)
-- Check if email is stored correctly in database
-- Verify login/auth flow sets correct user email
+**Solution:**
+- Frontend: Connected Sidebar.tsx to UserContext
+- Was hardcoded: "admin" and "admin@zedops.local"
+- Now dynamic: `user?.email` and `user?.role`
+- Added getUserInitials() function for avatar letter
+
+**Deployment:**
+- Version: eba47108-2d6e-4b74-8306-50fc2282708e
+- URL: https://zedops.mail-bcf.workers.dev
+
+**User Feedback:** "yep it works !" ✓
+
+**Files:**
+- `planning-history/m9.8.9-user-email-display/task_plan.md` - Complete
+- `frontend/src/components/layout/Sidebar.tsx` - Modified
 
 ---
 
@@ -298,11 +328,95 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
-### M9.8.19 - TBD
-**Status:** 📋 Not Started
-**Priority:** TBD
+### M9.8.19 - Recent Activity Color Coding & Audit Log Formatting ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** MEDIUM (UX Enhancement)
+**Duration:** ~2 hours (including ActivityTimeline conversion)
+**Completed:** 2026-01-13
 
-*Additional issues will be added as they're discovered during testing*
+**Issue Resolved:** Dashboard Recent Activity and Audit Log now use consistent color coding:
+- Created shared audit-colors utility for all 21 action types ✅
+- Dashboard Recent Activity: Color-coded actions (not all cyan) ✅
+- Audit Log page: Converted to ActivityTimeline format matching Dashboard ✅
+- Semantic colors: Green (create), Red (delete), Orange (change), Cyan (info) ✅
+
+**Solution:**
+- Frontend: Created `lib/audit-colors.ts` with keyword-based color mapping
+- Dashboard: Replaced incomplete actionColorMap with shared utility
+- AuditLog: Converted from table to ActivityTimeline component
+- Visual consistency achieved across both pages
+
+**Deployment History:**
+1. Phase 5: Version c63d9b24-5f11-4b1e-80bd-af7b565182b9
+2. Phase 7 (ActivityTimeline): Version 36bd523f-4d4d-404f-a09b-b304205e75c9
+3. Bug fix 1 (JSON.parse): Version eb2d177c-6ee4-4450-afe6-dab7275184ae
+4. Bug fix 2 (asset sync): Version a7e571e3-8825-48aa-8f6e-86882fb00b8a (FINAL)
+- URL: https://zedops.mail-bcf.workers.dev
+
+**User Feedback:** "it works !!" ✓
+
+**Files:**
+- `task_plan_m98.md` - 7-phase implementation plan
+- `findings_m98.md` - Complete action type analysis
+- `progress_m98.md` - Session log
+- `frontend/src/lib/audit-colors.ts` - Created
+- `frontend/src/pages/Dashboard.tsx` - Modified
+- `frontend/src/components/AuditLogViewer.tsx` - Major refactor
+- `manager/src/index.ts` - Asset filename sync
+
+---
+
+### M9.8.20 - Server Creation Agent Dropdown on Servers Page ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** MEDIUM (UX Enhancement - Workflow Improvement)
+**Duration:** ~1 hour
+**Completed:** 2026-01-13
+
+**Issue Resolved:** Servers page now has dropdown to select agent directly (no navigation needed):
+- Dropdown shows all agents with status indicators (green/red dots) ✅
+- Offline agents disabled with explanation ✅
+- Modal auto-opens when agent selected ✅
+- Form closes on successful creation ✅
+- Workflow: 5+ steps → 2-3 steps ✅
+
+**Solution:**
+- Frontend: Added DropdownMenu to ServerList.tsx with agent cards
+- Modal integration with ServerForm component
+- Edge cases handled: 0 agents, all offline, permissions
+- Old flow: Servers → /agents → find agent → click → form
+- New flow: Servers → dropdown → select → form
+
+**Deployment:**
+- Version: 4a0d3f57-80d5-4707-b46b-0926779f148f
+- URL: https://zedops.mail-bcf.workers.dev
+
+**User Feedback:** "it works !" ✓
+
+**Files:**
+- `task_plan_m920.md` - 5-phase implementation plan
+- `findings_m920.md` - Investigation and design
+- `progress_m920.md` - Session log
+- `ISSUE-M9.8.20-server-creation-dropdown.md` - Complete spec
+- `frontend/src/pages/ServerList.tsx` - Major modification
+
+---
+
+### M9.8.21 - Server Metrics Empty/Not Displaying
+**Status:** 📋 Not Started
+**Priority:** MEDIUM (Bug Fix)
+
+**Issue Reported:**
+> "there is the servers metric that should be fixed, they are empty right now"
+
+**Investigation Needed:**
+- Identify where server metrics are displayed
+- Check if metrics are being collected by agent
+- Check if metrics are being sent to manager
+- Check frontend rendering of metrics
+- Determine root cause (collection, transmission, or display)
+
+**Files:**
+- `ISSUE-M9.8.21-server-metrics-empty.md` - Created
 
 ---
 

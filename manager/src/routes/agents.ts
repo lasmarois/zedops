@@ -1927,4 +1927,92 @@ agents.delete(':id/servers/failed', async (c) => {
   }
 });
 
+/**
+ * GET /api/agents/:id/servers/:serverId/metrics
+ * Get container metrics for a specific server
+ *
+ * Returns: Container resource usage (CPU, memory, disk I/O, uptime)
+ * Permission: User must be able to view the server
+ */
+agents.get('/:id/servers/:serverId/metrics', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    // Check permission to view server
+    const hasPermission = await canViewServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden - you do not have permission to view this server' }, 403);
+    }
+
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Query server from DB to get container_id
+    const server = await c.env.DB.prepare(
+      `SELECT id, name, container_id, status FROM servers WHERE id = ? AND agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Check if server has a container
+    if (!server.container_id) {
+      return c.json({
+        error: 'Server has no container',
+        message: 'Server container is missing or not yet created',
+      }, 400);
+    }
+
+    // Check if container is running (metrics only available for running containers)
+    if (server.status !== 'running') {
+      return c.json({
+        error: 'Server not running',
+        message: `Cannot collect metrics - server status is ${server.status}`,
+      }, 400);
+    }
+
+    // Get AgentConnection DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    console.log(`[Server Metrics] Requesting metrics for container: ${server.container_id}`);
+
+    // Forward metrics request to agent via DO
+    const metricsResponse = await stub.fetch(
+      `http://do/containers/${server.container_id}/metrics`,
+      { method: 'GET' }
+    );
+
+    if (!metricsResponse.ok) {
+      const errorData = await metricsResponse.json();
+      return c.json({ error: errorData.error || 'Failed to collect metrics' }, metricsResponse.status);
+    }
+
+    const metricsData = await metricsResponse.json();
+
+    console.log(`[Server Metrics] Collected metrics for ${server.name}: CPU=${metricsData.cpuPercent}%, Memory=${metricsData.memoryUsedMB}MB`);
+
+    return c.json({
+      success: true,
+      metrics: metricsData,
+    });
+  } catch (error) {
+    console.error('[Server Metrics API] Error collecting metrics:', error);
+    return c.json({ error: 'Failed to collect server metrics' }, 500);
+  }
+});
+
 export { agents };

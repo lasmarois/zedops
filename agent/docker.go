@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -324,4 +325,182 @@ func parseLogLine(line string) (int64, string) {
 	}
 
 	return t.UnixMilli(), message
+}
+
+// ContainerMetrics represents container resource usage metrics
+type ContainerMetrics struct {
+	ContainerID   string  `json:"containerId"`
+	CPUPercent    float64 `json:"cpuPercent"`
+	MemoryUsedMB  int64   `json:"memoryUsedMB"`
+	MemoryLimitMB int64   `json:"memoryLimitMB"`
+	DiskReadMB    int64   `json:"diskReadMB"`
+	DiskWriteMB   int64   `json:"diskWriteMB"`
+	Uptime        string  `json:"uptime"`        // Human-readable: "2h 34m"
+	UptimeSeconds int64   `json:"uptimeSeconds"` // Raw seconds for calculations
+}
+
+// StatsData represents Docker container stats JSON structure
+type StatsData struct {
+	CPUStats struct {
+		CPUUsage struct {
+			TotalUsage  uint64   `json:"total_usage"`
+			PercpuUsage []uint64 `json:"percpu_usage"`
+		} `json:"cpu_usage"`
+		SystemUsage uint64 `json:"system_cpu_usage"`
+		OnlineCPUs  uint64 `json:"online_cpus"`
+	} `json:"cpu_stats"`
+	PreCPUStats struct {
+		CPUUsage struct {
+			TotalUsage uint64 `json:"total_usage"`
+		} `json:"cpu_usage"`
+		SystemUsage uint64 `json:"system_cpu_usage"`
+	} `json:"precpu_stats"`
+	MemoryStats struct {
+		Usage uint64 `json:"usage"`
+		Limit uint64 `json:"limit"`
+	} `json:"memory_stats"`
+	BlkioStats struct {
+		IoServiceBytesRecursive []struct {
+			Op    string `json:"op"`
+			Value uint64 `json:"value"`
+		} `json:"io_service_bytes_recursive"`
+	} `json:"blkio_stats"`
+}
+
+// CollectContainerMetrics collects resource usage metrics for a specific container
+func (dc *DockerClient) CollectContainerMetrics(ctx context.Context, containerID string) (*ContainerMetrics, error) {
+	// Get container stats (one-time snapshot, not streaming)
+	stats, err := dc.cli.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container stats: %w", err)
+	}
+	defer stats.Body.Close()
+
+	// Decode stats JSON
+	var statsJSON StatsData
+	decoder := json.NewDecoder(stats.Body)
+	if err := decoder.Decode(&statsJSON); err != nil {
+		return nil, fmt.Errorf("failed to decode stats JSON: %w", err)
+	}
+
+	// Calculate CPU percentage
+	cpuPercent := calculateCPUPercent(&statsJSON)
+
+	// Get memory stats (convert bytes to MB)
+	memoryUsedMB := int64(statsJSON.MemoryStats.Usage / 1024 / 1024)
+	memoryLimitMB := int64(statsJSON.MemoryStats.Limit / 1024 / 1024)
+
+	// Get disk I/O stats (convert bytes to MB)
+	var diskReadMB, diskWriteMB int64
+	for _, bioEntry := range statsJSON.BlkioStats.IoServiceBytesRecursive {
+		if bioEntry.Op == "read" || bioEntry.Op == "Read" {
+			diskReadMB += int64(bioEntry.Value / 1024 / 1024)
+		} else if bioEntry.Op == "write" || bioEntry.Op == "Write" {
+			diskWriteMB += int64(bioEntry.Value / 1024 / 1024)
+		}
+	}
+
+	// Get uptime
+	uptime, uptimeSeconds, err := dc.GetContainerUptime(ctx, containerID)
+	if err != nil {
+		log.Printf("Warning: failed to get container uptime: %v", err)
+		uptime = "N/A"
+		uptimeSeconds = 0
+	}
+
+	return &ContainerMetrics{
+		ContainerID:   containerID,
+		CPUPercent:    cpuPercent,
+		MemoryUsedMB:  memoryUsedMB,
+		MemoryLimitMB: memoryLimitMB,
+		DiskReadMB:    diskReadMB,
+		DiskWriteMB:   diskWriteMB,
+		Uptime:        uptime,
+		UptimeSeconds: uptimeSeconds,
+	}, nil
+}
+
+// calculateCPUPercent calculates CPU usage percentage from Docker stats
+func calculateCPUPercent(stats *StatsData) float64 {
+	// Calculate the change in CPU usage
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+
+	// Calculate the change in system CPU usage
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+
+	// Get number of CPUs
+	onlineCPUs := float64(stats.CPUStats.OnlineCPUs)
+	if onlineCPUs == 0 {
+		// Fallback to number of CPU stats
+		onlineCPUs = float64(len(stats.CPUStats.CPUUsage.PercpuUsage))
+		if onlineCPUs == 0 {
+			onlineCPUs = 1 // Minimum 1 CPU
+		}
+	}
+
+	// Calculate CPU percentage
+	cpuPercent := 0.0
+	if systemDelta > 0 && cpuDelta > 0 {
+		cpuPercent = (cpuDelta / systemDelta) * onlineCPUs * 100.0
+	}
+
+	return cpuPercent
+}
+
+// GetContainerUptime gets the uptime for a specific container
+// Returns human-readable uptime string and raw seconds
+func (dc *DockerClient) GetContainerUptime(ctx context.Context, containerID string) (string, int64, error) {
+	// Inspect container to get start time
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Check if container is running
+	if !inspect.State.Running {
+		return "Not running", 0, nil
+	}
+
+	// Parse start time
+	startedAt, err := time.Parse(time.RFC3339Nano, inspect.State.StartedAt)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to parse StartedAt: %w", err)
+	}
+
+	// Calculate uptime
+	uptime := time.Since(startedAt)
+	uptimeSeconds := int64(uptime.Seconds())
+
+	// Format uptime as human-readable string
+	uptimeStr := formatUptime(uptime)
+
+	return uptimeStr, uptimeSeconds, nil
+}
+
+// formatUptime formats a duration as a human-readable uptime string
+// Examples: "5m", "2h 34m", "3d 12h"
+func formatUptime(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		if hours > 0 {
+			return fmt.Sprintf("%dd %dh", days, hours)
+		}
+		return fmt.Sprintf("%dd", days)
+	}
+
+	if hours > 0 {
+		if minutes > 0 {
+			return fmt.Sprintf("%dh %dm", hours, minutes)
+		}
+		return fmt.Sprintf("%dh", hours)
+	}
+
+	return fmt.Sprintf("%dm", minutes)
 }

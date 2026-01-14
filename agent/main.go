@@ -274,6 +274,8 @@ func (a *Agent) receiveMessages() {
 			a.handleContainerStop(msg)
 		case "container.restart":
 			a.handleContainerRestart(msg)
+		case "container.metrics":
+			a.handleContainerMetrics(msg)
 		case "log.stream.start":
 			a.handleLogStreamStart(msg)
 		case "log.stream.stop":
@@ -430,6 +432,58 @@ func (a *Agent) handleContainerRestart(msg Message) {
 
 	// Send success response
 	a.sendContainerSuccessWithReply(op.ContainerID, "restart", msg.Reply)
+}
+
+// handleContainerMetrics handles container.metrics messages
+func (a *Agent) handleContainerMetrics(msg Message) {
+	ctx := context.Background()
+
+	// Check if Docker client is available
+	if a.docker == nil {
+		a.sendContainerErrorWithReply("", "metrics", "Docker client not initialized", "DOCKER_NOT_AVAILABLE", msg.Reply)
+		return
+	}
+
+	// Parse container ID from message
+	data, _ := json.Marshal(msg.Data)
+	var request struct {
+		ContainerID string `json:"containerId"`
+	}
+	if err := json.Unmarshal(data, &request); err != nil {
+		a.sendContainerErrorWithReply("", "metrics", "Invalid request format", "INVALID_REQUEST", msg.Reply)
+		return
+	}
+
+	if request.ContainerID == "" {
+		a.sendContainerErrorWithReply("", "metrics", "Container ID is required", "MISSING_CONTAINER_ID", msg.Reply)
+		return
+	}
+
+	log.Printf("Collecting metrics for container: %s", request.ContainerID)
+
+	// Collect container metrics
+	metrics, err := a.docker.CollectContainerMetrics(ctx, request.ContainerID)
+	if err != nil {
+		log.Printf("Failed to collect metrics for container %s: %v", request.ContainerID, err)
+		a.sendContainerErrorWithReply(request.ContainerID, "metrics", err.Error(), "METRICS_COLLECTION_FAILED", msg.Reply)
+		return
+	}
+
+	log.Printf("Collected metrics for container %s: CPU=%.2f%%, Memory=%dMB/%dMB, Uptime=%s",
+		request.ContainerID, metrics.CPUPercent, metrics.MemoryUsedMB, metrics.MemoryLimitMB, metrics.Uptime)
+
+	// Send response to reply subject
+	subject := "container.metrics.response"
+	if msg.Reply != "" {
+		subject = msg.Reply
+	}
+
+	response := Message{
+		Subject: subject,
+		Data:    metrics,
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
 }
 
 // sendContainerSuccess sends a success response for a container operation

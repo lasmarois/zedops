@@ -14,6 +14,7 @@ import {
   purgeServer,
   restoreServer,
   syncServers,
+  fetchServerMetrics,
   type CreateServerRequest,
 } from '../lib/api';
 import { getToken } from '../lib/auth';
@@ -322,5 +323,28 @@ export function useSyncServers() {
         queryKey: ['containers', variables.agentId],
       });
     },
+  });
+}
+
+/**
+ * Hook to fetch server metrics (CPU, memory, disk, uptime)
+ */
+export function useServerMetrics(
+  agentId: string | null,
+  serverId: string | null,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['server-metrics', agentId, serverId],
+    queryFn: () => {
+      if (!agentId || !serverId) {
+        throw new Error('Agent ID and Server ID are required');
+      }
+      return fetchServerMetrics(agentId, serverId);
+    },
+    enabled: enabled && !!agentId && !!serverId,
+    refetchInterval: 5000, // Refresh every 5 seconds
+    retry: 1, // Only retry once on failure
+    staleTime: 4000, // Consider data stale after 4 seconds
   });
 }

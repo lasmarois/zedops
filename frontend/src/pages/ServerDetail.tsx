@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogViewer } from "@/components/LogViewer"
 import { RconTerminal } from "@/components/RconTerminal"
-import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer } from "@/hooks/useServers"
+import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
@@ -23,6 +23,13 @@ export function ServerDetail() {
   const restartContainerMutation = useRestartContainer()
   const rebuildServerMutation = useRebuildServer()
   const deleteServerMutation = useDeleteServer()
+
+  // Fetch server metrics (must be called unconditionally - hooks rule)
+  const { data: metricsData } = useServerMetrics(
+    serverData?.server?.agent_id || null,
+    id || null,
+    serverData?.server?.status === 'running' // Only fetch when running
+  )
 
   // Handler functions for button clicks
   const handleStart = () => {
@@ -114,12 +121,15 @@ export function ServerDetail() {
   const config = server.config ? JSON.parse(server.config) : {}
   const rconPassword = config.RCON_PASSWORD || config.ADMIN_PASSWORD || ''
 
-  // Placeholder for metrics (TODO: Get from agent metrics)
-  const uptime = "N/A" // TODO: Calculate from container start time
-  const players = { current: 0, max: 32 } // TODO: Get from RCON
-  const cpuPercent = 0 // TODO: Get from agent metrics
-  const memoryUsedGB = 0 // TODO: Get from agent metrics
-  const diskUsedGB = 0 // TODO: Get from agent metrics
+  // Extract metrics or use placeholders (metrics fetched at top of component)
+  const metrics = metricsData?.metrics
+  const uptime = metrics?.uptime || "N/A"
+  const players = { current: 0, max: 32 } // TODO: Get from RCON (separate feature)
+  const cpuPercent = metrics?.cpuPercent ? metrics.cpuPercent.toFixed(1) : 0
+  const memoryUsedGB = metrics ? (metrics.memoryUsedMB / 1024).toFixed(1) : 0
+  const memoryLimitGB = metrics ? (metrics.memoryLimitMB / 1024).toFixed(1) : 0
+  const diskReadGB = metrics ? (metrics.diskReadMB / 1024).toFixed(2) : 0
+  const diskWriteGB = metrics ? (metrics.diskWriteMB / 1024).toFixed(2) : 0
 
   return (
     <div className="p-8 space-y-6">
@@ -199,6 +209,11 @@ export function ServerDetail() {
           {/* Server Metrics */}
           <div>
             <h2 className="text-xl font-semibold mb-4">Server Metrics</h2>
+            {status !== 'running' && (
+              <div className="mb-4 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                Metrics are only available when the server is running
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {/* Uptime Card */}
               <Card className="hover:shadow-md transition-shadow duration-200">
@@ -237,19 +252,23 @@ export function ServerDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{memoryUsedGB}GB</div>
+                  {memoryLimitGB && (
+                    <div className="text-xs text-muted-foreground">of {memoryLimitGB}GB</div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Disk Card */}
+              {/* Disk I/O Card */}
               <Card className="hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Disk
+                    Disk I/O
                   </CardTitle>
                   <HardDrive className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{diskUsedGB}GB</div>
+                  <div className="text-sm font-bold">↓ {diskReadGB}GB</div>
+                  <div className="text-sm font-bold">↑ {diskWriteGB}GB</div>
                 </CardContent>
               </Card>
 

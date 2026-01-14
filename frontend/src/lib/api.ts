@@ -151,6 +151,27 @@ export interface ContainerOperationResponse {
 }
 
 /**
+ * Server metrics types
+ */
+export interface ServerMetrics {
+  containerId: string;
+  cpuPercent: number;
+  memoryUsedMB: number;
+  memoryLimitMB: number;
+  diskReadMB: number;
+  diskWriteMB: number;
+  uptime: string;        // Human-readable: "2h 34m"
+  uptimeSeconds: number; // Raw seconds
+}
+
+export interface ServerMetricsResponse {
+  success: boolean;
+  metrics: ServerMetrics;
+  error?: string;
+  message?: string;
+}
+
+/**
  * Fetch containers for a specific agent
  */
 export async function fetchContainers(
@@ -633,6 +654,40 @@ export async function syncServers(
     }
     const errorData = await response.json();
     throw new Error(errorData.error || 'Failed to sync servers');
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch server metrics (CPU, memory, disk, uptime)
+ */
+export async function fetchServerMetrics(
+  agentId: string,
+  serverId: string
+): Promise<ServerMetricsResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/metrics`,
+    {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 400) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || errorData.error || 'Cannot collect metrics');
+    }
+    if (response.status === 503) {
+      throw new Error('Agent not connected');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to fetch server metrics');
   }
 
   return response.json();

@@ -98,6 +98,16 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Container metrics endpoint
+    if (url.pathname.startsWith("/containers/") && url.pathname.endsWith("/metrics") && request.method === "GET") {
+      const parts = url.pathname.split("/");
+      const containerId = parts[2];
+
+      if (containerId) {
+        return this.handleContainerMetricsRequest(containerId);
+      }
+    }
+
     // Port availability check endpoint
     if (url.pathname === "/ports/check" && request.method === "POST") {
       return this.handlePortCheckRequest(request);
@@ -916,6 +926,67 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Operation failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Handle container metrics request
+   */
+  private async handleContainerMetricsRequest(
+    containerId: string
+  ): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (10 seconds for metrics)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Metrics request timeout"));
+      }, 10000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send metrics request to agent with reply inbox
+    this.send({
+      subject: 'container.metrics',
+      data: {
+        containerId,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Return metrics data
+      return new Response(JSON.stringify(reply.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Failed to collect metrics",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },
