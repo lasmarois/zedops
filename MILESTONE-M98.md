@@ -260,7 +260,37 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
-### M9.8.10 - TBD
+### M9.8.18 - Fix Button Loading State Propagation ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** LOW (Visual Bug - No Functional Impact)
+**Duration:** ~25 minutes
+**Completed:** 2026-01-13
+
+**Issue Resolved:** Button loading states now scoped per-item instead of global:
+- Clicking Delete on Server A no longer affects Delete buttons on Server B/C ✅
+- Clicking Purge on one server no longer affects other Purge buttons ✅
+- All action buttons (Start, Stop, Delete, Rebuild, Purge, Restore) fixed ✅
+- Used React Query `variables` pattern to scope `isPending` checks ✅
+
+**Solution:**
+- Frontend: Changed from global `isPending` check to per-item check
+- Pattern: `disabled={mutation.isPending && mutation.variables?.serverId === server.id}`
+- Fixed 8 button occurrences across 2 files:
+  - ServerList.tsx: Purge button (line 295)
+  - AgentServerList.tsx: Start (x2), Delete, Rebuild, Restore, Purge (x3) buttons
+
+**Deployment:**
+- Version: 0aa69cb7-856d-4c53-866a-f3e02bcfb100
+- URL: https://zedops.mail-bcf.workers.dev
+
+**Files:**
+- `task_plan_m98.md` - 4-phase implementation plan
+- `findings_m98.md` - Root cause analysis and solution pattern
+- `progress_m98.md` - Session log
+
+---
+
+### M9.8.19 - TBD
 **Status:** 📋 Not Started
 **Priority:** TBD
 
