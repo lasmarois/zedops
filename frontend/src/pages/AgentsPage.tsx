@@ -6,23 +6,11 @@ export function AgentsPage() {
   const navigate = useNavigate();
 
   const handleSelectAgent = (agent: Agent) => {
-    // Navigate to agent detail page (new M9 design)
+    // Navigate to agent detail page
     navigate(`/agents/${agent.id}`);
   };
 
-  const handleViewUsers = () => {
-    navigate('/users');
-  };
-
-  const handleViewAuditLogs = () => {
-    navigate('/audit-logs');
-  };
-
   return (
-    <AgentList
-      onSelectAgent={handleSelectAgent}
-      onViewUsers={handleViewUsers}
-      onViewAuditLogs={handleViewAuditLogs}
-    />
+    <AgentList onSelectAgent={handleSelectAgent} />
   );
 }

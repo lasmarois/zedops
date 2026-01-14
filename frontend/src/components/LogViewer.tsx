@@ -87,6 +87,13 @@ export function LogViewer({
     }
   };
 
+  // Badge color styling for better contrast (matching AgentList improvements)
+  const getConnectionBadgeStyle = (connected: boolean): string => {
+    return connected
+      ? 'bg-green-600 text-white border-green-700'
+      : 'bg-red-700 text-white border-red-800';
+  };
+
   const handleScroll = () => {
     if (logContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
@@ -113,7 +120,7 @@ export function LogViewer({
 
         <div className="flex items-center gap-4 mb-4">
           <h2 className="text-2xl font-bold m-0">Logs: {containerName}</h2>
-          <Badge variant={isConnected ? 'success' : 'destructive'}>
+          <Badge className={getConnectionBadgeStyle(isConnected)}>
             {isConnected ? 'Connected' : 'Disconnected'}
           </Badge>
         </div>

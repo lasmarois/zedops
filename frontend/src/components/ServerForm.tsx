@@ -131,13 +131,24 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     return 'available';
   };
 
+  // Badge color styling for better contrast (matching AgentList improvements)
+  const getPortBadgeStyle = (status: string): string => {
+    if (status === 'available') {
+      return 'bg-green-600 text-white border-green-700 ml-2';
+    }
+    if (status === 'unavailable') {
+      return 'bg-red-700 text-white border-red-800 ml-2';
+    }
+    return 'ml-2'; // Secondary variant unchanged
+  };
+
   const getPortStatusBadge = (port: number) => {
     const status = getPortStatus(port);
     if (status === 'available') {
-      return <Badge variant="success" className="ml-2">✓ Available</Badge>;
+      return <Badge className={getPortBadgeStyle('available')}>✓ Available</Badge>;
     }
     if (status === 'unavailable') {
-      return <Badge variant="destructive" className="ml-2">✗ In Use</Badge>;
+      return <Badge className={getPortBadgeStyle('unavailable')}>✗ In Use</Badge>;
     }
     return <Badge variant="secondary" className="ml-2">? Unknown</Badge>;
   };

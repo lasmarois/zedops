@@ -457,13 +457,27 @@ export function RconTerminal({
     }
   }, [isConnected, handleRefreshPlayers]);
 
+  // Badge color styling for better contrast (matching AgentList improvements)
+  const getBadgeStyle = (state: 'success' | 'destructive' | 'warning'): string => {
+    switch (state) {
+      case 'success':
+        return 'bg-green-600 text-white border-green-700';
+      case 'warning':
+        return 'bg-orange-600 text-white border-orange-700';
+      case 'destructive':
+        return 'bg-red-700 text-white border-red-800';
+      default:
+        return 'bg-gray-600 text-white border-gray-700';
+    }
+  };
+
   const getConnectionBadge = () => {
     if (isConnected) {
-      return <Badge variant="success">● Connected</Badge>;
+      return <Badge className={getBadgeStyle('success')}>● Connected</Badge>;
     } else if (error) {
-      return <Badge variant="destructive">● Disconnected</Badge>;
+      return <Badge className={getBadgeStyle('destructive')}>● Disconnected</Badge>;
     } else {
-      return <Badge variant="warning">● Connecting...</Badge>;
+      return <Badge className={getBadgeStyle('warning')}>● Connecting...</Badge>;
     }
   };
 

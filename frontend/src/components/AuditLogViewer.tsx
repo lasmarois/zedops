@@ -77,6 +77,21 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
     return 'default';
   };
 
+  // Badge color styling for better contrast (matching AgentList improvements)
+  const getActionBadgeStyle = (action: string): string => {
+    const variant = getActionVariant(action);
+    switch (variant) {
+      case 'success':
+        return 'bg-green-600 text-white border-green-700';
+      case 'warning':
+        return 'bg-orange-600 text-white border-orange-700';
+      case 'destructive':
+        return 'bg-red-700 text-white border-red-800';
+      default:
+        return ''; // Default variant unchanged
+    }
+  };
+
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   if (isLoading) {
@@ -283,7 +298,10 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
                   </TableCell>
                   <TableCell>{log.user_email}</TableCell>
                   <TableCell>
-                    <Badge variant={getActionVariant(log.action)}>
+                    <Badge
+                      variant={getActionVariant(log.action) === 'default' ? 'default' : undefined}
+                      className={getActionBadgeStyle(log.action)}
+                    >
                       {formatAction(log.action)}
                     </Badge>
                   </TableCell>
