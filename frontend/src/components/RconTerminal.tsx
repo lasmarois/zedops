@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { useRcon } from '../hooks/useRcon';
+import { useRconHistory } from '../contexts/RconHistoryContext';
 import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,6 +69,9 @@ export function RconTerminal({
     rconPassword,
     enabled: true,
   });
+
+  // RCON history for preview component
+  const { addEntry } = useRconHistory();
 
   // Keep refs in sync with state for closure access
   useEffect(() => {
@@ -274,11 +278,16 @@ export function RconTerminal({
         lines.forEach((line) => {
           terminal.writeln(line);
         });
+        // Add to history for preview
+        addEntry(command, response);
       } else {
         terminal.writeln('\x1b[90m(no output)\x1b[0m');
+        addEntry(command, '(no output)');
       }
     } catch (err) {
-      terminal.writeln(`\x1b[1;31mError: ${err instanceof Error ? err.message : 'Command failed'}\x1b[0m`);
+      const errorMsg = err instanceof Error ? err.message : 'Command failed';
+      terminal.writeln(`\x1b[1;31mError: ${errorMsg}\x1b[0m`);
+      addEntry(command, `Error: ${errorMsg}`);
     }
 
     terminal.writeln('');

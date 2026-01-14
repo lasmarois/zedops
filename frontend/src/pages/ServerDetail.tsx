@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Breadcrumb } from "@/components/layout/Breadcrumb"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,10 +11,11 @@ import { RconTerminal } from "@/components/RconTerminal"
 import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { useLogStream } from "@/hooks/useLogStream"
+import { RconHistoryProvider, useRconHistory } from "@/contexts/RconHistoryContext"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
 
-export function ServerDetail() {
+function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: serverData, isLoading, error } = useServerById(id || null)
@@ -33,11 +35,18 @@ export function ServerDetail() {
   )
 
   // Fetch log stream for preview (must be called unconditionally - hooks rule)
-  const { logs } = useLogStream({
+  const { logs, clearLogs } = useLogStream({
     agentId: serverData?.server?.agent_id || '',
     containerId: serverData?.server?.container_id || '',
     enabled: serverData?.server?.status === 'running' && !!serverData?.server?.container_id
   })
+
+  // Log preview controls state
+  const [logsPaused, setLogsPaused] = useState(false)
+  const [logsAutoScroll, setLogsAutoScroll] = useState(true)
+
+  // RCON history from context
+  const { history: rconHistory } = useRconHistory()
 
   // Handler functions for button clicks
   const handleStart = () => {
@@ -298,13 +307,13 @@ export function ServerDetail() {
           {/* Log Preview */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Log Preview</h2>
+              <h2 className="text-xl font-semibold">LOG PREVIEW</h2>
               <Button variant="outline" size="sm" onClick={() => {
                 // Navigate to logs tab
                 const tabsList = document.querySelector('[value="logs"]') as HTMLButtonElement
                 if (tabsList) tabsList.click()
               }}>
-                Expand View →
+                ▼ Expand View
               </Button>
             </div>
             <Card>
@@ -318,25 +327,50 @@ export function ServerDetail() {
                     No logs yet. Waiting for container output...
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground space-y-1 font-mono">
-                    {logs.slice(-5).map((log, index) => {
-                      const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
-                        hour12: false,
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      });
-                      const streamColor = log.stream === 'stderr' ? 'text-error' : '';
-                      return (
-                        <div key={`${log.timestamp}-${index}`} className={streamColor}>
-                          [{timestamp}] {log.message}
-                        </div>
-                      );
-                    })}
-                    <div className="text-xs text-center text-muted-foreground pt-2">
-                      Last {Math.min(5, logs.length)} of {logs.length} lines • Click "Expand View" for full logs
+                  <>
+                    <div className="text-sm text-muted-foreground space-y-1 font-mono mb-3">
+                      {(logsPaused ? logs.slice(-5) : logs.slice(-5)).map((log, index) => {
+                        const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
+                          hour12: false,
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        });
+                        const streamColor = log.stream === 'stderr' ? 'text-error' : '';
+                        return (
+                          <div key={`${log.timestamp}-${index}`} className={streamColor}>
+                            [{timestamp}] {log.message}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                    <div className="flex gap-2 items-center justify-center pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLogsAutoScroll(!logsAutoScroll)}
+                        className="text-xs"
+                      >
+                        Auto-scroll {logsAutoScroll ? '✓' : ''}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLogsPaused(!logsPaused)}
+                        className="text-xs"
+                      >
+                        {logsPaused ? 'Resume' : 'Pause'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => clearLogs()}
+                        className="text-xs"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -345,12 +379,12 @@ export function ServerDetail() {
           {/* RCON Preview */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">RCON Console</h2>
+              <h2 className="text-xl font-semibold">RCON PREVIEW</h2>
               <Button variant="outline" size="sm" onClick={() => {
                 const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
                 if (tabsList) tabsList.click()
               }}>
-                Open Console →
+                ▼ Expand View
               </Button>
             </div>
             <Card>
@@ -359,30 +393,49 @@ export function ServerDetail() {
                   <div className="text-sm text-muted-foreground text-center py-4">
                     Server must be running to use RCON
                   </div>
-                ) : (
-                  <div className="text-sm space-y-3">
-                    <div>
-                      <p className="text-muted-foreground mb-2">
-                        Open the RCON console to interact with your server in real-time.
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">Common Commands:</p>
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div className="text-primary">players</div>
-                        <div className="text-muted-foreground">List online players</div>
-                        <div className="text-primary">save</div>
-                        <div className="text-muted-foreground">Save the world</div>
-                        <div className="text-primary">servermsg &lt;text&gt;</div>
-                        <div className="text-muted-foreground">Broadcast message</div>
-                        <div className="text-primary">kickuser &lt;name&gt;</div>
-                        <div className="text-muted-foreground">Kick a player</div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-center text-muted-foreground pt-2">
-                      Click "Open Console" for the full interactive terminal
-                    </div>
+                ) : rconHistory.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No RCON commands yet. Open the RCON tab to interact with your server.
                   </div>
+                ) : (
+                  <>
+                    <div className="text-sm text-muted-foreground space-y-2 font-mono mb-3">
+                      {rconHistory.slice(-3).map((entry, index) => (
+                        <div key={`${entry.timestamp}-${index}`} className="space-y-1">
+                          <div className="text-primary">
+                            &gt; {entry.command}
+                          </div>
+                          <div className="pl-4">
+                            {entry.response}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 items-center justify-center pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
+                          if (tabsList) tabsList.click()
+                        }}
+                        className="text-xs"
+                      >
+                        History ▲▼
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
+                          if (tabsList) tabsList.click()
+                        }}
+                        className="text-xs"
+                      >
+                        Quick Commands ▼
+                      </Button>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -514,5 +567,20 @@ export function ServerDetail() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+// Wrapper component with RconHistoryProvider
+export function ServerDetail() {
+  const { id } = useParams<{ id: string }>()
+
+  if (!id) {
+    return <div className="p-8 text-center">Server ID not provided</div>
+  }
+
+  return (
+    <RconHistoryProvider serverId={id}>
+      <ServerDetailContent />
+    </RconHistoryProvider>
   )
 }
