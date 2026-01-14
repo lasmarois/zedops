@@ -518,13 +518,8 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     };
   };
 
-  const isOperationPending = (): boolean => {
-    return (
-      startMutation.isPending ||
-      stopMutation.isPending ||
-      restartMutation.isPending
-    );
-  };
+  // Removed isOperationPending() - now using per-container scoped checks
+  // e.g., startMutation.isPending && startMutation.variables?.containerId === container.id
 
   const getServerFromContainerId = (containerId: string): Server | undefined => {
     return serversData?.servers.find((s) => s.container_id === containerId);
@@ -836,7 +831,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                 size="sm"
                                 variant="success"
                                 onClick={() => handleStart(container.id)}
-                                disabled={isOperationPending()}
+                                disabled={startMutation.isPending && startMutation.variables?.containerId === container.id}
                               >
                                 <Play className="h-4 w-4 mr-1" />
                                 Start
@@ -848,7 +843,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                   size="sm"
                                   variant="destructive"
                                   onClick={() => handleStop(container.id)}
-                                  disabled={isOperationPending()}
+                                  disabled={stopMutation.isPending && stopMutation.variables?.containerId === container.id}
                                 >
                                   <Square className="h-4 w-4 mr-1" />
                                   Stop
@@ -857,7 +852,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                   size="sm"
                                   variant="info"
                                   onClick={() => handleRestart(container.id)}
-                                  disabled={isOperationPending()}
+                                  disabled={restartMutation.isPending && restartMutation.variables?.containerId === container.id}
                                 >
                                   <RotateCw className="h-4 w-4 mr-1" />
                                   Restart
