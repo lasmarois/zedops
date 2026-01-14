@@ -99,3 +99,64 @@ This checks:
 1. Is ANY purge operation running? (`isPending`)
 2. Is it for THIS specific server? (`variables?.serverId === server.id`)
 3. Only disable/show loading if BOTH conditions are true
+
+---
+
+## Extended Investigation (Post-User Testing)
+
+### Additional Occurrences Found
+
+After initial fix, user reported:
+> "when I click stop, all the buttons (stop, restart) of the other servers become grayed out"
+
+#### 3. AgentServerList.tsx - Container Operations (3 additional)
+- **Line 839**: Start button - `isOperationPending()` (global)
+- **Line 851**: Stop button - `isOperationPending()` (global)
+- **Line 860**: Restart button - `isOperationPending()` (global)
+- **Lines 521-527**: `isOperationPending()` helper function
+
+**Root cause:** Used helper function that checked ALL container mutations:
+```tsx
+const isOperationPending = (): boolean => {
+  return (
+    startMutation.isPending ||
+    stopMutation.isPending ||
+    restartMutation.isPending
+  );
+};
+```
+
+**Fix:** Removed helper, used per-container checks:
+```tsx
+disabled={stopMutation.isPending && stopMutation.variables?.containerId === container.id}
+```
+
+#### 4. UserList.tsx (1 occurrence)
+- **Line 300**: Delete user button
+- **Pattern**: Multiple users in table, each with Delete button
+- **Variables**: `userId` (direct string, not object)
+- **Fix**: `disabled={deleteUserMutation.isPending && deleteUserMutation.variables === user.id}`
+
+**Note:** deleteUser mutation takes userId directly as parameter, so `variables` IS the userId string.
+
+#### 5. RoleAssignmentsManager.tsx (1 occurrence)
+- **Line 338**: Revoke role button
+- **Pattern**: Multiple role assignments in table, each with Revoke button
+- **Variables**: `{ assignmentId: string; userId: string }`
+- **Fix**: `disabled={revokeMutation.isPending && revokeMutation.variables?.assignmentId === assignment.id}`
+
+---
+
+## Complete Summary
+
+**Total occurrences fixed: 13**
+1. ServerList.tsx: 1 (Purge)
+2. AgentServerList.tsx: 10 (Start x2, Stop, Restart, Delete, Rebuild, Restore, Purge x3)
+3. UserList.tsx: 1 (Delete user)
+4. RoleAssignmentsManager.tsx: 1 (Revoke role)
+
+**Pattern variations:**
+- Server operations: `variables?.serverId === server.id`
+- Container operations: `variables?.containerId === container.id`
+- User operations: `variables === user.id` (direct parameter)
+- Role operations: `variables?.assignmentId === assignment.id`

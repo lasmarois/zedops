@@ -297,7 +297,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                             size="sm"
                             variant="destructive"
                             onClick={() => handleDeleteUser(user.id, user.email)}
-                            disabled={deleteUserMutation.isPending}
+                            disabled={deleteUserMutation.isPending && deleteUserMutation.variables === user.id}
                           >
                             Delete
                           </Button>

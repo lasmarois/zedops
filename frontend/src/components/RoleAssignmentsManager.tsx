@@ -335,7 +335,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
                       size="sm"
                       variant="destructive"
                       onClick={() => handleRevokeRoleAssignment(assignment.id)}
-                      disabled={revokeMutation.isPending}
+                      disabled={revokeMutation.isPending && revokeMutation.variables?.assignmentId === assignment.id}
                     >
                       Revoke
                     </Button>
