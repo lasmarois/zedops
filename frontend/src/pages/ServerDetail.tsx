@@ -9,6 +9,7 @@ import { LogViewer } from "@/components/LogViewer"
 import { RconTerminal } from "@/components/RconTerminal"
 import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
+import { useLogStream } from "@/hooks/useLogStream"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
 
@@ -30,6 +31,13 @@ export function ServerDetail() {
     id || null,
     serverData?.server?.status === 'running' // Only fetch when running
   )
+
+  // Fetch log stream for preview (must be called unconditionally - hooks rule)
+  const { logs } = useLogStream({
+    agentId: serverData?.server?.agent_id || '',
+    containerId: serverData?.server?.container_id || '',
+    enabled: serverData?.server?.status === 'running' && !!serverData?.server?.container_id
+  })
 
   // Handler functions for button clicks
   const handleStart = () => {
@@ -301,16 +309,35 @@ export function ServerDetail() {
             </div>
             <Card>
               <CardContent className="p-4">
-                <div className="text-sm text-muted-foreground space-y-1 font-mono">
-                  <div>[12:34:56] Server started on port 16261</div>
-                  <div>[12:35:02] Player 'John' connected</div>
-                  <div className="text-warning">[12:35:45] WARNING: High memory usage</div>
-                  <div>[12:36:15] Player 'Sarah' connected</div>
-                  <div>[12:37:22] Autosaving world...</div>
-                  <div className="text-xs text-center text-muted-foreground pt-2">
-                    Last 5 lines • Click "Expand View" for full logs
+                {status !== 'running' ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    Server must be running to view logs
                   </div>
-                </div>
+                ) : logs.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No logs yet. Waiting for container output...
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground space-y-1 font-mono">
+                    {logs.slice(-5).map((log, index) => {
+                      const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
+                        hour12: false,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      });
+                      const streamColor = log.stream === 'stderr' ? 'text-error' : '';
+                      return (
+                        <div key={`${log.timestamp}-${index}`} className={streamColor}>
+                          [{timestamp}] {log.message}
+                        </div>
+                      );
+                    })}
+                    <div className="text-xs text-center text-muted-foreground pt-2">
+                      Last {Math.min(5, logs.length)} of {logs.length} lines • Click "Expand View" for full logs
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -318,29 +345,45 @@ export function ServerDetail() {
           {/* RCON Preview */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">RCON Preview</h2>
+              <h2 className="text-xl font-semibold">RCON Console</h2>
               <Button variant="outline" size="sm" onClick={() => {
                 const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
                 if (tabsList) tabsList.click()
               }}>
-                Expand View →
+                Open Console →
               </Button>
             </div>
             <Card>
               <CardContent className="p-4">
-                <div className="text-sm text-muted-foreground space-y-2 font-mono">
-                  <div>
-                    <span className="text-primary">&gt;</span> players
+                {status !== 'running' ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    Server must be running to use RCON
                   </div>
-                  <div>Players online (5): John, Sarah, Mike, Alex, Jordan</div>
-                  <div className="pt-2">
-                    <span className="text-primary">&gt;</span> servermsg Welcome to the server!
+                ) : (
+                  <div className="text-sm space-y-3">
+                    <div>
+                      <p className="text-muted-foreground mb-2">
+                        Open the RCON console to interact with your server in real-time.
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Common Commands:</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div className="text-primary">players</div>
+                        <div className="text-muted-foreground">List online players</div>
+                        <div className="text-primary">save</div>
+                        <div className="text-muted-foreground">Save the world</div>
+                        <div className="text-primary">servermsg &lt;text&gt;</div>
+                        <div className="text-muted-foreground">Broadcast message</div>
+                        <div className="text-primary">kickuser &lt;name&gt;</div>
+                        <div className="text-muted-foreground">Kick a player</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-center text-muted-foreground pt-2">
+                      Click "Open Console" for the full interactive terminal
+                    </div>
                   </div>
-                  <div>Message broadcast to all players</div>
-                  <div className="text-xs text-center text-muted-foreground pt-2">
-                    Click "Expand View" for full RCON terminal
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
