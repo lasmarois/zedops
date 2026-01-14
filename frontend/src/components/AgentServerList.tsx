@@ -873,7 +873,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     size="sm"
                                     variant="success"
                                     onClick={() => handleServerStart(server.id, server.name)}
-                                    disabled={startServerMutation.isPending}
+                                    disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
                                   >
                                     <Play className="h-4 w-4 mr-1" />
                                     Start
@@ -923,7 +923,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     {server.status === 'running' && (
                                       <DropdownMenuItem
                                         onClick={() => handleRebuildServer(server.id, server.name)}
-                                        disabled={rebuildServerMutation.isPending}
+                                        disabled={rebuildServerMutation.isPending && rebuildServerMutation.variables?.serverId === server.id}
                                       >
                                         <Wrench className="h-4 w-4 mr-2" />
                                         Rebuild
@@ -941,7 +941,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
                                       onClick={() => handleDeleteServer(server.id, server.name)}
-                                      disabled={deleteServerMutation.isPending}
+                                      disabled={deleteServerMutation.isPending && deleteServerMutation.variables?.serverId === server.id}
                                     >
                                       <Trash2 className="h-4 w-4 mr-2" />
                                       Delete Server
@@ -1045,7 +1045,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       size="sm"
                                       variant="success"
                                       onClick={() => handleServerStart(server.id, server.name)}
-                                      disabled={startServerMutation.isPending}
+                                      disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
                                       className="font-bold"
                                     >
                                       <Play className="h-4 w-4 mr-1" />
@@ -1058,7 +1058,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       size="sm"
                                       variant="info"
                                       onClick={() => handleServerRestore(server.id, server.name)}
-                                      disabled={restoreServerMutation.isPending}
+                                      disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
                                     >
                                       Restore
                                     </Button>
@@ -1074,7 +1074,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       <DropdownMenuItem
                                         className="text-destructive focus:text-destructive"
                                         onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                        disabled={purgeServerMutation.isPending}
+                                        disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
                                       >
                                         <Trash2 className="h-4 w-4 mr-2" />
                                         Purge Server
@@ -1114,16 +1114,16 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
             <Button
               variant="warning"
               onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, false)}
-              disabled={purgeServerMutation.isPending}
+              disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId}
             >
               Keep Data & Purge
             </Button>
             <Button
               variant="destructive"
               onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, true)}
-              disabled={purgeServerMutation.isPending}
+              disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId}
             >
-              {purgeServerMutation.isPending ? 'Purging...' : 'Remove Data & Purge'}
+              {purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId ? 'Purging...' : 'Remove Data & Purge'}
             </Button>
           </DialogFooter>
         </DialogContent>

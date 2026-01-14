@@ -292,10 +292,10 @@ export function ServerList() {
                             e.stopPropagation()
                             handlePurge(server)
                           }}
-                          disabled={purgeServerMutation.isPending}
+                          disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
                         >
                           <Trash2 className="h-4 w-4" />
-                          {purgeServerMutation.isPending ? 'Purging...' : 'Purge'}
+                          {purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id ? 'Purging...' : 'Purge'}
                         </Button>
                       </div>
                     </div>
