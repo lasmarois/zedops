@@ -179,7 +179,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                 className={`transition-all duration-200 ${
                   isOnline
                     ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] border-l-4 border-l-success'
-                    : 'opacity-75 border-l-4 border-l-muted'
+                    : 'opacity-75 border-l-4 border-l-destructive'
                 }`}
                 onClick={() => isOnline && onSelectAgent(agent)}
               >
