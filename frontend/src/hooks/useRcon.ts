@@ -25,8 +25,12 @@ export interface UseRconReturn {
   isConnected: boolean;
   sessionId: string | null;
   error: string | null;
+  isRetrying: boolean;
+  retryAttempt: number;
+  maxRetries: number;
   sendCommand: (command: string) => Promise<string>;
   disconnect: () => void;
+  manualRetry: () => void;
 }
 
 export function useRcon({
@@ -40,14 +44,50 @@ export function useRcon({
   const [isConnected, setIsConnected] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Retry logic for network resilience and server restart scenarios
+  // NOTE: This is NOT for container initialization bugs (fixed in steam-zomboid v2.1.1)
+  // Use cases: PZ server restarts (30-60s downtime), network glitches, temporary RCON unavailability
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const maxRetries = 5;
   const wsRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const retryTimeoutRef = useRef<number | null>(null);
   const pendingRepliesRef = useRef<Map<string, (response: any) => void>>(new Map());
 
   // Keep ref in sync with state
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // Helper to check if error is retryable (connection refused = server not ready yet)
+  const isRetryableError = (errorMessage: string): boolean => {
+    return errorMessage.includes('connection refused') ||
+           errorMessage.includes('connect: connection refused') ||
+           errorMessage.includes('ECONNREFUSED');
+  };
+
+  // Retry with exponential backoff
+  const scheduleRetry = useCallback((attempt: number) => {
+    if (attempt >= maxRetries) {
+      setIsRetrying(false);
+      console.log(`[RCON] Max retries (${maxRetries}) reached, giving up`);
+      return;
+    }
+
+    // Exponential backoff: 2s, 4s, 8s, 16s, 30s
+    const delays = [2000, 4000, 8000, 16000, 30000];
+    const delay = delays[attempt] || 30000;
+
+    setIsRetrying(true);
+    setRetryAttempt(attempt + 1);
+    console.log(`[RCON] Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+
+    retryTimeoutRef.current = window.setTimeout(() => {
+      connect();
+    }, delay);
+  }, [maxRetries]);
 
   const connect = useCallback(async () => {
     if (!enabled || !agentId || !serverId) {
@@ -98,13 +138,28 @@ export function useRcon({
         // Store reply handler
         pendingRepliesRef.current.set(inbox, (response: any) => {
           if (response.success) {
+            // Connection successful - reset retry state
             setSessionId(response.sessionId);
             setIsConnected(true);
             setError(null);
+            setIsRetrying(false);
+            setRetryAttempt(0);
             console.log(`[RCON] Connected with session ${response.sessionId}`);
           } else {
-            setError(response.error || 'RCON connection failed');
-            console.error('[RCON] Connection failed:', response.error);
+            const errorMsg = response.error || 'RCON connection failed';
+            console.error('[RCON] Connection failed:', errorMsg);
+
+            // Check if error is retryable (connection refused = server unavailable)
+            // Common scenarios: server restarting, network hiccup, RCON service slow to start
+            if (isRetryableError(errorMsg) && retryAttempt < maxRetries) {
+              // Don't show error to user yet, we're retrying
+              console.log(`[RCON] Connection refused, will retry...`);
+              scheduleRetry(retryAttempt);
+            } else {
+              // Non-retryable error or max retries reached
+              setError(errorMsg);
+              setIsRetrying(false);
+            }
           }
         });
 
@@ -198,6 +253,12 @@ export function useRcon({
   }, []); // No dependencies - uses refs
 
   const disconnect = useCallback(() => {
+    // Clear any pending retry
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
     if (wsRef.current && sessionIdRef.current) {
       console.log('[RCON] Disconnecting');
 
@@ -219,8 +280,19 @@ export function useRcon({
 
     setIsConnected(false);
     setSessionId(null);
+    setIsRetrying(false);
+    setRetryAttempt(0);
     sessionIdRef.current = null;
   }, []); // No dependencies - uses refs
+
+  // Manual retry function for user
+  const manualRetry = useCallback(() => {
+    console.log('[RCON] Manual retry requested');
+    setRetryAttempt(0);
+    setIsRetrying(false);
+    setError(null);
+    connect();
+  }, [connect]);
 
   // Connect on mount/enable, disconnect on unmount
   useEffect(() => {
@@ -231,13 +303,18 @@ export function useRcon({
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]); // Safe now - these callbacks are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, agentId, serverId, containerID, port, rconPassword]); // Only primitives
 
   return {
     isConnected,
     sessionId,
     error,
+    isRetrying,
+    retryAttempt,
+    maxRetries,
     sendCommand,
     disconnect,
+    manualRetry,
   };
 }

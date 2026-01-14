@@ -1,6 +1,13 @@
 /**
  * RCON Terminal Component
  * Provides an interactive terminal for server administration via RCON
+ *
+ * Features automatic retry logic with exponential backoff for:
+ * - Server restarts (PZ servers take 30-60s to restart RCON)
+ * - Network glitches between manager and agent
+ * - Temporary RCON unavailability
+ *
+ * NOTE: Retry logic is NOT for container initialization bugs (fixed in steam-zomboid v2.1.1)
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -53,7 +60,7 @@ export function RconTerminal({
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
-  const { isConnected, error, sendCommand } = useRcon({
+  const { isConnected, error, sendCommand, isRetrying, retryAttempt, maxRetries, manualRetry } = useRcon({
     agentId,
     serverId,
     containerID,
@@ -225,11 +232,19 @@ export function RconTerminal({
       setTimeout(() => {
         terminal.scrollToBottom();
       }, 10);
+    } else if (isRetrying) {
+      terminal.writeln(`\x1b[1;33m⏳ Server starting, retrying connection... (attempt ${retryAttempt}/${maxRetries})\x1b[0m`);
+      terminal.writeln(`\x1b[2mProject Zomboid servers need 30-60 seconds to start\x1b[0m`);
+      terminal.writeln('');
     } else if (error) {
       terminal.writeln(`\x1b[1;31m✗ Connection failed: ${error}\x1b[0m`);
       terminal.writeln('');
+      if (!isRetrying && retryAttempt >= maxRetries) {
+        terminal.writeln(`\x1b[1;33mℹ Maximum retry attempts reached. Use the "Retry" button to try again.\x1b[0m`);
+        terminal.writeln('');
+      }
     }
-  }, [isConnected, error]);
+  }, [isConnected, error, isRetrying, retryAttempt, maxRetries]);
 
   const showPrompt = (terminal: Terminal) => {
     terminal.write('\x1b[1;32m>\x1b[0m ');
@@ -474,6 +489,8 @@ export function RconTerminal({
   const getConnectionBadge = () => {
     if (isConnected) {
       return <Badge className={getBadgeStyle('success')}>● Connected</Badge>;
+    } else if (isRetrying) {
+      return <Badge className={getBadgeStyle('warning')}>● Connecting... (attempt {retryAttempt}/{maxRetries})</Badge>;
     } else if (error) {
       return <Badge className={getBadgeStyle('destructive')}>● Disconnected</Badge>;
     } else {
@@ -510,6 +527,16 @@ export function RconTerminal({
         <div className="p-4 px-6 bg-[#1e1e1e] border-b border-[#333] max-h-[200px] overflow-y-auto">
           {/* Quick Action Buttons */}
           <div className="flex gap-2 mb-4 flex-wrap">
+            {/* Show retry button when connection failed and not retrying */}
+            {error && !isRetrying && !isConnected && (
+              <Button
+                variant="warning"
+                size="sm"
+                onClick={manualRetry}
+              >
+                🔄 Retry Connection
+              </Button>
+            )}
             <Button
               variant="info"
               size="sm"
