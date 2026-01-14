@@ -263,30 +263,38 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 ### M9.8.18 - Fix Button Loading State Propagation ✅ COMPLETE
 **Status:** ✅ Deployed
 **Priority:** LOW (Visual Bug - No Functional Impact)
-**Duration:** ~25 minutes
+**Duration:** ~45 minutes (including comprehensive fix)
 **Completed:** 2026-01-13
 
 **Issue Resolved:** Button loading states now scoped per-item instead of global:
 - Clicking Delete on Server A no longer affects Delete buttons on Server B/C ✅
 - Clicking Purge on one server no longer affects other Purge buttons ✅
-- All action buttons (Start, Stop, Delete, Rebuild, Purge, Restore) fixed ✅
-- Used React Query `variables` pattern to scope `isPending` checks ✅
+- Clicking Stop on Container 1 no longer grays out all Stop buttons ✅
+- Clicking Delete User no longer affects other Delete buttons ✅
+- Clicking Revoke Role no longer affects other Revoke buttons ✅
+- All action buttons properly scoped to specific items ✅
 
 **Solution:**
 - Frontend: Changed from global `isPending` check to per-item check
-- Pattern: `disabled={mutation.isPending && mutation.variables?.serverId === server.id}`
-- Fixed 8 button occurrences across 2 files:
-  - ServerList.tsx: Purge button (line 295)
-  - AgentServerList.tsx: Start (x2), Delete, Rebuild, Restore, Purge (x3) buttons
+- Pattern: `disabled={mutation.isPending && mutation.variables?.itemId === item.id}`
+- **Fixed 13 buttons across 4 components:**
+  1. **ServerList.tsx** (1): Purge button
+  2. **AgentServerList.tsx** (10): Start (x2), Stop, Restart, Delete, Rebuild, Restore, Purge (x3)
+  3. **UserList.tsx** (1): Delete user button
+  4. **RoleAssignmentsManager.tsx** (1): Revoke role button
+- Removed `isOperationPending()` helper function (was checking ALL mutations globally)
 
-**Deployment:**
-- Version: 0aa69cb7-856d-4c53-866a-f3e02bcfb100
+**Deployment History:**
+1. Initial (server ops): Version 0aa69cb7-856d-4c53-866a-f3e02bcfb100
+2. Container ops: Version 7c5738c7-54fd-4aa7-b71c-a8bace8f0da7
+3. Final (user/role): Version 5eff9145-128e-4404-933d-0bf1b9e76cbd
 - URL: https://zedops.mail-bcf.workers.dev
 
 **Files:**
 - `task_plan_m98.md` - 4-phase implementation plan
-- `findings_m98.md` - Root cause analysis and solution pattern
+- `findings_m98.md` - Complete root cause analysis with all discoveries
 - `progress_m98.md` - Session log
+- `COMPLETE.md` - Full documentation with all 13 fixes
 
 ---
 
