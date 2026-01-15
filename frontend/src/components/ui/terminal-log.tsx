@@ -5,9 +5,9 @@
  * with the midnight blue theme. Professional, dark aesthetic.
  */
 
-import { forwardRef, useRef, useImperativeHandle, type ReactNode } from 'react'
+import { forwardRef, useRef, useImperativeHandle, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { Info, AlertTriangle, XCircle, Bug, Terminal, AlertOctagon } from 'lucide-react'
+import { Info, AlertTriangle, XCircle, Bug, Terminal, AlertOctagon, ChevronUp } from 'lucide-react'
 
 // Log entry types
 export interface LogLine {
@@ -85,6 +85,8 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
   ({ logs, emptyMessage, showTimestamp = true, showLevel = true, showStream = false, className, children }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const endRef = useRef<HTMLDivElement>(null)
+    const startRef = useRef<HTMLDivElement>(null)
+    const [showScrollTop, setShowScrollTop] = useState(false)
 
     useImperativeHandle(ref, () => ({
       scrollToBottom: () => {
@@ -92,9 +94,20 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
       },
     }))
 
+    // Track scroll position to show/hide scroll-to-top button
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop } = e.currentTarget
+      setShowScrollTop(scrollTop > 200)
+    }
+
+    const scrollToTop = () => {
+      startRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+
     return (
       <div
         ref={containerRef}
+        onScroll={handleScroll}
         className={cn(
           // Base terminal styling
           'font-mono text-[13px] leading-relaxed',
@@ -102,8 +115,8 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
           'bg-[hsl(220_50%_4%)] rounded-lg border border-slate-800/50',
           // Subtle inner shadow for depth
           'shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]',
-          // Scrolling
-          'overflow-auto',
+          // Scrolling + relative for floating button
+          'overflow-auto relative',
           // Default sizing
           'min-h-[200px]',
           className
@@ -112,8 +125,33 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
         {/* Scanline overlay for retro terminal feel */}
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.02)_50%)] bg-[length:100%_4px] rounded-lg" />
 
+        {/* Floating scroll-to-top button */}
+        <button
+          onClick={scrollToTop}
+          className={cn(
+            'fixed bottom-6 right-6 z-50',
+            'flex items-center justify-center',
+            'w-10 h-10 rounded-full',
+            'bg-slate-800/90 hover:bg-slate-700/90',
+            'border border-slate-600/50',
+            'text-slate-300 hover:text-white',
+            'shadow-lg shadow-black/30',
+            'transition-all duration-200',
+            'backdrop-blur-sm',
+            // Show/hide with animation
+            showScrollTop
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-4 pointer-events-none'
+          )}
+          aria-label="Scroll to top"
+        >
+          <ChevronUp className="h-5 w-5" />
+        </button>
+
         {/* Log content */}
         <div className="relative p-4 space-y-0.5">
+          {/* Scroll anchor for top */}
+          <div ref={startRef} />
           {logs.length === 0 ? (
             <div className="text-muted-foreground/60 text-center py-8 select-none">
               <div className="inline-flex items-center gap-2">
