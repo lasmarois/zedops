@@ -420,6 +420,29 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
+### M9.8.32 - Separate Image and Tag Fields
+**Status:** COMPLETE
+**Priority:** HIGH (Bug Fix + Architecture Improvement)
+**Duration:** ~2 hours
+**Completed:** 2026-01-14
+
+**Bug Fixed:** Rebuild failures with "invalid reference format" error.
+
+**Root Cause:** `agents.ts:1093` stored full image reference in `image_tag` column, causing double-reference when rebuilding (`registry + ":" + "registry:tag"`).
+
+**Solution:**
+- Added `image` column to servers table (nullable, for per-server registry override)
+- Fixed backend to not overwrite `image_tag` after creation
+- Updated all rebuild/apply-config flows to use `server.image || agent.steam_zomboid_registry`
+- Added Image Registry field to Configuration edit form
+
+**Database Migration:** `0011_separate_image_tag.sql`
+
+**Files:**
+- `planning-history/m9832-separate-image-tag/progress_m9832.md` - Completion details
+
+---
+
 ### M9.8.33 - Real-Time Agent Logs
 **Status:** COMPLETE
 **Priority:** MEDIUM (Feature Enhancement)
@@ -502,66 +525,6 @@ M9.8 complete when:
 ---
 
 ## Future Enhancements (Post M9.8)
-
-### M9.8.32 - Separate Image and Tag Fields (Database Schema Refactor)
-**Status:** 📋 Planned (Not Implemented)
-**Priority:** HIGH (Bug Fix + Architecture Improvement)
-**Origin:** User suggestion during M9.8.30 (see progress_m9830.md line 452)
-
-**Current Problem (Bug Discovered 2026-01-14):**
-The `image_tag` field gets overwritten with the full resolved image name after server creation (e.g., `registry.gitlab.../steam-zomboid:latest` instead of just `latest`). This causes rebuild failures with "invalid reference format" because the code constructs: `registry + ":" + image_tag` → invalid double reference.
-
-**Root Cause:** `agents.ts:1093` stores `result.imageName` (full reference) in `image_tag` column.
-
-**Proposed Architecture:**
-- **`image` field:** Full image path without tag (e.g., `registry.gitlab.nicomarois.com/nicolas/steam-zomboid`)
-- **`tag` field:** Just the tag portion (e.g., `latest`, `v2.1.0`, `build42`)
-- Construct full reference when needed: `${image}:${tag}`
-
-**Benefits:**
-- Clear separation of concerns
-- No ambiguity about what each field contains
-- Easy to change tags without touching image path
-- Consistent with Docker's own terminology
-- Per-server image override (different servers can use different registries)
-- Fixes the current bug permanently
-
-**Schema Migration:**
-```sql
--- Add new columns
-ALTER TABLE servers ADD COLUMN image TEXT;
-ALTER TABLE servers ADD COLUMN tag TEXT DEFAULT 'latest';
-
--- Migrate data: Split existing image_tag into image and tag
-UPDATE servers SET
-  image = SUBSTR(image_tag, 1, INSTR(image_tag, ':') - 1),
-  tag = SUBSTR(image_tag, INSTR(image_tag, ':') + 1)
-WHERE image_tag LIKE '%:%';
-
--- For servers with just a tag (no colon), use agent's registry
-UPDATE servers SET
-  image = (SELECT steam_zomboid_registry FROM agents WHERE agents.id = servers.agent_id),
-  tag = image_tag
-WHERE image_tag NOT LIKE '%:%';
-
--- Drop old column after verification
--- ALTER TABLE servers DROP COLUMN image_tag;
-```
-
-**Files to Modify:**
-- `manager/migrations/` - New migration file
-- `manager/src/routes/agents.ts` - Update all server queries/inserts
-- `frontend/src/components/ConfigurationEdit.tsx` - Add image field (optional override)
-- `agent/main.go` - Use image + tag from message
-
-**Estimated Time:** 3-4 hours
-
-**Workaround (Until Fixed):**
-```sql
-UPDATE servers SET image_tag = 'latest' WHERE image_tag LIKE '%:%';
-```
-
----
 
 ### Agent Disconnect Functionality
 **Status:** 📋 Planned (Not Implemented)
