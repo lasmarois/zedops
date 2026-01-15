@@ -2,7 +2,8 @@
 
 **Parent Milestone:** M9.8
 **Started:** 2026-01-13
-**Status:** 🚧 In Progress
+**Completed:** 2026-01-15
+**Status:** ✅ COMPLETE
 
 ---
 
@@ -502,15 +503,49 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
+### M9.8.35 - Log Viewer Theme Alignment
+**Status:** COMPLETE
+**Priority:** LOW (UI Polish)
+**Duration:** ~20 minutes
+**Completed:** 2026-01-15
+
+**Enhancement:** Revamped log viewers to align with midnight blue theme.
+
+**Before:**
+- Hardcoded Dracula theme colors with inline styles
+- Inconsistent look between log viewers
+- Not integrated with theme system
+
+**After:**
+- New `TerminalLog` base component using Tailwind/theme CSS variables
+- Sleek design with subtle hover effects and depth
+- Consistent controls (Pause, Follow, Clear, Search)
+- Status indicators with pulsing animation for live streams
+- Error highlighting in log entries
+- Unified design across container and agent log viewers
+
+**Files Created:**
+- `frontend/src/components/ui/terminal-log.tsx` - Base terminal component
+
+**Files Modified:**
+- `frontend/src/components/LogViewer.tsx` - Container logs
+- `frontend/src/components/AgentLogViewer.tsx` - Agent logs
+
+**Deployment:**
+- Version: 5abd6e4c-c8fc-4f5a-b484-5a11bca7fb15
+- URL: https://zedops.mail-bcf.workers.dev
+
+---
+
 ## Completion Criteria
 
 M9.8 complete when:
-- [ ] All critical UX issues resolved
-- [ ] Server status accurately reflects reality
-- [ ] No misleading information in UI
-- [ ] Error states properly handled
-- [ ] Production testing validates all features
-- [ ] User approves completion ✓
+- [x] All critical UX issues resolved
+- [x] Server status accurately reflects reality
+- [x] No misleading information in UI
+- [x] Error states properly handled
+- [x] Production testing validates all features
+- [x] User approves completion ✓
 
 ---
 
