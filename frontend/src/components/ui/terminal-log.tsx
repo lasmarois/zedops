@@ -2,11 +2,12 @@
  * Terminal Log Component
  *
  * A sleek, theme-aware terminal-style log viewer that integrates
- * with the midnight blue theme. Replaces hardcoded Dracula colors.
+ * with the midnight blue theme. Professional, dark aesthetic.
  */
 
 import { forwardRef, useRef, useImperativeHandle, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { Info, AlertTriangle, XCircle, Bug, Terminal, AlertOctagon } from 'lucide-react'
 
 // Log entry types
 export interface LogLine {
@@ -30,18 +31,42 @@ export interface TerminalLogRef {
   scrollToBottom: () => void
 }
 
-// Level color classes using theme variables
-const levelColors: Record<string, string> = {
-  INFO: 'text-success',
-  WARN: 'text-warning',
-  ERROR: 'text-error',
-  DEBUG: 'text-info',
+// Level styling - muted, professional colors
+const levelConfig: Record<string, { icon: typeof Info; color: string; bg: string }> = {
+  INFO: {
+    icon: Info,
+    color: 'text-emerald-400/70',
+    bg: 'bg-emerald-500/5',
+  },
+  WARN: {
+    icon: AlertTriangle,
+    color: 'text-amber-400/80',
+    bg: 'bg-amber-500/8',
+  },
+  ERROR: {
+    icon: XCircle,
+    color: 'text-red-400/90',
+    bg: 'bg-red-500/10',
+  },
+  DEBUG: {
+    icon: Bug,
+    color: 'text-slate-400/60',
+    bg: 'bg-slate-500/5',
+  },
 }
 
-// Stream color classes
-const streamColors: Record<string, string> = {
-  stdout: 'text-success',
-  stderr: 'text-error',
+// Stream styling - subtle differentiation
+const streamConfig: Record<string, { icon: typeof Terminal; color: string; bg: string }> = {
+  stdout: {
+    icon: Terminal,
+    color: 'text-emerald-400/60',
+    bg: 'bg-transparent',
+  },
+  stderr: {
+    icon: AlertOctagon,
+    color: 'text-red-400/70',
+    bg: 'bg-red-500/5',
+  },
 }
 
 // Format timestamp to HH:MM:SS.mmm
@@ -72,11 +97,11 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
         ref={containerRef}
         className={cn(
           // Base terminal styling
-          'font-mono text-sm leading-relaxed',
-          // Theme-aware background - slightly darker than card for contrast
-          'bg-[hsl(220_45%_8%)] rounded-lg border border-border/50',
-          // Inner glow effect for depth
-          'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]',
+          'font-mono text-[13px] leading-relaxed',
+          // Very dark background for serious terminal look
+          'bg-[hsl(220_50%_4%)] rounded-lg border border-slate-800/50',
+          // Subtle inner shadow for depth
+          'shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]',
           // Scrolling
           'overflow-auto',
           // Default sizing
@@ -97,54 +122,51 @@ export const TerminalLog = forwardRef<TerminalLogRef, TerminalLogProps>(
               </div>
             </div>
           ) : (
-            logs.map((log, index) => (
-              <div
-                key={`${log.timestamp}-${index}`}
-                className={cn(
-                  'group flex items-start gap-2 py-0.5 -mx-2 px-2 rounded',
-                  'hover:bg-white/[0.02] transition-colors duration-75',
-                  // Highlight errors
-                  log.level === 'ERROR' && 'bg-error/5 hover:bg-error/10',
-                  log.stream === 'stderr' && 'bg-error/5 hover:bg-error/10'
-                )}
-              >
-                {/* Timestamp */}
-                {showTimestamp && (
-                  <span className="flex-shrink-0 text-muted-foreground/50 select-none tabular-nums">
-                    {formatTimestamp(log.timestamp)}
-                  </span>
-                )}
+            logs.map((log, index) => {
+              const level = log.level ? levelConfig[log.level] : null
+              const stream = log.stream ? streamConfig[log.stream] : null
+              const LevelIcon = level?.icon
+              const StreamIcon = stream?.icon
 
-                {/* Level badge */}
-                {showLevel && log.level && (
-                  <span
-                    className={cn(
-                      'flex-shrink-0 font-semibold w-14 select-none',
-                      levelColors[log.level] || 'text-foreground'
-                    )}
-                  >
-                    [{log.level}]
-                  </span>
-                )}
+              return (
+                <div
+                  key={`${log.timestamp}-${index}`}
+                  className={cn(
+                    'group flex items-start gap-2.5 py-1 -mx-2 px-2 rounded',
+                    'hover:bg-white/[0.015] transition-colors duration-75',
+                    // Subtle background for different levels/streams
+                    level?.bg,
+                    stream?.bg
+                  )}
+                >
+                  {/* Timestamp */}
+                  {showTimestamp && (
+                    <span className="flex-shrink-0 text-slate-500/70 select-none tabular-nums text-xs pt-0.5">
+                      {formatTimestamp(log.timestamp)}
+                    </span>
+                  )}
 
-                {/* Stream badge */}
-                {showStream && log.stream && (
-                  <span
-                    className={cn(
-                      'flex-shrink-0 font-semibold w-16 select-none',
-                      streamColors[log.stream] || 'text-foreground'
-                    )}
-                  >
-                    [{log.stream}]
-                  </span>
-                )}
+                  {/* Level icon */}
+                  {showLevel && LevelIcon && (
+                    <span className={cn('flex-shrink-0 pt-0.5', level?.color)}>
+                      <LevelIcon className="h-3.5 w-3.5" strokeWidth={2} />
+                    </span>
+                  )}
 
-                {/* Message */}
-                <span className="flex-1 text-foreground/90 whitespace-pre-wrap break-words">
-                  {log.message}
-                </span>
-              </div>
-            ))
+                  {/* Stream icon */}
+                  {showStream && StreamIcon && (
+                    <span className={cn('flex-shrink-0 pt-0.5', stream?.color)}>
+                      <StreamIcon className="h-3.5 w-3.5" strokeWidth={2} />
+                    </span>
+                  )}
+
+                  {/* Message */}
+                  <span className="flex-1 text-slate-300/90 whitespace-pre-wrap break-words">
+                    {log.message}
+                  </span>
+                </div>
+              )
+            })
           )}
 
           {/* Scroll anchor */}
