@@ -45,6 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface AgentServerListProps {
   agentId: string;
@@ -81,9 +82,10 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     message: string;
     type: 'success' | 'error';
   } | null>(null);
-  const [showDeletedServers, setShowDeletedServers] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ serverId: string; serverName: string } | null>(null);
+  const [confirmRebuild, setConfirmRebuild] = useState<{ serverId: string; serverName: string } | null>(null);
   const [rconServer, setRconServer] = useState<Server | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
@@ -262,6 +264,31 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
+  // Get container status display considering health check status
+  // Returns variant, label, and icon for StatusBadge
+  type StatusIcon = 'dot' | 'pulse' | 'loader' | 'check' | 'alert' | 'cross' | 'info';
+  const getContainerStatusDisplay = (container: Container): { variant: 'success' | 'error' | 'warning' | 'info' | 'muted' | 'starting'; label: string; icon: StatusIcon } => {
+    const state = container.state.toLowerCase();
+
+    // For running containers, check health status
+    if (state === 'running') {
+      switch (container.health) {
+        case 'starting':
+          return { variant: 'starting', label: 'Starting', icon: 'loader' };
+        case 'healthy':
+          return { variant: 'success', label: 'Running', icon: 'pulse' };
+        case 'unhealthy':
+          return { variant: 'error', label: 'Unhealthy', icon: 'alert' };
+        default:
+          // No health check configured - show as running
+          return { variant: 'success', label: 'Running', icon: 'pulse' };
+      }
+    }
+
+    // For non-running states, use existing logic
+    return { variant: getStateVariant(state), label: container.state, icon: 'dot' };
+  };
+
   const handleCreateServer = async (request: CreateServerRequest, serverIdToDelete?: string) => {
     try {
       // If editing (retrying a failed server), delete the old failed entry first
@@ -337,10 +364,15 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   };
 
 
-  const handleDeleteServer = async (serverId: string, serverName: string) => {
-    if (!confirm(`Delete server "${serverName}"? Container will be removed but data will be preserved.`)) {
-      return;
-    }
+  const handleDeleteServer = (serverId: string, serverName: string) => {
+    setConfirmDelete({ serverId, serverName });
+  };
+
+  const confirmDeleteServer = async () => {
+    // Capture values immediately before any state changes
+    const serverToDelete = confirmDelete;
+    if (!serverToDelete) return;
+    const { serverId } = serverToDelete;
 
     try {
       const result = await deleteServerMutation.mutateAsync({
@@ -370,10 +402,15 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  const handleRebuildServer = async (serverId: string, serverName: string) => {
-    if (!confirm(`Rebuild server "${serverName}"? This will pull the latest image and recreate the container. Game data will be preserved.`)) {
-      return;
-    }
+  const handleRebuildServer = (serverId: string, serverName: string) => {
+    setConfirmRebuild({ serverId, serverName });
+  };
+
+  const confirmRebuildServer = async () => {
+    // Capture values immediately before any state changes
+    const serverToRebuild = confirmRebuild;
+    if (!serverToRebuild) return;
+    const { serverId } = serverToRebuild;
 
     try {
       const result = await rebuildServerMutation.mutateAsync({
@@ -430,7 +467,15 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  const handleServerPurge = async (serverId: string, serverName: string, removeData: boolean) => {
+  const handleServerPurge = async (removeData: boolean) => {
+    // Capture values immediately before any state changes
+    const serverToPurge = confirmPurge;
+    if (!serverToPurge) return;
+    const { serverId, serverName } = serverToPurge;
+
+    // Close the dialog immediately
+    setConfirmPurge(null);
+
     try {
       await purgeServerMutation.mutateAsync({ agentId, serverId, removeData });
       setServerMessage({
@@ -440,14 +485,12 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         type: 'success',
       });
       setTimeout(() => setServerMessage(null), 5000);
-      setConfirmPurge(null);
     } catch (error) {
       setServerMessage({
         message: error instanceof Error ? error.message : 'Failed to purge server',
         type: 'error',
       });
       setTimeout(() => setServerMessage(null), 5000);
-      setConfirmPurge(null);
     }
   };
 
@@ -485,36 +528,37 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  const getServerStatusBadge = (server: Server): { variant: 'success' | 'muted' | 'info' | 'warning' | 'error'; text: string } => {
+  const getServerStatusBadge = (server: Server): { variant: 'success' | 'muted' | 'info' | 'warning' | 'error' | 'starting'; text: string; icon: StatusIcon } => {
     // Use shared status display logic that considers agent connectivity
     const displayStatus = getDisplayStatus(server);
 
     // Map our display variant types to StatusBadge variant types
-    const variantMap: Record<string, 'success' | 'muted' | 'info' | 'warning' | 'error'> = {
+    const variantMap: Record<string, 'success' | 'muted' | 'info' | 'warning' | 'error' | 'starting'> = {
       success: 'success',
       muted: 'muted',
       info: 'info',
       warning: 'warning',
       error: 'error',
+      starting: 'starting',
     };
 
-    // Add icons based on status
-    const iconMap: Record<string, string> = {
-      running: '✓ ',
-      stopped: '⏸ ',
-      creating: '⏳ ',
-      deleting: '⏳ ',
-      failed: '❌ ',
-      deleted: '🗑️ ',
-      agent_offline: '⚠️ ',
-      missing: '⚠️ ',
+    // Map status to StatusBadge icons
+    const iconMap: Record<string, StatusIcon> = {
+      running: 'pulse',
+      starting: 'loader',
+      stopped: 'dot',
+      creating: 'loader',
+      deleting: 'loader',
+      failed: 'cross',
+      deleted: 'cross',
+      agent_offline: 'alert',
+      missing: 'alert',
     };
-
-    const icon = iconMap[displayStatus.status] || '';
 
     return {
       variant: variantMap[displayStatus.variant] || 'muted',
-      text: `${icon}${displayStatus.label}`,
+      text: displayStatus.label,
+      icon: iconMap[displayStatus.status] || 'dot',
     };
   };
 
@@ -580,7 +624,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
       }
 
       // Separate missing and deleted into issues
-      if (server.status === 'missing' || (server.status === 'deleted' && showDeletedServers)) {
+      if (server.status === 'missing' || server.status === 'deleted') {
         issues.push({
           id: server.id,
           type: 'managed',
@@ -589,7 +633,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
           server,
           isIssue: true,
         });
-      } else if (server.status !== 'deleted') {
+      } else {
         // Normal managed server without container (creating, failed, etc.)
         unified.push({
           id: server.id,
@@ -749,6 +793,10 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                   // Get border color
                   const getBorderColor = () => {
                     if (container) {
+                      // Check health for running containers
+                      if (container.state.toLowerCase() === 'running' && container.health === 'starting') {
+                        return '#a78bbd'; // purple-500
+                      }
                       switch (container.state.toLowerCase()) {
                         case 'running': return '#22c55e';
                         case 'exited': return '#ef4444';
@@ -764,6 +812,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                         case 'error': return '#ef4444';
                         case 'warning': return '#f59e0b';
                         case 'info': return '#3b82f6';
+                        case 'starting': return '#a78bbd'; // purple-500
                         default: return '#6b7280';
                       }
                     }
@@ -773,11 +822,12 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                   // Get status badge
                   const getStatusBadge = () => {
                     if (container) {
-                      return <StatusBadge variant={getStateVariant(container.state)} iconOnly>{container.state}</StatusBadge>;
+                      const display = getContainerStatusDisplay(container);
+                      return <StatusBadge variant={display.variant} icon={display.icon} iconOnly>{display.label}</StatusBadge>;
                     }
                     if (server) {
                       const badge = getServerStatusBadge(server);
-                      return <StatusBadge variant={badge.variant} iconOnly>{badge.text}</StatusBadge>;
+                      return <StatusBadge variant={badge.variant} icon={badge.icon} iconOnly>{badge.text}</StatusBadge>;
                     }
                     return null;
                   };
@@ -900,7 +950,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                               <DropdownMenuContent align="end">
                                 {/* View Logs - always available if container exists */}
                                 {container && (
-                                  <DropdownMenuItem onClick={() => onViewLogs(container.id, item.name)}>
+                                  <DropdownMenuItem onSelect={() => onViewLogs(container.id, item.name)}>
                                     <Terminal className="h-4 w-4 mr-2" />
                                     View Logs
                                   </DropdownMenuItem>
@@ -910,14 +960,14 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                 {isManaged && server && (
                                   <>
                                     {isRunning && container && (
-                                      <DropdownMenuItem onClick={() => setRconServer(server)}>
+                                      <DropdownMenuItem onSelect={() => setRconServer(server)}>
                                         <Gamepad2 className="h-4 w-4 mr-2" />
                                         RCON
                                       </DropdownMenuItem>
                                     )}
                                     {server.status === 'running' && (
                                       <DropdownMenuItem
-                                        onClick={() => handleRebuildServer(server.id, server.name)}
+                                        onSelect={() => handleRebuildServer(server.id, server.name)}
                                         disabled={rebuildServerMutation.isPending && rebuildServerMutation.variables?.serverId === server.id}
                                       >
                                         <Wrench className="h-4 w-4 mr-2" />
@@ -925,7 +975,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       </DropdownMenuItem>
                                     )}
                                     {server.status === 'failed' && !container && (
-                                      <DropdownMenuItem onClick={() => handleEditServer(server)}>
+                                      <DropdownMenuItem onSelect={() => handleEditServer(server)}>
                                         <Wrench className="h-4 w-4 mr-2" />
                                         Edit & Retry
                                       </DropdownMenuItem>
@@ -935,7 +985,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
-                                      onClick={() => handleDeleteServer(server.id, server.name)}
+                                      onSelect={() => handleDeleteServer(server.id, server.name)}
                                       disabled={deleteServerMutation.isPending && deleteServerMutation.variables?.serverId === server.id}
                                     >
                                       <Trash2 className="h-4 w-4 mr-2" />
@@ -981,17 +1031,6 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
                 {showIssues && (
                   <>
-                    <div className="mb-4 flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showDeletedServers}
-                          onChange={(e) => setShowDeletedServers(e.target.checked)}
-                        />
-                        <span className="text-sm">Show Deleted Servers</span>
-                      </label>
-                    </div>
-
                     <div className="space-y-3">
                       {issues.map((item) => {
                         const server = item.server!;
@@ -1004,6 +1043,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                             case 'error': return '#ef4444';
                             case 'warning': return '#f59e0b';
                             case 'info': return '#3b82f6';
+                            case 'starting': return '#a78bbd'; // purple-500
                             default: return '#6b7280';
                           }
                         };
@@ -1055,27 +1095,20 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       onClick={() => handleServerRestore(server.id, server.name)}
                                       disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
                                     >
+                                      <RotateCw className="h-4 w-4 mr-1" />
                                       Restore
                                     </Button>
                                   )}
 
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button size="sm" variant="ghost">
-                                        <MoreVertical className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                        disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
-                                      >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Purge Server
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                    disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    Purge
+                                  </Button>
                                 </div>
                               </div>
                             </CardContent>
@@ -1092,37 +1125,69 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
       })()}
 
       {/* Purge Confirmation Dialog */}
-      <Dialog open={!!confirmPurge} onOpenChange={() => setConfirmPurge(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-destructive">⚠️ Permanent Deletion</DialogTitle>
-            <DialogDescription>
-              You are about to permanently delete server <strong>"{confirmPurge?.serverName}"</strong>.
-              <br /><br />
-              This action cannot be undone. The server record will be removed from the database.
+      <Dialog open={!!confirmPurge} onOpenChange={(open) => !open && setConfirmPurge(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+              <Trash2 className="h-6 w-6 text-destructive" />
+            </div>
+            <DialogTitle className="text-xl">Permanently Delete Server?</DialogTitle>
+            <DialogDescription className="pt-2">
+              <span className="font-semibold text-foreground">{confirmPurge?.serverName}</span> will be permanently removed from the database.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="secondary" onClick={() => setConfirmPurge(null)}>
-              Cancel
-            </Button>
+          <div className="mt-4 space-y-3">
             <Button
-              variant="warning"
-              onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, false)}
-              disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId}
+              variant="outline"
+              className="w-full justify-start h-auto py-3 px-4"
+              onClick={() => handleServerPurge(false)}
+              disabled={purgeServerMutation.isPending}
             >
-              Keep Data & Purge
+              <div className="flex flex-col items-start">
+                <span className="font-medium">Keep server data on disk</span>
+                <span className="text-xs text-muted-foreground">Remove record only, preserve saves & configs</span>
+              </div>
             </Button>
             <Button
               variant="destructive"
-              onClick={() => confirmPurge && handleServerPurge(confirmPurge.serverId, confirmPurge.serverName, true)}
-              disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId}
+              className="w-full justify-start h-auto py-3 px-4"
+              onClick={() => handleServerPurge(true)}
+              disabled={purgeServerMutation.isPending}
             >
-              {purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === confirmPurge?.serverId ? 'Purging...' : 'Remove Data & Purge'}
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{purgeServerMutation.isPending ? 'Purging...' : 'Delete everything'}</span>
+                <span className="text-xs text-destructive-foreground/70">Remove record AND all server data</span>
+              </div>
+            </Button>
+          </div>
+          <DialogFooter className="mt-4 sm:justify-center">
+            <Button variant="ghost" onClick={() => setConfirmPurge(null)} className="w-full sm:w-auto">
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Server Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        title="Delete Server"
+        description={`Delete server "${confirmDelete?.serverName}"? Container will be removed but data will be preserved.`}
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteServer}
+      />
+
+      {/* Rebuild Server Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmRebuild}
+        onOpenChange={(open) => !open && setConfirmRebuild(null)}
+        title="Rebuild Server"
+        description={`Rebuild server "${confirmRebuild?.serverName}"? This will pull the latest image and recreate the container. Game data will be preserved.`}
+        confirmText="Rebuild"
+        onConfirm={confirmRebuildServer}
+      />
 
       {showServerForm && (
         <ServerForm

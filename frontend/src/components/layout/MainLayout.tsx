@@ -43,7 +43,7 @@ export function MainLayout() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto pt-16 md:pt-0">
+      <main id="main-content" className="flex-1 overflow-auto pt-16 md:pt-0">
         <Outlet />
       </main>
     </div>

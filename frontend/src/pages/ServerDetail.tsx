@@ -18,6 +18,7 @@ import { useMoveProgress } from "@/hooks/useMoveProgress"
 import { RconHistoryProvider, useRconHistory } from "@/contexts/RconHistoryContext"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -70,6 +71,10 @@ function ServerDetailContent() {
   const [logsPaused, setLogsPaused] = useState(false)
   const [logsAutoScroll, setLogsAutoScroll] = useState(true)
 
+  // Confirmation dialogs state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showRebuildConfirm, setShowRebuildConfirm] = useState(false)
+
   // RCON history from context
   const { history: rconHistory } = useRconHistory()
 
@@ -97,19 +102,24 @@ function ServerDetailContent() {
   }
 
   const handleRebuild = () => {
+    setShowRebuildConfirm(true)
+  }
+
+  const confirmRebuild = () => {
     if (!id) return
     const agentId = serverData?.server?.agent_id
     if (!agentId) return
-    if (!confirm('Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable.')) return
     rebuildServerMutation.mutate({ agentId, serverId: id })
   }
 
   const handleDelete = () => {
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = () => {
     if (!id) return
     const agentId = serverData?.server?.agent_id
-    const serverName = serverData?.server?.name
     if (!agentId) return
-    if (!confirm(`Delete server "${serverName}"? This will stop and remove the container. Server data will be preserved for 24 hours.`)) return
     deleteServerMutation.mutate(
       { agentId, serverId: id, removeVolumes: false },
       {
@@ -259,6 +269,7 @@ function ServerDetailContent() {
             variant={displayStatus.variant}
             icon={
               displayStatus.status === 'running' ? 'pulse' :
+              displayStatus.status === 'starting' ? 'loader' :
               displayStatus.status === 'agent_offline' ? 'cross' :
               displayStatus.status === 'stopped' ? 'dot' : 'cross'
             }
@@ -730,6 +741,27 @@ function ServerDetailContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Server Confirmation Dialog */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Server"
+        description={`Delete server "${serverName}"? This will stop and remove the container. Server data will be preserved for 24 hours.`}
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
+
+      {/* Rebuild Server Confirmation Dialog */}
+      <ConfirmDialog
+        open={showRebuildConfirm}
+        onOpenChange={setShowRebuildConfirm}
+        title="Rebuild Server"
+        description="Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable."
+        confirmText="Rebuild"
+        onConfirm={confirmRebuild}
+      />
     </div>
   )
 }

@@ -7,56 +7,66 @@ import type { Agent } from '../lib/api';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Plus, Laptop, AlertCircle } from 'lucide-react';
+import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AgentListProps {
   onSelectAgent: (agent: Agent) => void;
 }
 
-function getMetricVariant(value: number, thresholds: [number, number]): 'success' | 'warning' | 'destructive' {
-  if (value < thresholds[0]) return 'success';
-  if (value < thresholds[1]) return 'warning';
-  return 'destructive';
+function getMetricColor(value: number, thresholds: [number, number] = [70, 85]): string {
+  if (value < thresholds[0]) return '#3DDC97'; // success green
+  if (value < thresholds[1]) return '#FFC952'; // warning yellow
+  return '#F75555'; // danger red
 }
 
-// Custom badge styling with better contrast (Option 1: Darker backgrounds)
-function getBadgeStyle(variant: 'success' | 'warning' | 'destructive'): string {
-  switch (variant) {
-    case 'success':
-      return 'bg-green-600 text-white border-green-700';
-    case 'warning':
-      return 'bg-orange-600 text-white border-orange-700';
-    case 'destructive':
-      return 'bg-red-700 text-white border-red-800';
-    default:
-      return 'bg-gray-600 text-white border-gray-700';
-  }
-}
-
-function MetricBadge({ label, value, unit = '%', thresholds = [70, 85] }: {
+function ResourceMeter({
+  icon: Icon,
+  label,
+  value,
+  thresholds = [70, 85]
+}: {
+  icon: React.ElementType;
   label: string;
   value: number | null | undefined;
-  unit?: string;
   thresholds?: [number, number];
 }) {
   if (value === null || value === undefined) {
     return (
-      <Badge variant="secondary" className="text-xs">
-        {label}: N/A
-      </Badge>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium w-8">{label}</span>
+        <div className="flex-1 h-1.5 bg-muted rounded-full" />
+        <span className="text-xs tabular-nums w-10 text-right">N/A</span>
+      </div>
     );
   }
 
-  const variant = getMetricVariant(value, thresholds);
-  const customStyle = getBadgeStyle(variant);
+  const color = getMetricColor(value, thresholds);
+  const clampedValue = Math.min(value, 100);
+
   return (
-    <Badge className={`text-xs ${customStyle}`}>
-      {label}: {value.toFixed(1)}{unit}
-    </Badge>
+    <div className="flex items-center gap-2">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="text-xs font-medium w-8 text-muted-foreground">{label}</span>
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${clampedValue}%`,
+            backgroundColor: color,
+          }}
+        />
+      </div>
+      <span
+        className="text-xs font-semibold tabular-nums w-10 text-right"
+        style={{ color }}
+      >
+        {value.toFixed(0)}%
+      </span>
+    </div>
   );
 }
 
@@ -200,24 +210,22 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                 <CardContent className="space-y-4">
                   {/* Metrics for online agents */}
                   {isOnline && metrics ? (
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-xs text-muted-foreground mb-2">Resources</div>
-                        <div className="flex flex-wrap gap-2">
-                          <MetricBadge
-                            label="CPU"
-                            value={metrics.cpuPercent}
-                          />
-                          <MetricBadge
-                            label="MEM"
-                            value={(metrics.memoryUsedMB / metrics.memoryTotalMB) * 100}
-                          />
-                          <MetricBadge
-                            label="DSK"
-                            value={metrics.diskPercent}
-                          />
-                        </div>
-                      </div>
+                    <div className="space-y-2">
+                      <ResourceMeter
+                        icon={Cpu}
+                        label="CPU"
+                        value={metrics.cpuPercent}
+                      />
+                      <ResourceMeter
+                        icon={MemoryStick}
+                        label="MEM"
+                        value={(metrics.memoryUsedMB / metrics.memoryTotalMB) * 100}
+                      />
+                      <ResourceMeter
+                        icon={HardDrive}
+                        label="DISK"
+                        value={metrics.diskPercent}
+                      />
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground py-4">

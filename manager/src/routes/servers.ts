@@ -57,6 +57,42 @@ servers.get('/', async (c) => {
       serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
     }
 
+    // Fetch container health from each unique online agent
+    const containerHealthMap: Record<string, string> = {};
+    const onlineAgents = new Map<string, string>(); // agentName -> agentId
+
+    // Collect unique online agents
+    for (const row of serverRows) {
+      if (row.agent_status === 'online' && row.agent_name && row.container_id) {
+        onlineAgents.set(row.agent_name, row.agent_id);
+      }
+    }
+
+    // Fetch containers from each online agent in parallel
+    const fetchPromises = Array.from(onlineAgents.entries()).map(async ([agentName]) => {
+      try {
+        const id = c.env.AGENT_CONNECTION.idFromName(agentName);
+        const stub = c.env.AGENT_CONNECTION.get(id);
+        const containerResponse = await stub.fetch(`http://do/containers`, { method: 'GET' });
+
+        if (containerResponse.ok) {
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          if (containerData.containers) {
+            for (const container of containerData.containers) {
+              if (container.health) {
+                containerHealthMap[container.id] = container.health;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // If container fetch fails for this agent, continue without health data
+        console.log(`[Servers API] Could not fetch container health from ${agentName}:`, err);
+      }
+    });
+
+    await Promise.all(fetchPromises);
+
     const servers = serverRows.map((row: any) => ({
       id: row.id,
       agent_id: row.agent_id,
@@ -74,6 +110,7 @@ servers.get('/', async (c) => {
       rcon_port: row.rcon_port,
       server_data_path: row.server_data_path, // Per-server override (NULL = use agent default)
       status: row.status,
+      health: row.container_id ? containerHealthMap[row.container_id] : undefined, // Container health status
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
       created_at: row.created_at,
@@ -95,7 +132,7 @@ servers.get('/', async (c) => {
  * GET /api/servers/:id
  * Get single server details by ID (with permission check)
  *
- * Returns: Server details with agent information
+ * Returns: Server details with agent information and container health
  * Permission:
  *   - Admin: Any server
  *   - Non-admin: Only servers user has permission to view
@@ -133,6 +170,29 @@ servers.get('/:id', async (c) => {
       }
     }
 
+    // Fetch container health if agent is online and server has a container
+    let health: string | undefined;
+    if (server.agent_status === 'online' && server.container_id && server.agent_name) {
+      try {
+        const id = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
+        const stub = c.env.AGENT_CONNECTION.get(id);
+        const containerResponse = await stub.fetch(`http://do/containers`, { method: 'GET' });
+
+        if (containerResponse.ok) {
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          if (containerData.containers) {
+            const container = containerData.containers.find(c => c.id === server.container_id);
+            if (container?.health) {
+              health = container.health;
+            }
+          }
+        }
+      } catch (err) {
+        // If container fetch fails, continue without health data
+        console.log('[Servers API] Could not fetch container health:', err);
+      }
+    }
+
     const serverData = {
       id: server.id,
       agent_id: server.agent_id,
@@ -150,6 +210,7 @@ servers.get('/:id', async (c) => {
       rcon_port: server.rcon_port,
       server_data_path: server.server_data_path, // Per-server override (NULL = use agent default)
       status: server.status,
+      health, // Container health status
       data_exists: server.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: server.deleted_at,
       created_at: server.created_at,

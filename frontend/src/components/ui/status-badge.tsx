@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils"
 
 interface StatusBadgeProps {
-  variant: "success" | "warning" | "error" | "info" | "muted"
+  variant: "success" | "warning" | "error" | "info" | "muted" | "starting"
   children?: React.ReactNode
   className?: string
   size?: "sm" | "md" | "lg"
-  icon?: "dot" | "pulse" | "check" | "alert" | "cross" | "info"
+  icon?: "dot" | "pulse" | "loader" | "check" | "alert" | "cross" | "info"
   iconOnly?: boolean
 }
 
@@ -21,6 +21,12 @@ const StatusIcons = {
       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
       <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
     </span>
+  ),
+  loader: ({ className }: { className?: string }) => (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className={cn("animate-spin", className)}>
+      <path d="M6 1V3M6 9V11M1 6H3M9 6H11M2.5 2.5L3.9 3.9M8.1 8.1L9.5 9.5M2.5 9.5L3.9 8.1M8.1 3.9L9.5 2.5" strokeLinecap="round" opacity="0.3" />
+      <path d="M6 1V3" strokeLinecap="round" />
+    </svg>
   ),
   check: ({ className }: { className?: string }) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
@@ -67,6 +73,7 @@ export function StatusBadge({
             "text-error": variant === "error",
             "text-info": variant === "info",
             "text-muted-foreground": variant === "muted",
+            "text-purple-400/70": variant === "starting",
           })}
         />
       </span>
@@ -94,6 +101,7 @@ export function StatusBadge({
           "bg-error/10 text-error ring-error/20": variant === "error",
           "bg-info/10 text-info ring-info/20": variant === "info",
           "bg-muted/10 text-muted-foreground ring-muted/20": variant === "muted",
+          "bg-purple-400/5 text-purple-400/70 ring-purple-400/10": variant === "starting",
         },
         className
       )}

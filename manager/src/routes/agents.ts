@@ -1135,16 +1135,16 @@ agents.post('/:id/servers', async (c) => {
  * GET /api/agents/:id/servers
  * List all servers for a specific agent
  *
- * Returns: Array of servers
+ * Returns: Array of servers with health status from containers
  */
 agents.get('/:id/servers', async (c) => {
   const user = c.get('user');
   const agentId = c.req.param('id');
 
   try {
-    // Verify agent exists
+    // Verify agent exists and get name for DO lookup
     const agent = await c.env.DB.prepare(
-      `SELECT id FROM agents WHERE id = ?`
+      `SELECT id, name, status FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -1175,6 +1175,30 @@ agents.get('/:id/servers', async (c) => {
       serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
     }
 
+    // Fetch container health from agent (if online)
+    let containerHealthMap: Record<string, string> = {};
+    if (agent.status === 'online') {
+      try {
+        const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+        const stub = c.env.AGENT_CONNECTION.get(id);
+        const containerResponse = await stub.fetch(`http://do/containers`, { method: 'GET' });
+
+        if (containerResponse.ok) {
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          if (containerData.containers) {
+            for (const container of containerData.containers) {
+              if (container.health) {
+                containerHealthMap[container.id] = container.health;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // If container fetch fails, continue without health data
+        console.log('[Agents API] Could not fetch container health:', err);
+      }
+    }
+
     const servers = serverRows.map((row: any) => ({
       id: row.id,
       agent_id: row.agent_id,
@@ -1187,6 +1211,7 @@ agents.get('/:id/servers', async (c) => {
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,
       status: row.status,
+      health: row.container_id ? containerHealthMap[row.container_id] : undefined, // Container health status
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
       created_at: row.created_at,

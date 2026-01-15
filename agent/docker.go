@@ -57,7 +57,7 @@ func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, er
 
 	result := make([]ContainerInfo, len(containers))
 	for i, c := range containers {
-		result[i] = ContainerInfo{
+		info := ContainerInfo{
 			ID:      c.ID,
 			Names:   c.Names,
 			Image:   c.Image,
@@ -67,6 +67,19 @@ func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, er
 			Ports:   convertPorts(c.Ports),
 			Labels:  c.Labels, // Include container labels for sync matching
 		}
+
+		// For running containers, get health status via ContainerInspect
+		// The ContainerList API doesn't include health info directly
+		if c.State == "running" {
+			inspect, err := dc.cli.ContainerInspect(ctx, c.ID)
+			if err == nil && inspect.State != nil && inspect.State.Health != nil {
+				// Health check configured - get status: "starting", "healthy", "unhealthy"
+				info.Health = inspect.State.Health.Status
+			}
+			// If no health check configured, info.Health remains "" (empty)
+		}
+
+		result[i] = info
 	}
 
 	return result, nil
@@ -120,7 +133,7 @@ func (dc *DockerClient) GetContainerStatus(ctx context.Context, containerID stri
 		return nil, fmt.Errorf("failed to inspect container %s: %w", containerID, err)
 	}
 
-	return &ContainerInfo{
+	info := &ContainerInfo{
 		ID:      inspect.ID,
 		Names:   []string{inspect.Name},
 		Image:   inspect.Config.Image,
@@ -128,7 +141,14 @@ func (dc *DockerClient) GetContainerStatus(ctx context.Context, containerID stri
 		Status:  fmt.Sprintf("%s (%s)", inspect.State.Status, inspect.State.StartedAt),
 		Created: 0, // inspect.Created is a string in newer Docker API
 		Ports:   []PortMapping{}, // Would need to parse from inspect
-	}, nil
+	}
+
+	// Include health status if available
+	if inspect.State != nil && inspect.State.Health != nil {
+		info.Health = inspect.State.Health.Status
+	}
+
+	return info, nil
 }
 
 // Ping tests the connection to Docker daemon
@@ -160,6 +180,7 @@ type ContainerInfo struct {
 	Image   string            `json:"image"`
 	State   string            `json:"state"`
 	Status  string            `json:"status"`
+	Health  string            `json:"health,omitempty"` // Health check status: "starting", "healthy", "unhealthy", or "" (no healthcheck)
 	Created int64             `json:"created"`
 	Ports   []PortMapping     `json:"ports"`
 	Labels  map[string]string `json:"labels"` // Container labels (for sync matching)

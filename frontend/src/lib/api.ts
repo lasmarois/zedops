@@ -196,6 +196,7 @@ export interface Container {
   image: string;
   state: string; // running, exited, created, paused, etc.
   status: string; // human-readable status
+  health?: string; // health check status: "starting", "healthy", "unhealthy", or undefined (no healthcheck)
   created: number; // unix timestamp
   ports: PortMapping[];
 }
@@ -360,6 +361,7 @@ export interface Server {
   rcon_port: number;
   server_data_path: string | null; // M9.8.23: Per-server data path override (NULL = use agent default)
   status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting' | 'missing' | 'deleted';
+  health?: string; // Container health check status: "starting", "healthy", "unhealthy", or undefined
   data_exists: boolean;
   deleted_at: number | null;
   created_at: number;

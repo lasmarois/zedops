@@ -24,7 +24,7 @@ import {
   type LogLine,
   type TerminalLogRef,
 } from '@/components/ui/terminal-log'
-import { ArrowLeft, Pause, Play, ArrowDownToLine, Trash2, Search } from 'lucide-react'
+import { ArrowLeft, Pause, Play, ArrowDownToLine, Trash2, Search, ChevronUp } from 'lucide-react'
 
 interface LogViewerProps {
   agentId: string
@@ -48,6 +48,7 @@ export function LogViewer({
   const [streamFilter, setStreamFilter] = useState<'all' | 'stdout' | 'stderr'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [isPaused, setIsPaused] = useState(false)
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   const terminalRef = useRef<TerminalLogRef>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -58,6 +59,28 @@ export function LogViewer({
       terminalRef.current?.scrollToBottom()
     }
   }, [logs, autoScroll, isPaused])
+
+  // Track scroll position to show/hide floating button
+  useEffect(() => {
+    const mainContent = document.getElementById('main-content')
+    if (!mainContent) return
+
+    const handleMainScroll = () => {
+      setShowScrollTop(mainContent.scrollTop > 300)
+    }
+
+    mainContent.addEventListener('scroll', handleMainScroll, { passive: true })
+    return () => mainContent.removeEventListener('scroll', handleMainScroll)
+  }, [])
+
+  // Handle scroll to top - also disables auto-scroll
+  const handleScrollToTop = () => {
+    const mainContent = document.getElementById('main-content')
+    if (mainContent) {
+      mainContent.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    setAutoScroll(false)
+  }
 
   // Convert to LogLine format and filter
   const filteredLogs: LogLine[] = logs
@@ -194,6 +217,17 @@ export function LogViewer({
           className="h-full"
         />
       </div>
+
+      {/* Floating scroll-to-top button - shows when scrolled down */}
+      {showScrollTop && (
+        <button
+          onClick={handleScrollToTop}
+          className="fixed bottom-6 right-6 z-[99999] w-12 h-12 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 hover:-translate-y-1 active:scale-95 bg-gradient-to-br from-slate-700 to-slate-900 border border-slate-500/50 shadow-[0_0_20px_rgba(59,130,246,0.3),0_4px_12px_rgba(0,0,0,0.4)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5),0_6px_20px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+          aria-label="Scroll to top and disable auto-scroll"
+        >
+          <ChevronUp className="w-6 h-6 text-blue-400" />
+        </button>
+      )}
     </div>
   )
 }

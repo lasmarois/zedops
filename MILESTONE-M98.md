@@ -530,9 +530,16 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 **Files Modified:**
 - `frontend/src/components/LogViewer.tsx` - Container logs
 - `frontend/src/components/AgentLogViewer.tsx` - Agent logs
+- `frontend/src/components/layout/MainLayout.tsx` - Added id for scroll tracking
+
+**Additional Feature - Floating Scroll-to-Top Button:**
+- Appears when scrolled down 300px+
+- Scrolls to top AND disables auto-scroll
+- Slick design: dark gradient, blue glow, hover/press animations
+- Works on both Agent Logs and Server Logs
 
 **Deployment:**
-- Version: 5abd6e4c-c8fc-4f5a-b484-5a11bca7fb15
+- Version: 4e9e97d4-99e9-46d7-ad8d-1873ef94d156
 - URL: https://zedops.mail-bcf.workers.dev
 
 ---
@@ -579,3 +586,26 @@ M9.8 complete when:
 - Consider: Should disconnect persist or auto-reconnect on agent side?
 
 **UI Location:** AgentDetail page header (currently has red "Disconnect" button)
+
+---
+
+### Container Health Visual Feedback
+**Status:** 📋 Planned (Not Implemented)
+**Priority:** MEDIUM (UX Enhancement)
+
+**Issue:** When a container is starting but not yet healthy, the UI shows "running" without indicating the health check status.
+
+**Proposed Enhancement:**
+- Show "Starting" status with different color shade when container is running but not healthy
+- Add visual distinction between:
+  - "Starting" (container running, health check pending) → Yellow/Amber
+  - "Running" (container running, health check passed) → Green
+  - "Unhealthy" (container running, health check failed) → Red/Orange
+- Possibly add health check progress indicator or spinner
+- Update status badge component to support health states
+
+**UI Locations:**
+- AgentServerList container rows
+- ServerDetail overview tab
+- ServerList page
+- Dashboard stats (optional)

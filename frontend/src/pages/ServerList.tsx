@@ -22,13 +22,19 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog"
 import { ServerForm } from "@/components/ServerForm"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface ServerWithAgent {
   id: string
   name: string
   status: string
+  health?: string
   agentId: string
   agentName: string
   agentStatus: 'online' | 'offline'
@@ -61,11 +67,16 @@ export function ServerList() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
 
+  // Confirmation dialog state
+  const [confirmPurge, setConfirmPurge] = useState<ServerWithAgent | null>(null)
+  const [confirmRestore, setConfirmRestore] = useState<ServerWithAgent | null>(null)
+
   // Map API data to component format
   const allServers: ServerWithAgent[] = serversData?.servers?.map((server: Server) => ({
     id: server.id,
     name: server.name,
     status: server.status,
+    health: server.health,
     agentId: server.agent_id,
     agentName: server.agent_name,
     agentStatus: server.agent_status,
@@ -95,46 +106,43 @@ export function ServerList() {
     return matchesSearch && matchesStatus
   })
 
-  // Handler for purging deleted servers
+  // Handler for purging deleted servers - opens dialog
   const handlePurge = (server: ServerWithAgent) => {
-    const removeData = confirm(
-      `Permanently purge server "${server.name}"?\n\n` +
-      `This will remove the server record and container.\n\n` +
-      `⚠️ Click OK to also DELETE SERVER DATA (saves, mods, configs)\n` +
-      `Click Cancel to keep the data on disk`
-    )
-
-    if (removeData !== null) { // User didn't cancel first prompt
-      const finalConfirm = confirm(
-        removeData
-          ? `⚠️ FINAL WARNING: Delete "${server.name}" AND all its data? This cannot be undone!`
-          : `Purge "${server.name}" record but keep data on disk?`
-      )
-
-      if (finalConfirm) {
-        purgeServerMutation.mutate({
-          agentId: server.agentId,
-          serverId: server.id,
-          removeData: removeData,
-        })
-      }
-    }
+    setConfirmPurge(server)
   }
 
-  // Handler for restoring deleted servers (M9.8.24)
-  const handleRestore = (server: ServerWithAgent) => {
-    const confirmed = confirm(
-      `Restore server "${server.name}"?\n\n` +
-      `This will restore the server from deleted status.\n` +
-      `The container will need to be started manually after restore.`
-    )
+  // Confirm purge action
+  const confirmPurgeServer = (removeData: boolean) => {
+    const server = confirmPurge
+    if (!server) return
 
-    if (confirmed) {
-      restoreServerMutation.mutate({
-        agentId: server.agentId,
-        serverId: server.id,
-      })
-    }
+    // Close dialog immediately
+    setConfirmPurge(null)
+
+    purgeServerMutation.mutate({
+      agentId: server.agentId,
+      serverId: server.id,
+      removeData: removeData,
+    })
+  }
+
+  // Handler for restoring deleted servers - opens dialog
+  const handleRestore = (server: ServerWithAgent) => {
+    setConfirmRestore(server)
+  }
+
+  // Confirm restore action
+  const confirmRestoreServer = () => {
+    const server = confirmRestore
+    if (!server) return
+
+    // Close dialog immediately
+    setConfirmRestore(null)
+
+    restoreServerMutation.mutate({
+      agentId: server.agentId,
+      serverId: server.id,
+    })
   }
 
   // Handler for agent selection from dropdown
@@ -318,6 +326,7 @@ export function ServerList() {
               id: server.id,
               name: server.name,
               status: server.status as any,
+              health: server.health,
               agent_id: server.agentId,
               agent_name: server.agentName,
               agent_status: server.agentStatus,
@@ -340,12 +349,14 @@ export function ServerList() {
             // Border color based on display status
             const borderColor =
               displayStatus.variant === 'success' ? '#3DDC97' :
+              displayStatus.variant === 'starting' ? '#a78bbd' :
               displayStatus.variant === 'warning' ? '#FFA500' :
               displayStatus.variant === 'error' ? '#F75555' : '#6c757d';
 
             // Icon based on display status
-            const icon =
+            const icon: "dot" | "pulse" | "loader" | "check" | "alert" | "cross" | "info" =
               displayStatus.status === 'running' ? 'pulse' :
+              displayStatus.status === 'starting' ? 'loader' :
               displayStatus.status === 'agent_offline' ? 'cross' :
               displayStatus.status === 'stopped' ? 'dot' : 'cross';
 
@@ -360,7 +371,7 @@ export function ServerList() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <StatusBadge
-                      variant={displayStatus.variant}
+                      variant={displayStatus.variant as "success" | "warning" | "error" | "info" | "muted" | "starting"}
                       icon={icon}
                       iconOnly
                     />
@@ -496,6 +507,60 @@ export function ServerList() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Purge Confirmation Dialog */}
+      <Dialog open={!!confirmPurge} onOpenChange={(open) => !open && setConfirmPurge(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+              <Trash2 className="h-6 w-6 text-destructive" />
+            </div>
+            <DialogTitle className="text-xl">Permanently Delete Server?</DialogTitle>
+            <DialogDescription className="pt-2">
+              <span className="font-semibold text-foreground">{confirmPurge?.name}</span> will be permanently removed from the database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start h-auto py-3 px-4"
+              onClick={() => confirmPurgeServer(false)}
+              disabled={purgeServerMutation.isPending}
+            >
+              <div className="flex flex-col items-start">
+                <span className="font-medium">Keep server data on disk</span>
+                <span className="text-xs text-muted-foreground">Remove record only, preserve saves & configs</span>
+              </div>
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full justify-start h-auto py-3 px-4"
+              onClick={() => confirmPurgeServer(true)}
+              disabled={purgeServerMutation.isPending}
+            >
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{purgeServerMutation.isPending ? 'Purging...' : 'Delete everything'}</span>
+                <span className="text-xs text-destructive-foreground/70">Remove record AND all server data</span>
+              </div>
+            </Button>
+          </div>
+          <DialogFooter className="mt-4 sm:justify-center">
+            <Button variant="ghost" onClick={() => setConfirmPurge(null)} className="w-full sm:w-auto">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restore Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmRestore}
+        onOpenChange={(open) => !open && setConfirmRestore(null)}
+        title="Restore Server"
+        description={`Restore server "${confirmRestore?.name}"? This will restore the server from deleted status. The container will need to be started manually after restore.`}
+        confirmText="Restore"
+        onConfirm={confirmRestoreServer}
+      />
     </div>
   )
 }
