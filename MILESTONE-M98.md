@@ -457,6 +457,28 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
+### M9.8.34 - PUID Display Bug Fix
+**Status:** COMPLETE
+**Priority:** LOW (Bug Fix)
+**Duration:** ~15 minutes
+**Completed:** 2026-01-15
+
+**Bug Fixed:** Configuration tab showed incorrect PUID value when setting was never set by user.
+
+**Root Causes:**
+1. Display fallback was '1000' but actual image default is '1430'
+2. Edit form defaulted to '1430' and saved it even without user changes (polluting config)
+
+**Solution:**
+- `ConfigurationDisplay.tsx`: Changed fallback from '1000' to '1430'
+- `ConfigurationEdit.tsx`: Changed default from '1430' to '' (empty string)
+- Now: Unset PUID shows "1430 (image default)", edit form uses placeholder not value
+
+**Files:**
+- `planning-history/m9.8.34-puid-display-bug/M9834-COMPLETE.md` - Completion summary
+
+---
+
 ## Completion Criteria
 
 M9.8 complete when:

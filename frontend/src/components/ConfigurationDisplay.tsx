@@ -164,7 +164,7 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
           {renderField('Beta Branch', config.BETA_BRANCH || 'none (stable)')}
           {renderField('Data Path', dataPathDisplay)}
           {renderField('Timezone', config.TZ || `${getDefault('TZ', 'UTC')} (image default)`)}
-          {renderField('User ID (PUID)', config.PUID || `${getDefault('PUID', '1000')} (image default)`)}
+          {renderField('User ID (PUID)', config.PUID || `${getDefault('PUID', '1430')} (image default)`)}
         </CardContent>
       </Card>
 

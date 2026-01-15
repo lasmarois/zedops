@@ -35,7 +35,7 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
   const [serverDataPath, setServerDataPath] = useState(server.server_data_path || '')
   const [betaBranch, setBetaBranch] = useState(config.BETA_BRANCH || 'none')
   const [timezone, setTimezone] = useState(config.TZ || 'UTC')
-  const [puid, setPuid] = useState(config.PUID || '1430')
+  const [puid, setPuid] = useState(config.PUID || '')
 
   // Helper to render immutable field (read-only)
   const renderImmutableField = (label: string, value: string | number) => {
