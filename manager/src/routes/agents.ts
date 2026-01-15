@@ -174,6 +174,155 @@ agents.get('/:id', async (c) => {
 });
 
 /**
+ * GET /api/agents/:id/config
+ * Get agent configuration
+ *
+ * Returns: Agent configuration (server_data_path, steam_zomboid_registry)
+ * Permission: Admin only
+ */
+agents.get('/:id/config', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+
+  // Only admins can view agent configuration
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  }
+
+  try {
+    // Query agent configuration from database
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, server_data_path, steam_zomboid_registry FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    return c.json({
+      success: true,
+      config: {
+        server_data_path: agent.server_data_path,
+        steam_zomboid_registry: agent.steam_zomboid_registry,
+      },
+    });
+  } catch (error) {
+    console.error('[Agents API] Error getting agent config:', error);
+    return c.json({ error: 'Failed to get agent configuration' }, 500);
+  }
+});
+
+/**
+ * PUT /api/agents/:id/config
+ * Update agent configuration
+ *
+ * Body: { server_data_path?: string, steam_zomboid_registry?: string }
+ * Returns: Updated configuration
+ * Permission: Admin only
+ */
+agents.put('/:id/config', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+
+  // Only admins can update agent configuration
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  }
+
+  // Parse request body
+  let body: { server_data_path?: string; steam_zomboid_registry?: string };
+  try {
+    body = await c.req.json();
+  } catch (error) {
+    return c.json({ error: 'Invalid request body' }, 400);
+  }
+
+  // Validate at least one field is provided
+  if (!body.server_data_path && !body.steam_zomboid_registry) {
+    return c.json({ error: 'Must provide at least one configuration field to update' }, 400);
+  }
+
+  // Validate server_data_path if provided
+  if (body.server_data_path) {
+    // Must be an absolute path
+    if (!body.server_data_path.startsWith('/')) {
+      return c.json({ error: 'server_data_path must be an absolute path (start with /)' }, 400);
+    }
+
+    // Prevent setting to system directories
+    const forbiddenPaths = ['/etc', '/var', '/usr', '/bin', '/sbin', '/boot', '/sys', '/proc', '/dev'];
+    if (forbiddenPaths.some(p => body.server_data_path === p || body.server_data_path?.startsWith(p + '/'))) {
+      return c.json({ error: 'Cannot use system directories as server data path' }, 400);
+    }
+
+    // Must not be root
+    if (body.server_data_path === '/') {
+      return c.json({ error: 'Cannot use root directory as server data path' }, 400);
+    }
+  }
+
+  try {
+    // Verify agent exists
+    const agent = await c.env.DB.prepare(
+      `SELECT id FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Build update query dynamically based on provided fields
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (body.server_data_path) {
+      updates.push('server_data_path = ?');
+      values.push(body.server_data_path);
+    }
+
+    if (body.steam_zomboid_registry) {
+      updates.push('steam_zomboid_registry = ?');
+      values.push(body.steam_zomboid_registry);
+    }
+
+    // Add agentId for WHERE clause
+    values.push(agentId);
+
+    // Execute update
+    await c.env.DB.prepare(
+      `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`
+    )
+      .bind(...values)
+      .run();
+
+    // Fetch updated configuration
+    const updatedAgent = await c.env.DB.prepare(
+      `SELECT server_data_path, steam_zomboid_registry FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    console.log(`[Agents API] Configuration updated for agent ${agentId}`);
+
+    return c.json({
+      success: true,
+      message: 'Agent configuration updated successfully',
+      config: {
+        server_data_path: updatedAgent!.server_data_path,
+        steam_zomboid_registry: updatedAgent!.steam_zomboid_registry,
+      },
+    });
+  } catch (error) {
+    console.error('[Agents API] Error updating agent config:', error);
+    return c.json({ error: 'Failed to update agent configuration' }, 500);
+  }
+});
+
+/**
  * GET /api/agents/:id/containers
  * List containers for a specific agent
  *
@@ -741,6 +890,25 @@ agents.post('/:id/servers', async (c) => {
     return c.json({ error: 'Missing required fields: name, imageTag, config' }, 400);
   }
 
+  // Validate server_data_path if provided (M9.8.23: Per-Server Path Override)
+  if (body.server_data_path) {
+    // Must be absolute path
+    if (!body.server_data_path.startsWith('/')) {
+      return c.json({ error: 'server_data_path must be an absolute path (start with /)' }, 400);
+    }
+
+    // Must not be root
+    if (body.server_data_path === '/') {
+      return c.json({ error: 'Cannot use root directory as server data path' }, 400);
+    }
+
+    // Prevent system directories
+    const forbiddenPaths = ['/etc', '/var', '/usr', '/bin', '/sbin', '/boot', '/sys', '/proc', '/dev'];
+    if (forbiddenPaths.some(p => body.server_data_path === p || body.server_data_path?.startsWith(p + '/'))) {
+      return c.json({ error: 'Cannot use system directories as server data path' }, 400);
+    }
+  }
+
   // Validate server name (DNS-safe: lowercase, alphanumeric, hyphens, 3-32 chars)
   const nameRegex = /^[a-z][a-z0-9-]{2,31}$/;
   if (!nameRegex.test(body.name)) {
@@ -848,22 +1016,29 @@ agents.post('/:id/servers', async (c) => {
     const serverId = crypto.randomUUID();
     const now = Date.now();
 
+    // Determine data path: custom override or agent default
+    const dataPath = body.server_data_path || agent.server_data_path;
+
     // Store in D1 with status='creating'
+    // M9.8.23: Include server_data_path (NULL = inherit from agent, Non-NULL = custom)
+    // M9.8.32: Include image (NULL = use agent's steam_zomboid_registry, Non-NULL = custom)
     await c.env.DB.prepare(
-      `INSERT INTO servers (id, agent_id, name, container_id, config, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'creating', ?, ?)`
+      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, ?)`
     )
       .bind(
         serverId,
         agentId,
         body.name,
         JSON.stringify(body.config),
+        body.image || null,  // M9.8.32: Store custom image or NULL (use agent's registry)
         body.imageTag,
         gamePort,
         udpPort,
         rconPort,
         now,
-        now
+        now,
+        body.server_data_path || null  // Store custom path or NULL (inherit from agent)
       )
       .run();
 
@@ -878,19 +1053,21 @@ agents.post('/:id/servers', async (c) => {
     };
 
     // Forward server.create message to Durable Object
+    // M9.8.23: Use determined dataPath (custom override or agent default)
+    // M9.8.32: Use custom image if provided, otherwise use agent's registry
     const response = await stub.fetch(`http://do/servers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         serverId,
         name: body.name,
-        registry: agent.steam_zomboid_registry,
+        registry: body.image || agent.steam_zomboid_registry,
         imageTag: body.imageTag,
         config: configWithRconPort,
         gamePort,
         udpPort,
         rconPort,
-        dataPath: agent.server_data_path,
+        dataPath: dataPath,  // Use custom override or agent default
       }),
     });
 
@@ -909,10 +1086,16 @@ agents.post('/:id/servers', async (c) => {
     const result = await response.json();
 
     // Update container_id and status
+    // M9.8.32: Don't overwrite image_tag with result.imageName (full reference)
+    // Keep image_tag as just the tag the user provided
     await c.env.DB.prepare(
       `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
     )
-      .bind(result.containerId, Date.now(), serverId)
+      .bind(
+        result.containerId,
+        Date.now(),
+        serverId
+      )
       .run();
 
     // Return created server
@@ -1192,19 +1375,25 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
       };
 
       // Call server.create on agent
+      // M9.8.23: Use server's custom path if set, otherwise use agent default
+      const dataPath = server.server_data_path || agent.server_data_path;
+
+      // M9.8.32: Use server's custom image if set, otherwise use agent's registry
+      const imageRef = server.image || agent.steam_zomboid_registry;
+
       const createResponse = await stub.fetch(`http://do/servers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serverId: server.id,
           name: server.name,
-          registry: agent.steam_zomboid_registry,
+          registry: imageRef,
           imageTag: server.image_tag,
           config: configWithRconPort,
           gamePort: server.game_port,
           udpPort: server.udp_port,
           rconPort: server.rcon_port,
-          dataPath: agent.server_data_path,
+          dataPath: dataPath,
         }),
       });
 
@@ -1467,8 +1656,9 @@ agents.delete('/:id/servers/:serverId', async (c) => {
       return c.json({ error: 'Forbidden - you do not have permission to delete this server' }, 403);
     }
     // Verify server exists and belongs to agent
+    // M9.8.23: Include server_data_path for custom path support
     const server = await c.env.DB.prepare(
-      `SELECT id, container_id, status FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT id, container_id, status, name, server_data_path FROM servers WHERE id = ? AND agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -1482,13 +1672,6 @@ agents.delete('/:id/servers/:serverId', async (c) => {
       return c.json({ error: 'Server is already deleted. Use PURGE to permanently remove.' }, 400);
     }
 
-    // Get server name for audit log
-    const serverName = await c.env.DB.prepare(
-      `SELECT name FROM servers WHERE id = ?`
-    )
-      .bind(serverId)
-      .first<{ name: string }>();
-
     // Soft delete: set deleted_at and status='deleted'
     const now = Date.now();
     await c.env.DB.prepare(
@@ -1499,9 +1682,9 @@ agents.delete('/:id/servers/:serverId', async (c) => {
 
     // If server has a container, remove it (but preserve data)
     if (server.container_id) {
-      // Get agent name for Durable Object
+      // Get agent name and data path for Durable Object
       const agent = await c.env.DB.prepare(
-        `SELECT name FROM agents WHERE id = ?`
+        `SELECT name, server_data_path FROM agents WHERE id = ?`
       )
         .bind(agentId)
         .first();
@@ -1511,6 +1694,9 @@ agents.delete('/:id/servers/:serverId', async (c) => {
         const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
         const stub = c.env.AGENT_CONNECTION.get(id);
 
+        // M9.8.23: Use server's custom path if set, otherwise use agent default
+        const dataPath = server.server_data_path || agent.server_data_path;
+
         // Forward server.delete message to Durable Object (preserve volumes)
         try {
           await stub.fetch(`http://do/servers/${serverId}`, {
@@ -1518,7 +1704,9 @@ agents.delete('/:id/servers/:serverId', async (c) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               containerId: server.container_id,
+              serverName: server.name as string,
               removeVolumes: false, // Always preserve data on soft delete
+              dataPath: dataPath as string,
             }),
           });
           console.log(`[Soft Delete] Container removed for server ${serverId}`);
@@ -1581,8 +1769,9 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
 
   try {
     // Verify server exists and belongs to agent
+    // M9.8.23: Include server_data_path to check for custom path override
     const server = await c.env.DB.prepare(
-      `SELECT id, container_id, name FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT id, container_id, name, server_data_path FROM servers WHERE id = ? AND agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -1594,7 +1783,7 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
     // Remove container and/or data from agent (if agent is online)
     // Get agent info
     const agent = await c.env.DB.prepare(
-      `SELECT name, status FROM agents WHERE id = ?`
+      `SELECT name, status, server_data_path FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -1603,6 +1792,9 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
       // Get Durable Object for this agent
       const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
       const stub = c.env.AGENT_CONNECTION.get(id);
+
+      // M9.8.23: Use server's custom path if set, otherwise use agent default
+      const dataPath = server.server_data_path || agent.server_data_path;
 
       // Forward server.delete message to Durable Object
       // IMPORTANT: Always send if removeData=true, even if container doesn't exist
@@ -1614,6 +1806,7 @@ agents.delete('/:id/servers/:serverId/purge', async (c) => {
             containerId: server.container_id || '', // Empty string if no container
             serverName: server.name, // Pass server name so agent can remove data without container
             removeVolumes: removeData, // Remove data if requested
+            dataPath: dataPath as string,
           }),
         });
 
@@ -1679,9 +1872,9 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
   }
 
   try {
-    // Verify server exists and belongs to agent
+    // Verify server exists and belongs to agent (include server_data_path for checking)
     const server = await c.env.DB.prepare(
-      `SELECT id, status, deleted_at, name FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT id, status, deleted_at, name, server_data_path FROM servers WHERE id = ? AND agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -1695,15 +1888,57 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
       return c.json({ error: 'Server is not deleted. Only deleted servers can be restored.' }, 400);
     }
 
-    // Restore: clear deleted_at and set status to 'missing'
+    // Get agent config to determine data path
+    const agent = await c.env.DB.prepare(
+      `SELECT name, server_data_path FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Determine effective data path (server custom path || agent default path)
+    const effectiveDataPath = server.server_data_path || agent.server_data_path || '/var/lib/zedops/servers';
+
+    // Get AgentConnection DO to check if data exists
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Check if data actually exists on filesystem
+    let dataExists = false;
+    try {
+      const checkResponse = await stub.fetch('http://internal/check-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverName: server.name,
+          dataPath: effectiveDataPath,
+        }),
+      });
+
+      if (checkResponse.ok) {
+        const checkResult = await checkResponse.json();
+        dataExists = checkResult.dataExists || false;
+        console.log(`[Restore] Data exists check for ${server.name}: ${dataExists} (path: ${effectiveDataPath})`);
+      } else {
+        console.warn(`[Restore] Data check failed, assuming data doesn't exist`);
+      }
+    } catch (error) {
+      console.error(`[Restore] Error checking data existence:`, error);
+      // If agent is offline or check fails, assume data doesn't exist (safe default)
+    }
+
+    // Restore: clear deleted_at, set status to 'missing', set data_exists based on actual check
     const now = Date.now();
     await c.env.DB.prepare(
-      `UPDATE servers SET status = 'missing', deleted_at = NULL, updated_at = ? WHERE id = ?`
+      `UPDATE servers SET status = 'missing', deleted_at = NULL, data_exists = ?, updated_at = ? WHERE id = ?`
     )
-      .bind(now, serverId)
+      .bind(dataExists ? 1 : 0, now, serverId)
       .run();
 
-    console.log(`[Restore] Server ${server.name} (${serverId}) restored`);
+    console.log(`[Restore] Server ${server.name} (${serverId}) restored with data_exists=${dataExists}`);
 
     // Audit log
     await logServerOperation(c.env.DB, c, user.id, 'server.restored', serverId, server.name as string, agentId);
@@ -2012,6 +2247,403 @@ agents.get('/:id/servers/:serverId/metrics', async (c) => {
   } catch (error) {
     console.error('[Server Metrics API] Error collecting metrics:', error);
     return c.json({ error: 'Failed to collect server metrics' }, 500);
+  }
+});
+
+/**
+ * PATCH /api/agents/:id/servers/:serverId/config
+ * Update server configuration (Save step - no container restart)
+ *
+ * Body: { config: {...}, imageTag?: string, serverDataPath?: string }
+ * Returns: { success, pendingRestart, dataPathChanged }
+ */
+agents.patch('/:id/servers/:serverId/config', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  // Check permission to control server
+  const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - you do not have permission to modify this server' }, 403);
+  }
+
+  try {
+    // Parse request body
+    // M9.8.32: Added image field for custom registry override
+    const body = await c.req.json() as {
+      config: Record<string, string>;
+      image?: string | null;  // M9.8.32: Custom registry (NULL = use agent default)
+      imageTag?: string;
+      serverDataPath?: string | null;
+    };
+
+    // Trim serverDataPath to prevent leading/trailing whitespace issues
+    if (body.serverDataPath) {
+      body.serverDataPath = body.serverDataPath.trim();
+    }
+
+    // Verify server exists and belongs to agent, also get agent's default data path
+    // M9.8.32: Include image field
+    const server = await c.env.DB.prepare(
+      `SELECT s.id, s.config, s.image, s.image_tag, s.server_data_path, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ? AND s.agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Parse existing config
+    const existingConfig = server.config ? JSON.parse(server.config as string) : {};
+
+    // Validation: Immutable fields
+    // SERVER_MAP cannot be changed after world creation (game engine constraint)
+    if (body.config.SERVER_MAP && existingConfig.SERVER_MAP && body.config.SERVER_MAP !== existingConfig.SERVER_MAP) {
+      return c.json({
+        error: 'Cannot change SERVER_MAP after world creation. This is a game engine constraint.',
+        field: 'SERVER_MAP'
+      }, 400);
+    }
+
+    // Determine what changed
+    const configChanged = JSON.stringify(body.config) !== JSON.stringify(existingConfig);
+    // M9.8.32: Track image and imageTag changes separately
+    const imageChanged = body.image !== undefined && body.image !== server.image;
+    const imageTagChanged = body.imageTag !== undefined && body.imageTag !== server.image_tag;
+    const dataPathChanged = body.serverDataPath !== undefined && body.serverDataPath !== server.server_data_path;
+
+    // Build update query
+    const updates: string[] = [];
+    const bindings: any[] = [];
+
+    if (configChanged) {
+      updates.push('config = ?');
+      bindings.push(JSON.stringify(body.config));
+    }
+
+    // M9.8.32: Support updating image (registry) separately from tag
+    if (imageChanged) {
+      updates.push('image = ?');
+      bindings.push(body.image || null);  // Allow clearing to fall back to agent default
+    }
+
+    if (imageTagChanged) {
+      updates.push('image_tag = ?');
+      bindings.push(body.imageTag);
+    }
+
+    if (dataPathChanged) {
+      updates.push('server_data_path = ?');
+      bindings.push(body.serverDataPath);
+    }
+
+    if (updates.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No changes detected',
+        pendingRestart: false,
+        dataPathChanged: false,
+      });
+    }
+
+    // Update database
+    updates.push('updated_at = ?');
+    bindings.push(Date.now());
+    bindings.push(serverId);
+
+    await c.env.DB.prepare(
+      `UPDATE servers SET ${updates.join(', ')} WHERE id = ?`
+    )
+      .bind(...bindings)
+      .run();
+
+    // Audit log
+    const changes = [];
+    if (configChanged) changes.push('config');
+    if (imageChanged) changes.push('image');  // M9.8.32
+    if (imageTagChanged) changes.push('image_tag');
+    if (dataPathChanged) changes.push('server_data_path');
+
+    await logServerOperation(
+      c.env.DB,
+      c,
+      user.id,
+      'server.config.updated',
+      serverId,
+      server.name as string || serverId,
+      agentId,
+      { changes }
+    );
+
+    // Determine if restart is needed
+    // Config changes require restart, image tag only affects next rebuild, data path requires recreation
+    const pendingRestart = configChanged || dataPathChanged;
+
+    // M9.8.29: Compute effective old path (server's custom OR agent's default)
+    const effectiveOldPath = server.server_data_path || server.agent_server_data_path;
+
+    return c.json({
+      success: true,
+      message: 'Configuration updated successfully',
+      pendingRestart,
+      dataPathChanged,
+      configChanged,
+      imageTagChanged,
+      // M9.8.29: Return effective old data path so frontend can pass it to apply-config for data migration
+      oldDataPath: dataPathChanged ? effectiveOldPath : undefined,
+    });
+  } catch (error) {
+    console.error('[Agents API] Error updating server config:', error);
+    return c.json({ error: 'Failed to update server configuration' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/:serverId/apply-config
+ * Apply configuration changes (restart container with new config)
+ *
+ * Returns: { success, server }
+ */
+agents.post('/:id/servers/:serverId/apply-config', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  // Check permission to control server
+  const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - you do not have permission to control this server' }, 403);
+  }
+
+  // M9.8.29: Parse optional oldDataPath from request body
+  let oldDataPath: string | undefined;
+  try {
+    const body = await c.req.json();
+    oldDataPath = body.oldDataPath;
+  } catch {
+    // No body or invalid JSON is fine - oldDataPath is optional
+  }
+
+  try {
+    // Verify server exists and get current config
+    const server = await c.env.DB.prepare(
+      `SELECT s.*, a.name as agent_name, a.steam_zomboid_registry, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ? AND s.agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    if (!server.container_id) {
+      return c.json({ error: 'Server has no container (never started)' }, 400);
+    }
+
+    // Check if status allows apply
+    if (server.status === 'creating' || server.status === 'deleting') {
+      return c.json({ error: `Cannot apply config while server is ${server.status}` }, 400);
+    }
+
+    // Update status to indicate restart in progress
+    await c.env.DB.prepare(
+      `UPDATE servers SET status = 'restarting', updated_at = ? WHERE id = ?`
+    )
+      .bind(Date.now(), serverId)
+      .run();
+
+    // Get Durable Object for this agent
+    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Parse config and add RCON_PORT
+    const config = server.config ? JSON.parse(server.config as string) : {};
+    const configWithRconPort = {
+      ...config,
+      RCON_PORT: server.rcon_port.toString(),
+    };
+
+    // Determine data path (custom override or agent default)
+    const dataPath = server.server_data_path || server.agent_server_data_path;
+
+    // M9.8.29: If oldDataPath provided and different from current, move data first
+    if (oldDataPath && dataPath && oldDataPath !== dataPath) {
+      console.log(`[Agents API] Moving server data from ${oldDataPath} to ${dataPath}`);
+
+      const moveResponse = await agentStub.fetch(`http://do/servers/${serverId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverName: server.name,
+          oldPath: oldDataPath,
+          newPath: dataPath,
+        }),
+      });
+
+      if (!moveResponse.ok) {
+        // Move failed - restore status and return error
+        await c.env.DB.prepare(
+          `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+        )
+          .bind(Date.now(), serverId)
+          .run();
+
+        const errorData = await moveResponse.json() as { error?: string };
+        return c.json({
+          error: `Failed to move server data: ${errorData.error || 'Unknown error'}`
+        }, moveResponse.status);
+      }
+
+      console.log(`[Agents API] Server data move completed for ${server.name}`);
+    }
+
+    // Forward rebuild request with new config
+    // M9.8.32: Use server's custom image if set, otherwise use agent's registry
+    const imageRef = server.image || server.steam_zomboid_registry;
+
+    const response = await agentStub.fetch(`http://do/servers/${serverId}/rebuild`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        containerId: server.container_id,
+        // Include full config for recreation
+        name: server.name,
+        registry: imageRef,
+        imageTag: server.image_tag,
+        config: configWithRconPort,
+        gamePort: server.game_port,
+        udpPort: server.udp_port,
+        rconPort: server.rcon_port,
+        dataPath: dataPath,
+      }),
+    });
+
+    if (!response.ok) {
+      // Update status back to failed
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+
+      const errorData = await response.json();
+      return c.json({ error: errorData.error || 'Failed to apply configuration' }, response.status);
+    }
+
+    const result = await response.json() as { success: boolean; newContainerID: string };
+
+    // Update database with new container_id and running status
+    const now = Date.now();
+    await c.env.DB.prepare(
+      `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
+    )
+      .bind(result.newContainerID, now, serverId)
+      .run();
+
+    // Fetch updated server
+    const updatedServer = await c.env.DB.prepare(
+      `SELECT s.*, a.name as agent_name, a.status as agent_status, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ?`
+    )
+      .bind(serverId)
+      .first();
+
+    // Audit log
+    await logServerOperation(c.env.DB, c, user.id, 'server.config.applied', serverId, server.name as string, agentId);
+
+    return c.json({
+      success: true,
+      message: 'Configuration applied successfully',
+      server: {
+        ...updatedServer,
+        data_exists: updatedServer.data_exists === 1,
+      },
+    });
+  } catch (error) {
+    console.error('[Agents API] Error applying server config:', error);
+
+    // Try to restore status
+    try {
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+    } catch (dbError) {
+      console.error('[Agents API] Failed to update status after error:', dbError);
+    }
+
+    return c.json({ error: 'Failed to apply configuration' }, 500);
+  }
+});
+
+/**
+ * GET /api/agents/:id/images/defaults?tag=<image-tag>
+ * Query Docker image for default ENV variables
+ *
+ * Returns: { defaults: { PUID: "1430", TZ: "UTC", ... } }
+ */
+agents.get('/:id/images/defaults', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const imageTag = c.req.query('tag');
+
+  if (!imageTag) {
+    return c.json({ error: 'Image tag is required (use ?tag=<image-tag> query parameter)' }, 400);
+  }
+
+  // Image tag already decoded by query parser
+  const decodedImageTag = imageTag;
+
+  try {
+    // Query database to get agent name (needed for Durable Object lookup)
+    const agent = await c.env.DB.prepare('SELECT name FROM agents WHERE id = ?')
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Get agent's Durable Object using agent NAME (not ID)
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Forward request to Durable Object (which proxies to agent)
+    // Use query parameter to avoid path encoding issues
+    const response = await agentStub.fetch(
+      `http://do/images/defaults?tag=${encodeURIComponent(decodedImageTag)}`,
+      {
+        method: 'GET',
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json() as { error?: string };
+      return c.json({
+        error: errorData.error || 'Failed to fetch image defaults',
+      }, response.status);
+    }
+
+    const data = await response.json() as { defaults: Record<string, string> };
+    return c.json(data);
+  } catch (error) {
+    console.error('[Agents API] Error fetching image defaults:', error);
+    return c.json({ error: 'Failed to fetch image defaults' }, 500);
   }
 });
 

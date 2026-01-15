@@ -5,11 +5,25 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useAllServers, usePurgeServer } from "@/hooks/useServers"
-import { Plus, Search, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { useAllServers, usePurgeServer, useRestoreServer, useCreateServer } from "@/hooks/useServers"
+import { useAgents } from "@/hooks/useAgents"
+import { Plus, Search, Trash2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { getDisplayStatus } from "@/lib/server-status"
-import type { Server } from "@/lib/api"
+import type { Server, CreateServerRequest } from "@/lib/api"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog"
+import { ServerForm } from "@/components/ServerForm"
 
 interface ServerWithAgent {
   id: string
@@ -18,20 +32,34 @@ interface ServerWithAgent {
   agentId: string
   agentName: string
   agentStatus: 'online' | 'offline'
+  agentServerDataPath: string | null
   gamePort: number
   udpPort: number
   rconPort: number
   imageTag: string
   createdAt: number
+  containerId: string | null
+  config: string
+  serverDataPath: string | null
+  dataExists: boolean
+  deletedAt: number | null
+  updatedAt: number
 }
 
 export function ServerList() {
   const navigate = useNavigate()
   const { data: serversData, isLoading } = useAllServers()
+  const { data: agentsData } = useAgents()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [showDeletedServers, setShowDeletedServers] = useState(false)
   const purgeServerMutation = usePurgeServer()
+  const restoreServerMutation = useRestoreServer()
+  const createServerMutation = useCreateServer()
+
+  // Modal state for server creation
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
 
   // Map API data to component format
   const allServers: ServerWithAgent[] = serversData?.servers?.map((server: Server) => ({
@@ -41,11 +69,18 @@ export function ServerList() {
     agentId: server.agent_id,
     agentName: server.agent_name,
     agentStatus: server.agent_status,
+    agentServerDataPath: server.agent_server_data_path,
     gamePort: server.game_port,
     udpPort: server.udp_port,
     rconPort: server.rcon_port,
     imageTag: server.image_tag,
     createdAt: server.created_at,
+    containerId: server.container_id,
+    config: server.config,
+    serverDataPath: server.server_data_path,
+    dataExists: server.data_exists,
+    deletedAt: server.deleted_at,
+    updatedAt: server.updated_at,
   })) || []
 
   // Separate active and deleted servers
@@ -86,6 +121,55 @@ export function ServerList() {
     }
   }
 
+  // Handler for restoring deleted servers (M9.8.24)
+  const handleRestore = (server: ServerWithAgent) => {
+    const confirmed = confirm(
+      `Restore server "${server.name}"?\n\n` +
+      `This will restore the server from deleted status.\n` +
+      `The container will need to be started manually after restore.`
+    )
+
+    if (confirmed) {
+      restoreServerMutation.mutate({
+        agentId: server.agentId,
+        serverId: server.id,
+      })
+    }
+  }
+
+  // Handler for agent selection from dropdown
+  const handleAgentSelect = (agentId: string) => {
+    setSelectedAgentId(agentId)
+    setIsModalOpen(true)
+  }
+
+  // Handler for form submission
+  const handleCreateServer = (request: CreateServerRequest) => {
+    if (!selectedAgentId) return
+
+    createServerMutation.mutate(
+      { agentId: selectedAgentId, request },
+      {
+        onSuccess: () => {
+          setIsModalOpen(false)
+          setSelectedAgentId(null)
+        },
+      }
+    )
+  }
+
+  // Handler for modal cancel
+  const handleModalCancel = () => {
+    setIsModalOpen(false)
+    setSelectedAgentId(null)
+  }
+
+  // Get agents list
+  const agents = agentsData?.agents || []
+  const onlineAgents = agents.filter(agent => agent.status === 'online')
+  const hasAgents = agents.length > 0
+  const hasOnlineAgents = onlineAgents.length > 0
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -97,10 +181,48 @@ export function ServerList() {
             Global server list across all agents
           </p>
         </div>
-        <Button onClick={() => navigate('/agents')}>
-          <Plus className="h-4 w-4" />
-          Create Server
-        </Button>
+        {hasAgents ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Create Server
+                <ChevronDown className="h-4 w-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Select Agent</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {hasOnlineAgents ? (
+                agents.map(agent => (
+                  <DropdownMenuItem
+                    key={agent.id}
+                    disabled={agent.status !== 'online'}
+                    onClick={() => agent.status === 'online' && handleAgentSelect(agent.id)}
+                    className="flex flex-col items-start py-3"
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <div className={`h-2 w-2 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="font-medium">{agent.name}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground ml-4">
+                      {agent.status === 'online' ? 'Ready' : 'Offline - cannot create servers'}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                  All agents are offline
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button onClick={() => navigate('/agents')}>
+            <Plus className="h-4 w-4" />
+            Add Agent First
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -141,10 +263,48 @@ export function ServerList() {
               <p className="text-sm mb-6">
                 Create your first server to get started
               </p>
-              <Button onClick={() => navigate('/agents')}>
-                <Plus className="h-4 w-4" />
-                Create Server
-              </Button>
+              {hasAgents ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4" />
+                      Create Server
+                      <ChevronDown className="h-4 w-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="w-64">
+                    <DropdownMenuLabel>Select Agent</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {hasOnlineAgents ? (
+                      agents.map(agent => (
+                        <DropdownMenuItem
+                          key={agent.id}
+                          disabled={agent.status !== 'online'}
+                          onClick={() => agent.status === 'online' && handleAgentSelect(agent.id)}
+                          className="flex flex-col items-start py-3"
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <div className={`h-2 w-2 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="font-medium">{agent.name}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground ml-4">
+                            {agent.status === 'online' ? 'Ready' : 'Offline - cannot create servers'}
+                          </span>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                        All agents are offline
+                      </div>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button onClick={() => navigate('/agents')}>
+                  <Plus className="h-4 w-4" />
+                  Add Agent First
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -161,16 +321,20 @@ export function ServerList() {
               agent_id: server.agentId,
               agent_name: server.agentName,
               agent_status: server.agentStatus,
+              agent_server_data_path: server.agentServerDataPath,
+              steam_zomboid_registry: null, // M9.8.32: Not needed for display status
               game_port: server.gamePort,
               udp_port: server.udpPort,
               rcon_port: server.rconPort,
+              image: null, // M9.8.32: Not needed for display status
               image_tag: server.imageTag,
               created_at: server.createdAt,
-              container_id: null,
-              config: '',
-              data_exists: false,
-              deleted_at: null,
-              updated_at: server.createdAt,
+              container_id: server.containerId,
+              config: server.config,
+              server_data_path: server.serverDataPath,
+              data_exists: server.dataExists,
+              deleted_at: server.deletedAt,
+              updated_at: server.updatedAt,
             });
 
             // Border color based on display status
@@ -286,6 +450,18 @@ export function ServerList() {
                           </div>
                         </div>
                         <Button
+                          variant="success"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRestore(server)
+                          }}
+                          disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'Restoring...' : 'Restore'}
+                        </Button>
+                        <Button
                           variant="destructive"
                           size="sm"
                           onClick={(e) => {
@@ -306,6 +482,20 @@ export function ServerList() {
           )}
         </div>
       )}
+
+      {/* Create Server Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedAgentId && (
+            <ServerForm
+              agentId={selectedAgentId}
+              onSubmit={handleCreateServer}
+              onCancel={handleModalCancel}
+              isSubmitting={createServerMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

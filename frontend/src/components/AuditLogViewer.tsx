@@ -8,16 +8,9 @@ import { useUsers } from '../hooks/useUsers';
 import type { AuditLogsQuery } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { getAuditActionColor } from '@/lib/audit-colors';
+import { ActivityTimeline, type ActivityEvent } from '@/components/ui/activity-timeline';
 import {
   Select,
   SelectContent,
@@ -63,36 +56,44 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
     return new Date(timestamp).toLocaleString();
   };
 
-  const formatAction = (action: string) => {
-    return action
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
+  const formatDateRelative = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-  const getActionVariant = (action: string): 'destructive' | 'success' | 'warning' | 'default' => {
-    if (action.includes('delete') || action.includes('revoke')) return 'destructive';
-    if (action.includes('create') || action.includes('grant')) return 'success';
-    if (action.includes('update') || action.includes('modify')) return 'warning';
-    return 'default';
-  };
-
-  // Badge color styling for better contrast (matching AgentList improvements)
-  const getActionBadgeStyle = (action: string): string => {
-    const variant = getActionVariant(action);
-    switch (variant) {
-      case 'success':
-        return 'bg-green-600 text-white border-green-700';
-      case 'warning':
-        return 'bg-orange-600 text-white border-orange-700';
-      case 'destructive':
-        return 'bg-red-700 text-white border-red-800';
-      default:
-        return ''; // Default variant unchanged
-    }
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
   };
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+
+  // Transform audit logs to activity events
+  const activityEvents: ActivityEvent[] = data?.logs.map(log => {
+    const details = log.details
+      ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details)
+      : {};
+    const targetName = details.name || details.serverName || log.target_id;
+
+    return {
+      id: log.id,
+      timestamp: formatDateRelative(log.timestamp),
+      user: log.user_email.split('@')[0],
+      action: log.action.replace(/\./g, ' ').replace(/_/g, ' '),
+      target: log.target_type ? `${log.target_type} ${targetName || ''}`.trim() : '',
+      actionColor: getAuditActionColor(log.action),
+      details: {
+        'IP Address': log.ip_address,
+        'Full Timestamp': formatDate(log.timestamp),
+        ...details,
+      },
+    };
+  }) || [];
 
   if (isLoading) {
     return (
@@ -112,31 +113,16 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
             <Skeleton className="h-9 w-[80px]" />
           </div>
         </div>
-        <div className="border rounded-md overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>IP Address</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-[140px]" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-[100px]" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-[120px]" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-[200px]" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-[110px]" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex gap-4">
+              <Skeleton className="h-20 w-1 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-[60%]" />
+                <Skeleton className="h-4 w-[40%]" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -277,55 +263,8 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
         )}
       </div>
 
-      {data?.logs && data.logs.length > 0 ? (
-        <div className="border rounded-md overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>IP Address</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-                    {formatDate(log.timestamp)}
-                  </TableCell>
-                  <TableCell>{log.user_email}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={getActionVariant(log.action) === 'default' ? 'default' : undefined}
-                      className={getActionBadgeStyle(log.action)}
-                    >
-                      {formatAction(log.action)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {log.target_type && log.target_id ? (
-                      <>
-                        <span className="text-muted-foreground">{log.target_type}:</span>{' '}
-                        {log.target_id.substring(0, 8)}...
-                      </>
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm max-w-[300px] overflow-hidden overflow-ellipsis">
-                    {log.details || '-'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {log.ip_address}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+      {activityEvents.length > 0 ? (
+        <ActivityTimeline events={activityEvents} />
       ) : (
         <div className="text-center p-8 bg-muted rounded-md">
           No audit logs found.

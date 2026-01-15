@@ -12,6 +12,7 @@ import { useAuditLogs } from "@/hooks/useAuditLogs"
 import { Server as ServerIcon, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { getDisplayStatus } from "@/lib/server-status"
+import { getAuditActionColor } from "@/lib/audit-colors"
 import type { Server } from "@/lib/api"
 
 export function Dashboard() {
@@ -38,14 +39,6 @@ export function Dashboard() {
 
   // Convert audit logs to activity events
   const activityEvents: ActivityEvent[] = (auditLogsData?.logs || []).slice(0, 5).map(log => {
-    const actionColorMap: Record<string, "success" | "warning" | "error" | "info"> = {
-      'server.start': 'success',
-      'server.stop': 'warning',
-      'server.delete': 'error',
-      'agent.connect': 'info',
-      'agent.disconnect': 'warning',
-    }
-
     const details = log.details ? JSON.parse(log.details) : {}
     const targetName = details.name || details.serverName || log.target_id
 
@@ -55,7 +48,7 @@ export function Dashboard() {
       user: log.user_email.split('@')[0], // Use email username part
       action: log.action.replace(/\./g, ' '),
       target: log.target_type ? `${log.target_type} ${targetName || ''}`.trim() : '',
-      actionColor: actionColorMap[log.action] || 'info',
+      actionColor: getAuditActionColor(log.action),
       details: log.details ? JSON.parse(log.details) : undefined,
     }
   })

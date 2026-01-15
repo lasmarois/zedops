@@ -24,6 +24,8 @@ import {
   LogLine,
   LogSubscriber,
   CircularBuffer,
+  AgentLogLine,
+  AgentLogSubscriber,
 } from "../types/LogMessage";
 import { logRconCommand } from "../lib/audit";
 
@@ -34,9 +36,14 @@ export class AgentConnection extends DurableObject {
   private isRegistered: boolean = false;
   private pendingReplies: Map<string, (msg: Message) => void> = new Map();
 
-  // Log streaming pub/sub
+  // Log streaming pub/sub (container logs)
   private logSubscribers: Map<string, LogSubscriber> = new Map(); // subscriberId -> LogSubscriber
   private logBuffers: Map<string, CircularBuffer<LogLine>> = new Map(); // containerId -> buffer
+
+  // Agent log streaming pub/sub (agent's own logs)
+  private agentLogSubscribers: Map<string, AgentLogSubscriber> = new Map(); // subscriberId -> AgentLogSubscriber
+  private agentLogBuffer: CircularBuffer<AgentLogLine> = new CircularBuffer<AgentLogLine>(1000);
+  private isAgentLogStreaming: boolean = false; // Whether we've requested logs from agent
 
   // RCON session tracking
   private rconSessions: Map<string, { sessionId: string; serverId: string }> = new Map(); // sessionId -> { sessionId, serverId }
@@ -123,6 +130,11 @@ export class AgentConnection extends DurableObject {
       return this.handleServerSyncRequest(request);
     }
 
+    // Internal endpoint: Check data existence for a single server
+    if (url.pathname === "/internal/check-data" && request.method === "POST") {
+      return this.handleCheckDataRequest(request);
+    }
+
     // Server delete endpoint
     if (url.pathname.startsWith("/servers/") && request.method === "DELETE") {
       const parts = url.pathname.split("/");
@@ -138,6 +150,28 @@ export class AgentConnection extends DurableObject {
       const serverId = parts[2];
       if (serverId) {
         return this.handleServerRebuildRequest(request, serverId);
+      }
+    }
+
+    // Server move data endpoint (M9.8.29: Data path migration)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/move") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleServerMoveDataRequest(request, serverId);
+      }
+    }
+
+    // Image defaults endpoint (inspect Docker image for ENV defaults)
+    if (url.pathname === "/images/defaults" && request.method === "GET") {
+      const imageTag = url.searchParams.get("tag");
+      if (imageTag) {
+        return this.handleImageInspectRequest(imageTag);
+      } else {
+        return new Response(JSON.stringify({ error: "Missing tag query parameter" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -270,6 +304,14 @@ export class AgentConnection extends DurableObject {
         await this.handleLogStreamError(message);
         break;
 
+      case "agent.logs.line":
+        await this.handleAgentLogLine(message);
+        break;
+
+      case "agent.logs.history":
+        await this.handleAgentLogHistory(message);
+        break;
+
       case "rcon.connect":
         await this.handleRCONConnect(message);
         break;
@@ -285,6 +327,11 @@ export class AgentConnection extends DurableObject {
       case "test.echo":
         // Echo back for testing
         this.send(createMessage("test.echo", message.data));
+        break;
+
+      case "move.progress":
+        // M9.8.31: Forward data move progress to all connected frontends
+        await this.handleMoveProgress(message);
         break;
 
       default:
@@ -388,6 +435,13 @@ export class AgentConnection extends DurableObject {
 
       // Trigger initial server status sync in background
       this.ctx.waitUntil(this.triggerServerSync());
+
+      // Always subscribe to agent logs on connect to populate cache
+      if (!this.isAgentLogStreaming) {
+        console.log(`[AgentConnection] Subscribing to agent logs for caching`);
+        await this.send(createMessage("agent.logs.subscribe", { tail: 1000 }));
+        this.isAgentLogStreaming = true;
+      }
     } catch (error) {
       console.error("[AgentConnection] Registration error:", error);
       this.sendError("Registration failed");
@@ -478,6 +532,14 @@ export class AgentConnection extends DurableObject {
 
       // Trigger initial server status sync in background
       this.ctx.waitUntil(this.triggerServerSync());
+
+      // Always subscribe to agent logs on connect to populate cache
+      // This ensures we have logs cached even if no UI is viewing them
+      if (!this.isAgentLogStreaming) {
+        console.log(`[AgentConnection] Subscribing to agent logs for caching`);
+        await this.send(createMessage("agent.logs.subscribe", { tail: 1000 }));
+        this.isAgentLogStreaming = true;
+      }
     } catch (error) {
       console.error("[AgentConnection] Authentication error:", error);
       this.sendError("Authentication failed");
@@ -659,6 +721,9 @@ export class AgentConnection extends DurableObject {
     this.agentId = null;
     this.agentName = null;
     this.isRegistered = false;
+
+    // Reset agent log streaming state so we re-subscribe when agent reconnects
+    this.isAgentLogStreaming = false;
   }
 
   /**
@@ -1086,6 +1151,14 @@ export class AgentConnection extends DurableObject {
           await this.handleLogUnsubscribe(subscriberId, message);
           break;
 
+        case "agent.logs.subscribe":
+          await this.handleAgentLogSubscribe(subscriberId, ws, message);
+          break;
+
+        case "agent.logs.unsubscribe":
+          await this.handleAgentLogUnsubscribe(subscriberId);
+          break;
+
         case "rcon.connect":
         case "rcon.command":
         case "rcon.disconnect":
@@ -1403,6 +1476,189 @@ export class AgentConnection extends DurableObject {
         subscriber.ws.send(errorMessage);
       } catch (err) {
         console.error(`[AgentConnection] Failed to send error to subscriber ${subscriber.id}:`, err);
+        this.logSubscribers.delete(subscriber.id);
+      }
+    }
+  }
+
+  /**
+   * M9.8.33: Handle agent.logs.subscribe from UI client
+   * Subscribe to agent's own logs (not container logs)
+   */
+  private async handleAgentLogSubscribe(
+    subscriberId: string,
+    ws: WebSocket,
+    message: Message
+  ): Promise<void> {
+    console.log(`[AgentConnection] ========== handleAgentLogSubscribe START ==========`);
+    console.log(`[AgentConnection] subscriberId: ${subscriberId}`);
+    console.log(`[AgentConnection] this.ws: ${!!this.ws}`);
+    console.log(`[AgentConnection] this.isRegistered: ${this.isRegistered}`);
+    console.log(`[AgentConnection] this.agentId: ${this.agentId}`);
+    console.log(`[AgentConnection] this.isAgentLogStreaming: ${this.isAgentLogStreaming}`);
+    console.log(`[AgentConnection] agentLogSubscribers.size (before): ${this.agentLogSubscribers.size}`);
+
+    try {
+      const { tail = 500 } = (message.data || {}) as { tail?: number };
+
+      // Add subscriber
+      this.agentLogSubscribers.set(subscriberId, {
+        id: subscriberId,
+        ws,
+      });
+
+      console.log(`[AgentConnection] Subscriber ${subscriberId} subscribed to agent logs`);
+      console.log(`[AgentConnection] agentLogSubscribers.size (after): ${this.agentLogSubscribers.size}`);
+
+      // Check if agent is connected
+      const agentWs = await this.getActiveWebSocket();
+      console.log(`[AgentConnection] getActiveWebSocket returned: ${!!agentWs}`);
+      const isAgentOnline = !!agentWs;
+
+      // Send cached logs to new subscriber with online status
+      const cachedLogs = this.agentLogBuffer.getAll();
+
+      // Always send history (even if empty) with agent status
+      ws.send(JSON.stringify(createMessage("agent.logs.history", {
+        lines: cachedLogs,
+        agentOnline: isAgentOnline,
+        cachedCount: cachedLogs.length,
+      })));
+
+      if (cachedLogs.length > 0) {
+        console.log(`[AgentConnection] Sent ${cachedLogs.length} cached agent logs to ${subscriberId} (agent ${isAgentOnline ? 'online' : 'offline'})`);
+      }
+
+      // Start streaming from agent if agent is online
+      // Always send subscribe - agent handles duplicates gracefully
+      console.log(`[AgentConnection] Checking if should start stream: size=${this.agentLogSubscribers.size}, isStreaming=${this.isAgentLogStreaming}, isOnline=${isAgentOnline}`);
+      if (isAgentOnline) {
+        console.log(`[AgentConnection] Agent online - sending agent.logs.subscribe to agent`);
+        await this.send(createMessage("agent.logs.subscribe", {
+          tail,
+        }));
+        this.isAgentLogStreaming = true;
+        console.log(`[AgentConnection] agent.logs.subscribe sent`);
+      } else {
+        console.log(`[AgentConnection] Agent offline - not starting stream`);
+      }
+
+      // Send acknowledgment
+      ws.send(JSON.stringify(createMessage("agent.logs.subscribed", {
+        message: "Subscribed to agent logs",
+      })));
+    } catch (error) {
+      console.error(`[AgentConnection] Error in handleAgentLogSubscribe:`, error);
+      ws.send(JSON.stringify(createMessage("error", {
+        message: error instanceof Error ? error.message : "Failed to subscribe to agent logs",
+      })));
+    }
+  }
+
+  /**
+   * M9.8.33: Handle agent.logs.unsubscribe from UI client
+   */
+  private async handleAgentLogUnsubscribe(subscriberId: string): Promise<void> {
+    const subscriber = this.agentLogSubscribers.get(subscriberId);
+    if (!subscriber) {
+      return; // Already unsubscribed
+    }
+
+    this.agentLogSubscribers.delete(subscriberId);
+    console.log(`[AgentConnection] Subscriber ${subscriberId} unsubscribed from agent logs`);
+
+    // Stop streaming if no more subscribers
+    if (this.agentLogSubscribers.size === 0 && this.isAgentLogStreaming) {
+      console.log(`[AgentConnection] Stopping agent log stream (no more subscribers)`);
+      const agentWs = await this.getActiveWebSocket();
+      if (agentWs) {
+        await this.send(createMessage("agent.logs.unsubscribe", {}));
+      }
+      this.isAgentLogStreaming = false;
+    }
+  }
+
+  /**
+   * M9.8.33: Handle agent.logs.line from agent
+   * Broadcast to all agent log subscribers and cache
+   */
+  private async handleAgentLogLine(message: Message): Promise<void> {
+    const logLine = message.data as AgentLogLine;
+
+    // Add to buffer
+    this.agentLogBuffer.append(logLine);
+
+    // Broadcast to all agent log subscribers
+    if (this.agentLogSubscribers.size > 0) {
+      const broadcastMessage = JSON.stringify(createMessage("agent.logs.line", logLine));
+      for (const subscriber of this.agentLogSubscribers.values()) {
+        try {
+          subscriber.ws.send(broadcastMessage);
+        } catch (error) {
+          console.error(`[AgentConnection] Failed to send agent log to subscriber ${subscriber.id}:`, error);
+          this.agentLogSubscribers.delete(subscriber.id);
+        }
+      }
+    }
+  }
+
+  /**
+   * M9.8.33: Handle agent.logs.history from agent
+   * Forward to all agent log subscribers (initial history on subscribe)
+   */
+  private async handleAgentLogHistory(message: Message): Promise<void> {
+    const { lines } = message.data as { lines: AgentLogLine[] };
+
+    console.log(`[AgentConnection] Received ${lines?.length || 0} agent log history lines`);
+
+    if (!lines || lines.length === 0) return;
+
+    // Add to buffer
+    for (const line of lines) {
+      this.agentLogBuffer.append(line);
+    }
+
+    // Forward to all subscribers
+    if (this.agentLogSubscribers.size > 0) {
+      const historyMessage = JSON.stringify(createMessage("agent.logs.history", { lines }));
+      for (const subscriber of this.agentLogSubscribers.values()) {
+        try {
+          subscriber.ws.send(historyMessage);
+        } catch (error) {
+          console.error(`[AgentConnection] Failed to send agent log history to subscriber ${subscriber.id}:`, error);
+          this.agentLogSubscribers.delete(subscriber.id);
+        }
+      }
+    }
+  }
+
+  /**
+   * M9.8.31: Handle move.progress from agent
+   * Broadcast to all connected frontends (they filter by serverName)
+   */
+  private async handleMoveProgress(message: Message): Promise<void> {
+    const progress = message.data as {
+      serverName: string;
+      phase: string;
+      percent: number;
+      bytesTotal: number;
+      bytesCopied: number;
+      filesTotal: number;
+      filesCopied: number;
+      currentFile?: string;
+      error?: string;
+    };
+
+    console.log(`[AgentConnection] Move progress: ${progress.serverName} - ${progress.phase} ${progress.percent}%`);
+
+    // Broadcast to ALL connected frontends (they filter by serverName)
+    const broadcastMessage = JSON.stringify(createMessage("move.progress", progress));
+
+    for (const subscriber of this.logSubscribers.values()) {
+      try {
+        subscriber.ws.send(broadcastMessage);
+      } catch (error) {
+        console.error(`[AgentConnection] Failed to send move progress to subscriber ${subscriber.id}:`, error);
         this.logSubscribers.delete(subscriber.id);
       }
     }
@@ -1733,13 +1989,23 @@ export class AgentConnection extends DurableObject {
       });
     }
 
-    const { containerId, serverName, removeVolumes } = body;
+    const { containerId, serverName, removeVolumes, dataPath } = body;
     // containerId and serverName are both optional now
     // - If containerId exists, try to remove container first
     // - If serverName exists and removeVolumes=true, remove data directories
     if (!containerId && !serverName) {
       return new Response(JSON.stringify({
         error: "Missing containerId or serverName",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // dataPath is required for proper cleanup
+    if (!dataPath) {
+      return new Response(JSON.stringify({
+        error: "Missing dataPath - required for data directory operations",
       }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -1771,6 +2037,7 @@ export class AgentConnection extends DurableObject {
         containerId: containerId || '',
         serverName: serverName || '',
         removeVolumes: removeVolumes ?? false,
+        dataPath: dataPath,
       },
       reply: inbox,
     });
@@ -1823,7 +2090,7 @@ export class AgentConnection extends DurableObject {
       });
     }
 
-    const { containerId } = body;
+    const { containerId, name, registry, imageTag, config, gamePort, udpPort, rconPort, dataPath } = body;
     if (!containerId) {
       return new Response(JSON.stringify({
         error: "Missing containerId",
@@ -1852,11 +2119,22 @@ export class AgentConnection extends DurableObject {
     });
 
     // Send server.rebuild request to agent with reply inbox
+    // Include full config if provided (for config updates), otherwise just containerId (simple rebuild)
+    const rebuildData: any = { containerId };
+    if (name && registry && imageTag && config) {
+      rebuildData.name = name;
+      rebuildData.registry = registry;
+      rebuildData.imageTag = imageTag;
+      rebuildData.config = config;
+      rebuildData.gamePort = gamePort;
+      rebuildData.udpPort = udpPort;
+      rebuildData.rconPort = rconPort;
+      rebuildData.dataPath = dataPath;
+    }
+
     this.send({
       subject: "server.rebuild",
-      data: {
-        containerId,
-      },
+      data: rebuildData,
       reply: inbox,
     });
 
@@ -1882,6 +2160,102 @@ export class AgentConnection extends DurableObject {
   }
 
   /**
+   * M9.8.29: HTTP handler for server data move request
+   * Moves server data from old path to new path before rebuild
+   */
+  private async handleServerMoveDataRequest(request: Request, serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverName, oldPath, newPath } = body;
+    if (!serverName || !oldPath || !newPath) {
+      return new Response(JSON.stringify({
+        error: "Missing required fields: serverName, oldPath, newPath",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[AgentConnection] Moving server data: ${serverName} from ${oldPath} to ${newPath}`);
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (5 minutes for large data moves)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server data move timeout - operation took longer than 5 minutes"));
+      }, 300000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send server.movedata request to agent
+    this.send({
+      subject: "server.movedata",
+      data: {
+        serverName,
+        oldPath,
+        newPath,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      if (success) {
+        console.log(`[AgentConnection] Server data move completed: ${serverName}`);
+      } else {
+        console.error(`[AgentConnection] Server data move failed: ${reply.data.error}`);
+      }
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error(`[AgentConnection] Server data move error:`, error);
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server data move failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
    * Handle server sync request from API
    */
   private async handleServerSyncRequest(request: Request): Promise<Response> {
@@ -1897,6 +2271,68 @@ export class AgentConnection extends DurableObject {
       console.error("[AgentConnection] Server sync error:", error);
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Server sync failed",
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Handle check data request for a single server (used by restore endpoint)
+   */
+  private async handleCheckDataRequest(request: Request): Promise<Response> {
+    try {
+      const body = await request.json();
+      const { serverName, dataPath } = body;
+
+      if (!serverName || !dataPath) {
+        return new Response(JSON.stringify({
+          error: "Missing serverName or dataPath",
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Check if agent is connected
+      if (!this.ws) {
+        return new Response(JSON.stringify({
+          dataExists: false,
+          error: "Agent offline",
+        }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Call agent to check data existence
+      const checkResponse = await this.sendMessageWithReply({
+        subject: 'server.checkdata',
+        data: {
+          servers: [serverName],
+          dataPath: dataPath,
+        },
+      }, 10000);
+
+      const status = checkResponse.data.statuses?.[0];
+      const dataExists = status?.dataExists || false;
+
+      console.log(`[CheckData] Server ${serverName}: data_exists=${dataExists} (path: ${dataPath})`);
+
+      return new Response(JSON.stringify({
+        dataExists,
+        serverName,
+        dataPath,
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("[AgentConnection] Check data error:", error);
+      return new Response(JSON.stringify({
+        dataExists: false,
+        error: error instanceof Error ? error.message : "Data check failed",
       }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
@@ -1934,6 +2370,16 @@ export class AgentConnection extends DurableObject {
 
     console.log(`[Sync] Syncing ${servers.length} servers for agent ${effectiveAgentId}`);
 
+    // Query agent config to get default data path
+    const agentResult = await this.env.DB.prepare(
+      `SELECT server_data_path FROM agents WHERE id = ?`
+    )
+      .bind(effectiveAgentId)
+      .first();
+
+    const agentDefaultPath = agentResult?.server_data_path || '/var/lib/zedops/servers';
+    console.log(`[Sync] Agent default data path: ${agentDefaultPath}`);
+
     // Query agent for container list
     const containersResponse = await this.sendMessageWithReply({
       subject: 'container.list',  // Note: singular "container" not "containers"
@@ -1943,20 +2389,42 @@ export class AgentConnection extends DurableObject {
     const containers = containersResponse.data.containers || [];
     console.log(`[Sync] Found ${containers.length} containers on agent`);
 
-    // Query agent for data existence (batch check all server names)
-    const serverNames = servers.map((s: any) => s.name);
-    const dataCheckResponse = await this.sendMessageWithReply({
-      subject: 'server.checkdata',
-      data: {
-        servers: serverNames,
-        dataPath: '/var/lib/zedops/servers',
-      },
-    }, 10000);
+    // Group servers by data path (server custom path || agent default path)
+    // This allows us to batch checkdata calls by unique paths
+    const serversByPath = new Map<string, any[]>();
+    for (const server of servers) {
+      const effectivePath = server.server_data_path || agentDefaultPath;
+      if (!serversByPath.has(effectivePath)) {
+        serversByPath.set(effectivePath, []);
+      }
+      serversByPath.get(effectivePath)!.push(server);
+    }
 
-    const dataStatuses = dataCheckResponse.data.statuses || [];
-    console.log(`[Sync] Checked data existence for ${dataStatuses.length} servers`);
+    console.log(`[Sync] Grouped ${servers.length} servers into ${serversByPath.size} unique data path(s)`);
 
-    // Build lookup maps
+    // Check data existence for each unique path
+    const dataByName = new Map();
+    for (const [dataPath, pathServers] of serversByPath) {
+      const serverNames = pathServers.map((s: any) => s.name);
+      console.log(`[Sync] Checking ${serverNames.length} servers at path: ${dataPath}`);
+
+      const dataCheckResponse = await this.sendMessageWithReply({
+        subject: 'server.checkdata',
+        data: {
+          servers: serverNames,
+          dataPath: dataPath,
+        },
+      }, 10000);
+
+      const statuses = dataCheckResponse.data.statuses || [];
+      for (const status of statuses) {
+        dataByName.set(status.serverName, status);
+      }
+    }
+
+    console.log(`[Sync] Checked data existence for ${dataByName.size} servers`);
+
+    // Build container lookup map
     const containerByName = new Map();
     for (const container of containers) {
       const labels = container.labels || {};
@@ -1964,11 +2432,6 @@ export class AgentConnection extends DurableObject {
       if (serverName) {
         containerByName.set(serverName, container);
       }
-    }
-
-    const dataByName = new Map();
-    for (const dataStatus of dataStatuses) {
-      dataByName.set(dataStatus.serverName, dataStatus);
     }
 
     // Update each server's status
@@ -2062,6 +2525,78 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       console.error("[AgentConnection] Error triggering sync:", error);
       // Don't throw - sync failure shouldn't prevent agent connection
+    }
+  }
+
+  /**
+   * Handle image inspect request - Query Docker image for default ENV variables
+   * Implements request/reply pattern with agent
+   */
+  private async handleImageInspectRequest(imageTag: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not registered",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<any>((resolve, reject) => {
+      // Set timeout (10 seconds)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Image inspect timeout"));
+      }, 10000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        this.pendingReplies.delete(inbox);
+        resolve(msg.data);
+      });
+    });
+
+    // Send request to agent
+    this.send({
+      subject: "images.inspect",
+      data: { imageTag },
+      reply: inbox,
+    });
+
+    console.log(`[AgentConnection] Sent images.inspect request to agent ${this.agentId} for image: ${imageTag}`);
+
+    // Wait for reply
+    try {
+      const response = await replyPromise;
+
+      if (!response.success) {
+        return new Response(JSON.stringify({
+          error: response.error || "Failed to inspect image",
+        }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        defaults: response.defaults || {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error(`[AgentConnection] Error waiting for image inspect response:`, error);
+      return new Response(JSON.stringify({
+        error: "Timeout waiting for agent response",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 }

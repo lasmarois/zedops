@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 )
 
@@ -503,4 +505,60 @@ func formatUptime(d time.Duration) string {
 	}
 
 	return fmt.Sprintf("%dm", minutes)
+}
+
+// GetImageDefaults inspects a local Docker image and returns default ENV variables
+// The image must already be pulled locally (returns error if not found)
+// If the exact image tag is not found, tries to find an image with a matching tag
+func (dc *DockerClient) GetImageDefaults(ctx context.Context, imageTag string) (map[string]string, error) {
+	// Try direct inspection first
+	inspect, err := dc.cli.ImageInspect(ctx, imageTag)
+	if err != nil {
+		// If direct inspection fails, try to find an image with matching tag
+		log.Printf("Direct inspection of '%s' failed, searching for images with matching tag...", imageTag)
+
+		images, listErr := dc.cli.ImageList(ctx, image.ListOptions{})
+		if listErr != nil {
+			return nil, fmt.Errorf("failed to list images: %w", listErr)
+		}
+
+		// Look for an image where one of its RepoTags matches the pattern
+		var matchedImage string
+		for _, img := range images {
+			for _, tag := range img.RepoTags {
+				// Check if this tag ends with the provided imageTag
+				// e.g., "registry.gitlab.../steam-zomboid:latest" matches ":latest"
+				if strings.HasSuffix(tag, ":"+imageTag) || tag == imageTag {
+					matchedImage = tag
+					log.Printf("Found matching image: %s", matchedImage)
+					break
+				}
+			}
+			if matchedImage != "" {
+				break
+			}
+		}
+
+		if matchedImage == "" {
+			return nil, fmt.Errorf("no image found matching tag '%s': %w", imageTag, err)
+		}
+
+		// Try inspecting with the matched image name
+		inspect, err = dc.cli.ImageInspect(ctx, matchedImage)
+		if err != nil {
+			return nil, fmt.Errorf("failed to inspect matched image %s: %w", matchedImage, err)
+		}
+	}
+
+	// Parse ENV array (format: "KEY=VALUE") into map
+	defaults := make(map[string]string)
+	for _, env := range inspect.Config.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			defaults[parts[0]] = parts[1]
+		}
+	}
+
+	log.Printf("Extracted %d ENV defaults from image %s", len(defaults), imageTag)
+	return defaults, nil
 }

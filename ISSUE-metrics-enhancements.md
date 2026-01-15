@@ -212,6 +212,31 @@ Milestone 5 delivered basic host metrics (CPU, memory, disk) with real-time disp
 
 ---
 
+### 8. Real-Time Agent Logs (New)
+
+**Goal:** View agent's log output in real-time from the platform
+
+**Requirements:**
+- [ ] Agent captures its own stdout/stderr log output
+- [ ] New message type: `agent.logs` (subscribe/stream)
+- [ ] Agent streams logs to manager when subscribed
+- [ ] UI adds "Logs" tab to agent detail page (similar to container logs)
+- [ ] Log filtering, search, pause/resume controls
+
+**Implementation Options:**
+- **Option A (WebSocket stream)**: Frontend subscribes, agent streams via existing WS
+- **Option B (Log buffer)**: Agent buffers last N lines, frontend polls or fetches on demand
+- **Option C (Log file)**: Agent writes to file, frontend requests via new endpoint
+
+**Use Cases:**
+- Debug agent connection issues from platform
+- Monitor agent startup and authentication
+- View agent errors without SSH access to host
+
+**Estimated Effort:** 2-3 days
+
+---
+
 ## Related Milestones
 
 - **Milestone 5** (Complete) - Host Metrics Display

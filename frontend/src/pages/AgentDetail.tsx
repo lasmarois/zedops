@@ -1,18 +1,45 @@
+import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Breadcrumb } from "@/components/layout/Breadcrumb"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAgents } from "@/hooks/useAgents"
 import { Laptop, Server, HardDrive } from "lucide-react"
 import { AgentServerList } from "@/components/AgentServerList"
+import { AgentConfigModal } from "@/components/AgentConfigModal"
+import { AgentLogViewer } from "@/components/AgentLogViewer"
+import { fetchAgentConfig, updateAgentConfig, type AgentConfig } from "@/lib/api"
 
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: agentsData, isLoading } = useAgents()
+  const [configModalOpen, setConfigModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
+
+  // Fetch agent configuration - MUST be before any early returns (React hooks rule)
+  const { data: agentConfig, isLoading: isLoadingConfig } = useQuery({
+    queryKey: ['agentConfig', id],
+    queryFn: () => fetchAgentConfig(id!),
+    enabled: !!id && (configModalOpen || activeTab === 'config'), // Fetch when modal open OR config tab active
+  })
+
+  // Update agent configuration mutation - MUST be before any early returns
+  const updateConfigMutation = useMutation({
+    mutationFn: (config: Partial<AgentConfig>) => updateAgentConfig(id!, config),
+    onSuccess: () => {
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries({ queryKey: ['agentConfig', id] })
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+    },
+  })
 
   const agent = agentsData?.agents.find(a => a.id === id)
 
@@ -42,6 +69,10 @@ export function AgentDetail() {
         </div>
       </div>
     )
+  }
+
+  const handleSaveConfig = async (config: Partial<AgentConfig>) => {
+    await updateConfigMutation.mutateAsync(config)
   }
 
   const metrics = agent.metadata?.metrics
@@ -79,7 +110,11 @@ export function AgentDetail() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" disabled={agent.status !== 'online'}>
+          <Button
+            variant="outline"
+            disabled={agent.status !== 'online'}
+            onClick={() => setConfigModalOpen(true)}
+          >
             Configure
           </Button>
           <Button
@@ -94,11 +129,12 @@ export function AgentDetail() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue="overview" className="space-y-6" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="servers">Servers</TabsTrigger>
           <TabsTrigger value="config">Configuration</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -234,16 +270,84 @@ export function AgentDetail() {
         <TabsContent value="config" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Agent Configuration</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Server Settings</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={() => setConfigModalOpen(true)}
+                  disabled={agent.status !== 'online'}
+                >
+                  Edit Configuration
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Agent configuration settings will be available in a future update.
-              </p>
+            <CardContent className="space-y-6">
+              {isLoadingConfig ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              ) : agentConfig ? (
+                <>
+                  {/* Server Data Path */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Server Data Path</Label>
+                    <div className="p-3 bg-muted rounded-md font-mono text-sm">
+                      {agentConfig.server_data_path}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Host directory where server data (bin, saves) will be stored.
+                    </p>
+                  </div>
+
+                  {/* Docker Registry */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Docker Registry</Label>
+                    <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
+                      {agentConfig.steam_zomboid_registry}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Docker registry URL for the Steam Zomboid server image.
+                    </p>
+                  </div>
+
+                  {/* Info Banner */}
+                  <Alert>
+                    <AlertDescription>
+                      These settings are inherited by new servers created on this agent.
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    Failed to load agent configuration. Please try refreshing the page.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Logs Tab - M9.8.33 */}
+        <TabsContent value="logs" className="space-y-6">
+          <Card>
+            <CardContent className="pt-6">
+              <AgentLogViewer agentId={id!} agentName={agent.name} />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Agent Configuration Modal */}
+      <AgentConfigModal
+        open={configModalOpen}
+        onOpenChange={setConfigModalOpen}
+        agentName={agent.name}
+        currentConfig={agentConfig || null}
+        isLoadingConfig={isLoadingConfig}
+        onSave={handleSaveConfig}
+      />
     </div>
   )
 }

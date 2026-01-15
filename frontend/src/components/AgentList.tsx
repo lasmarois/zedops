@@ -176,12 +176,12 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
             return (
               <Card
                 key={agent.id}
-                className={`transition-all duration-200 ${
+                className={`transition-all duration-200 cursor-pointer hover:shadow-lg hover:scale-[1.02] ${
                   isOnline
-                    ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] border-l-4 border-l-success'
+                    ? 'border-l-4 border-l-success'
                     : 'opacity-75 border-l-4 border-l-destructive'
                 }`}
-                onClick={() => isOnline && onSelectAgent(agent)}
+                onClick={() => onSelectAgent(agent)}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -232,12 +232,10 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                     </div>
                   </div>
 
-                  {/* Click hint for online agents */}
-                  {isOnline && (
-                    <div className="text-xs text-muted-foreground text-center pt-2">
-                      Click to view details →
-                    </div>
-                  )}
+                  {/* Click hint */}
+                  <div className="text-xs text-muted-foreground text-center pt-2">
+                    {isOnline ? 'Click to view details →' : 'Click to view cached logs →'}
+                  </div>
                 </CardContent>
               </Card>
             );

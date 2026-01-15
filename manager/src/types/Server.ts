@@ -6,6 +6,7 @@ export interface Server {
   name: string;
   container_id: string | null;
   config: string; // JSON string of ENV variables
+  image: string | null; // M9.8.32: Per-server image override (NULL = use agent's steam_zomboid_registry)
   image_tag: string;
   game_port: number;
   udp_port: number;
@@ -25,11 +26,13 @@ export interface ServerConfig {
 
 export interface CreateServerRequest {
   name: string;
+  image?: string; // M9.8.32: Custom image path (optional, NULL = use agent's steam_zomboid_registry)
   imageTag: string;
   config: ServerConfig;
   gamePort?: number; // Optional, will auto-suggest if not provided
   udpPort?: number;  // Optional, calculated as gamePort + 1
   rconPort?: number; // Optional, will auto-suggest if not provided
+  server_data_path?: string; // Optional, M9.8.23: Per-server path override (NULL = inherit from agent)
 }
 
 export interface CreateServerResponse {

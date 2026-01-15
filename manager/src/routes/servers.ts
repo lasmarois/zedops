@@ -35,11 +35,14 @@ servers.get('/', async (c) => {
 
   try {
     // Query all servers with agent information (JOIN)
+    // M9.8.32: Include steam_zomboid_registry for image reference display
     const result = await c.env.DB.prepare(
       `SELECT
         s.*,
         a.name as agent_name,
-        a.status as agent_status
+        a.status as agent_status,
+        a.server_data_path as agent_server_data_path,
+        a.steam_zomboid_registry as steam_zomboid_registry
       FROM servers s
       LEFT JOIN agents a ON s.agent_id = a.id
       ORDER BY s.created_at DESC`
@@ -59,13 +62,17 @@ servers.get('/', async (c) => {
       agent_id: row.agent_id,
       agent_name: row.agent_name || 'Unknown', // Fallback if agent deleted
       agent_status: row.agent_status || 'offline', // Agent connectivity status
+      agent_server_data_path: row.agent_server_data_path, // Agent's default data path
+      steam_zomboid_registry: row.steam_zomboid_registry, // M9.8.32: Agent's default registry
       name: row.name,
       container_id: row.container_id,
       config: row.config,
+      image: row.image, // M9.8.32: Per-server image override
       image_tag: row.image_tag,
       game_port: row.game_port,
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,
+      server_data_path: row.server_data_path, // Per-server override (NULL = use agent default)
       status: row.status,
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
@@ -99,11 +106,14 @@ servers.get('/:id', async (c) => {
 
   try {
     // Query server with agent information (JOIN)
+    // M9.8.32: Include steam_zomboid_registry for image reference display
     const server = await c.env.DB.prepare(
       `SELECT
         s.*,
         a.name as agent_name,
-        a.status as agent_status
+        a.status as agent_status,
+        a.server_data_path as agent_server_data_path,
+        a.steam_zomboid_registry as steam_zomboid_registry
       FROM servers s
       LEFT JOIN agents a ON s.agent_id = a.id
       WHERE s.id = ?`
@@ -128,13 +138,17 @@ servers.get('/:id', async (c) => {
       agent_id: server.agent_id,
       agent_name: server.agent_name || 'Unknown', // Fallback if agent deleted
       agent_status: server.agent_status || 'offline', // Agent connectivity status
+      agent_server_data_path: server.agent_server_data_path, // Agent's default data path
+      steam_zomboid_registry: server.steam_zomboid_registry, // M9.8.32: Agent's default registry
       name: server.name,
       container_id: server.container_id,
       config: server.config, // Full config (ENV vars)
+      image: server.image, // M9.8.32: Per-server image override
       image_tag: server.image_tag,
       game_port: server.game_port,
       udp_port: server.udp_port,
       rcon_port: server.rcon_port,
+      server_data_path: server.server_data_path, // Per-server override (NULL = use agent default)
       status: server.status,
       data_exists: server.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: server.deleted_at,

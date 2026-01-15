@@ -96,6 +96,69 @@ export async function fetchAgent(id: string): Promise<Agent> {
 }
 
 /**
+ * Fetch agent configuration
+ */
+export interface AgentConfig {
+  server_data_path: string;
+  steam_zomboid_registry: string;
+}
+
+export async function fetchAgentConfig(agentId: string): Promise<AgentConfig> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/config`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    if (response.status === 403) {
+      throw new Error('Insufficient permissions - admin role required');
+    }
+    throw new Error('Failed to fetch agent configuration');
+  }
+
+  const data = await response.json();
+  return data.config;
+}
+
+/**
+ * Update agent configuration
+ */
+export async function updateAgentConfig(
+  agentId: string,
+  config: Partial<AgentConfig>
+): Promise<AgentConfig> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/config`, {
+    method: 'PUT',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(config),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    if (response.status === 403) {
+      throw new Error('Insufficient permissions - admin role required');
+    }
+    if (response.status === 400) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Invalid configuration');
+    }
+    throw new Error('Failed to update agent configuration');
+  }
+
+  const data = await response.json();
+  return data.config;
+}
+
+/**
  * Generate ephemeral token for agent registration
  */
 export async function generateEphemeralToken(
@@ -285,13 +348,17 @@ export interface Server {
   agent_id: string;
   agent_name: string;
   agent_status: 'online' | 'offline';
+  agent_server_data_path: string | null; // Agent's default data path
+  steam_zomboid_registry: string | null; // M9.8.32: Agent's default registry
   name: string;
   container_id: string | null;
   config: string; // JSON string of ENV variables
+  image: string | null; // M9.8.32: Per-server image override (NULL = use agent default)
   image_tag: string;
   game_port: number;
   udp_port: number;
   rcon_port: number;
+  server_data_path: string | null; // M9.8.23: Per-server data path override (NULL = use agent default)
   status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting' | 'missing' | 'deleted';
   data_exists: boolean;
   deleted_at: number | null;
@@ -305,11 +372,13 @@ export interface ServerConfig {
 
 export interface CreateServerRequest {
   name: string;
+  image?: string; // M9.8.32: Custom registry override (optional, NULL = use agent default)
   imageTag: string;
   config: ServerConfig;
   gamePort?: number;
   udpPort?: number;
   rconPort?: number;
+  server_data_path?: string; // M9.8.23: Optional per-server data path override
 }
 
 export interface ServersResponse {
@@ -440,6 +509,127 @@ export async function rebuildServer(
   }
 
   return response.json();
+}
+
+/**
+ * Update server configuration (Save step - no restart)
+ * M9.8.32: Added image parameter for custom registry override
+ */
+export async function updateServerConfig(
+  agentId: string,
+  serverId: string,
+  config: Record<string, string>,
+  imageTag?: string,
+  serverDataPath?: string | null,
+  image?: string | null  // M9.8.32: Custom registry override
+): Promise<{
+  success: boolean;
+  message: string;
+  pendingRestart: boolean;
+  dataPathChanged: boolean;
+  configChanged: boolean;
+  imageTagChanged: boolean;
+  imageChanged?: boolean;  // M9.8.32
+  oldDataPath?: string; // M9.8.29: Returned when dataPathChanged is true
+}> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/config`,
+    {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ config, image, imageTag, serverDataPath }),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 400) {
+      const data = await response.json();
+      throw new Error(data.error || 'Invalid configuration');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to update configuration');
+  }
+
+  return response.json();
+}
+
+/**
+ * Apply server configuration changes (restart container with new config)
+ * M9.8.29: Optional oldDataPath triggers data migration before rebuild
+ */
+export async function applyServerConfig(
+  agentId: string,
+  serverId: string,
+  oldDataPath?: string
+): Promise<{ success: boolean; message: string; server: Server }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/apply-config`,
+    {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      // M9.8.29: Include oldDataPath in body if provided (for data migration)
+      body: oldDataPath ? JSON.stringify({ oldDataPath }) : undefined,
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 400) {
+      const data = await response.json();
+      throw new Error(data.error || 'Cannot apply configuration');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to apply configuration');
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch default ENV variables from Docker image
+ * Queries the agent to inspect the image and return default values
+ */
+export async function fetchImageDefaults(
+  agentId: string,
+  imageTag: string
+): Promise<Record<string, string>> {
+  // Use query parameter to avoid issues with slashes in image names
+  const encodedTag = encodeURIComponent(imageTag);
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/images/defaults?tag=${encodedTag}`,
+    {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Agent not found');
+    }
+    if (response.status === 503) {
+      throw new Error('Agent not connected');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to fetch image defaults');
+  }
+
+  const data = await response.json();
+  return data.defaults || {};
 }
 
 /**

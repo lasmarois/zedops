@@ -8,9 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogViewer } from "@/components/LogViewer"
 import { RconTerminal } from "@/components/RconTerminal"
-import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics } from "@/hooks/useServers"
+import { ConfigurationDisplay } from "@/components/ConfigurationDisplay"
+import { ConfigurationEdit } from "@/components/ConfigurationEdit"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics, useUpdateServerConfig, useApplyServerConfig } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { useLogStream } from "@/hooks/useLogStream"
+import { useMoveProgress } from "@/hooks/useMoveProgress"
 import { RconHistoryProvider, useRconHistory } from "@/contexts/RconHistoryContext"
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
@@ -26,6 +30,20 @@ function ServerDetailContent() {
   const restartContainerMutation = useRestartContainer()
   const rebuildServerMutation = useRebuildServer()
   const deleteServerMutation = useDeleteServer()
+  const updateConfigMutation = useUpdateServerConfig()
+  const applyConfigMutation = useApplyServerConfig()
+
+  // Configuration edit mode state
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [pendingChanges, setPendingChanges] = useState<{
+    pendingRestart: boolean;
+    dataPathChanged: boolean;
+    configChanged: boolean;
+    oldDataPath?: string; // M9.8.29: Store old path for data migration
+  } | null>(null)
+
+  // M9.8.31: Track if data migration is in progress
+  const [isMigrating, setIsMigrating] = useState(false)
 
   // Fetch server metrics (must be called unconditionally - hooks rule)
   const { data: metricsData } = useServerMetrics(
@@ -39,6 +57,13 @@ function ServerDetailContent() {
     agentId: serverData?.server?.agent_id || '',
     containerId: serverData?.server?.container_id || '',
     enabled: serverData?.server?.status === 'running' && !!serverData?.server?.container_id
+  })
+
+  // M9.8.31: Move progress streaming (enabled only during migration)
+  const { progress: moveProgress, reset: resetMoveProgress } = useMoveProgress({
+    agentId: serverData?.server?.agent_id || '',
+    serverName: serverData?.server?.name || '',
+    enabled: isMigrating && !!serverData?.server?.agent_id && !!serverData?.server?.name
   })
 
   // Log preview controls state
@@ -93,6 +118,73 @@ function ServerDetailContent() {
         }
       }
     )
+  }
+
+  // M9.8.32: Added image parameter for per-server registry override
+  const handleSaveConfig = (config: Record<string, string>, imageTag?: string, serverDataPath?: string | null, image?: string | null) => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
+
+    updateConfigMutation.mutate(
+      { agentId, serverId: id, config, imageTag, serverDataPath, image },
+      {
+        onSuccess: (data) => {
+          setPendingChanges({
+            pendingRestart: data.pendingRestart,
+            dataPathChanged: data.dataPathChanged,
+            configChanged: data.configChanged,
+            // M9.8.29: Store old path for data migration when applying
+            oldDataPath: data.oldDataPath,
+          })
+          setIsEditMode(false)
+        },
+        onError: (error) => {
+          alert(`Failed to save configuration: ${error.message}`)
+        }
+      }
+    )
+  }
+
+  const handleApplyConfig = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    const serverName = serverData?.server?.name
+    if (!agentId) return
+
+    const message = pendingChanges?.dataPathChanged
+      ? `Apply configuration changes to "${serverName}"?\n\nThis will restart the server and migrate data to the new path. This may take several minutes depending on data size.`
+      : `Apply configuration changes to "${serverName}"?\n\nThis will restart the server (~30 seconds downtime).`
+
+    if (!confirm(message)) return
+
+    // M9.8.31: Start migration tracking if data path is changing
+    if (pendingChanges?.dataPathChanged) {
+      setIsMigrating(true)
+      resetMoveProgress()
+    }
+
+    // M9.8.29: Pass oldDataPath if data path changed (triggers data migration)
+    applyConfigMutation.mutate(
+      { agentId, serverId: id, oldDataPath: pendingChanges?.oldDataPath },
+      {
+        onSuccess: () => {
+          setPendingChanges(null)
+          setIsMigrating(false)
+          resetMoveProgress()
+        },
+        onError: (error) => {
+          setIsMigrating(false)
+          resetMoveProgress()
+          alert(`Failed to apply configuration: ${error.message}`)
+        }
+      }
+    )
+  }
+
+  const handleCancelEdit = () => {
+    if (updateConfigMutation.isPending) return
+    setIsEditMode(false)
   }
 
   if (isLoading) {
@@ -470,19 +562,91 @@ function ServerDetailContent() {
 
         {/* Configuration Tab */}
         <TabsContent value="config" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Server Configuration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Docker ENV configuration editor will be available in a future update.
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Planned features: Basic settings, network configuration, port management with conflict detection.
-              </p>
-            </CardContent>
-          </Card>
+          {/* M9.8.31: Migration Progress Banner - Slick UI matching app theme */}
+          {isMigrating && (
+            <div className="rounded-lg border border-[hsl(199,92%,65%,0.3)] bg-card p-4 shadow-[0_0_15px_rgba(51,225,255,0.1)]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-[#33E1FF] animate-pulse" />
+                    <strong className="text-foreground">Migrating server data...</strong>
+                  </div>
+                  <span className="text-sm font-medium" style={{ color: '#33E1FF' }}>
+                    {moveProgress?.phase === 'copying' && 'Copying files'}
+                    {moveProgress?.phase === 'verifying' && 'Verifying copy'}
+                    {moveProgress?.phase === 'cleaning' && 'Cleaning up'}
+                    {moveProgress?.phase === 'complete' && 'Complete!'}
+                    {!moveProgress && 'Connecting...'}
+                  </span>
+                </div>
+                {/* Progress Bar - Animated gradient */}
+                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300 ease-out"
+                    style={{
+                      width: `${moveProgress?.percent || 0}%`,
+                      background: 'linear-gradient(90deg, #3B82F6 0%, #33E1FF 50%, #3DDC97 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s linear infinite',
+                    }}
+                  />
+                </div>
+                {/* Progress Details */}
+                {moveProgress && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span className="font-mono">{moveProgress.percent || 0}%</span>
+                    <span>
+                      {(moveProgress.filesCopied || 0).toLocaleString()} / {(moveProgress.filesTotal || 0).toLocaleString()} files
+                      <span className="mx-2 opacity-50">•</span>
+                      {((moveProgress.bytesCopied || 0) / 1024 / 1024).toFixed(1)} / {((moveProgress.bytesTotal || 0) / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  </div>
+                )}
+                {moveProgress?.currentFile && (
+                  <div className="text-xs text-muted-foreground truncate font-mono opacity-70">
+                    → {moveProgress.currentFile}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Pending Changes Banner */}
+          {pendingChanges && pendingChanges.pendingRestart && !isEditMode && !isMigrating && (
+            <Alert>
+              <AlertDescription className="flex items-center justify-between">
+                <div>
+                  <strong>Configuration changes saved.</strong>
+                  {pendingChanges.dataPathChanged && (
+                    <span className="ml-2">Data path will be migrated when applied.</span>
+                  )}
+                  <span className="ml-2">Click "Apply Changes" to restart the server with new configuration.</span>
+                </div>
+                <Button
+                  onClick={handleApplyConfig}
+                  disabled={applyConfigMutation.isPending}
+                  size="sm"
+                >
+                  {applyConfigMutation.isPending ? 'Applying...' : 'Apply Changes'}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Display or Edit Mode */}
+          {isEditMode ? (
+            <ConfigurationEdit
+              server={server}
+              onSave={handleSaveConfig}
+              onCancel={handleCancelEdit}
+              isSaving={updateConfigMutation.isPending}
+            />
+          ) : (
+            <ConfigurationDisplay
+              server={server}
+              onEdit={() => setIsEditMode(true)}
+            />
+          )}
         </TabsContent>
 
         {/* Logs Tab */}

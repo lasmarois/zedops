@@ -420,6 +420,43 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
+### M9.8.33 - Real-Time Agent Logs
+**Status:** COMPLETE
+**Priority:** MEDIUM (Feature Enhancement)
+**Duration:** ~3 hours
+**Completed:** 2026-01-14
+
+**Feature Implemented:** Real-time agent log streaming in the platform UI:
+- Agent LogCapture with 1000-line ring buffer
+- WebSocket pub/sub for real-time streaming
+- DO caching (1000 lines) for offline viewing
+- Auto-subscribe on agent connect (no UI dependency)
+- Re-subscribe on agent reconnect
+- AgentLogViewer component with status indicators
+- Logs tab in AgentDetail page
+
+**Key Components:**
+- **Agent:** `logcapture.go`, `main.go` (handlers), `reconnect.go` (cleanup)
+- **Manager:** `AgentConnection.ts` (routing, caching, auto-subscribe)
+- **Frontend:** `AgentLogViewer.tsx`, `useAgentLogStream.ts`, `AgentDetail.tsx`
+
+**Bug Fixes:**
+1. Agent cleanup on disconnect (prevents "Already streaming" error)
+2. DO flag reset on agent disconnect
+3. Re-subscribe logic on agent reconnect
+4. Auto-cache on connect (not dependent on UI viewing)
+
+**Deployment:**
+- Version: 78e77d3d-ce7a-4979-a8b8-a26aec1fd3a8
+- URL: https://zedops.mail-bcf.workers.dev
+
+**User Feedback:** "ok it works" (both live streaming and offline caching verified)
+
+**Files:**
+- `planning-history/m9.8.33-agent-logs/M9833-COMPLETE.md` - Completion summary
+
+---
+
 ## Completion Criteria
 
 M9.8 complete when:
@@ -443,6 +480,66 @@ M9.8 complete when:
 ---
 
 ## Future Enhancements (Post M9.8)
+
+### M9.8.32 - Separate Image and Tag Fields (Database Schema Refactor)
+**Status:** 📋 Planned (Not Implemented)
+**Priority:** HIGH (Bug Fix + Architecture Improvement)
+**Origin:** User suggestion during M9.8.30 (see progress_m9830.md line 452)
+
+**Current Problem (Bug Discovered 2026-01-14):**
+The `image_tag` field gets overwritten with the full resolved image name after server creation (e.g., `registry.gitlab.../steam-zomboid:latest` instead of just `latest`). This causes rebuild failures with "invalid reference format" because the code constructs: `registry + ":" + image_tag` → invalid double reference.
+
+**Root Cause:** `agents.ts:1093` stores `result.imageName` (full reference) in `image_tag` column.
+
+**Proposed Architecture:**
+- **`image` field:** Full image path without tag (e.g., `registry.gitlab.nicomarois.com/nicolas/steam-zomboid`)
+- **`tag` field:** Just the tag portion (e.g., `latest`, `v2.1.0`, `build42`)
+- Construct full reference when needed: `${image}:${tag}`
+
+**Benefits:**
+- Clear separation of concerns
+- No ambiguity about what each field contains
+- Easy to change tags without touching image path
+- Consistent with Docker's own terminology
+- Per-server image override (different servers can use different registries)
+- Fixes the current bug permanently
+
+**Schema Migration:**
+```sql
+-- Add new columns
+ALTER TABLE servers ADD COLUMN image TEXT;
+ALTER TABLE servers ADD COLUMN tag TEXT DEFAULT 'latest';
+
+-- Migrate data: Split existing image_tag into image and tag
+UPDATE servers SET
+  image = SUBSTR(image_tag, 1, INSTR(image_tag, ':') - 1),
+  tag = SUBSTR(image_tag, INSTR(image_tag, ':') + 1)
+WHERE image_tag LIKE '%:%';
+
+-- For servers with just a tag (no colon), use agent's registry
+UPDATE servers SET
+  image = (SELECT steam_zomboid_registry FROM agents WHERE agents.id = servers.agent_id),
+  tag = image_tag
+WHERE image_tag NOT LIKE '%:%';
+
+-- Drop old column after verification
+-- ALTER TABLE servers DROP COLUMN image_tag;
+```
+
+**Files to Modify:**
+- `manager/migrations/` - New migration file
+- `manager/src/routes/agents.ts` - Update all server queries/inserts
+- `frontend/src/components/ConfigurationEdit.tsx` - Add image field (optional override)
+- `agent/main.go` - Use image + tag from message
+
+**Estimated Time:** 3-4 hours
+
+**Workaround (Until Fixed):**
+```sql
+UPDATE servers SET image_tag = 'latest' WHERE image_tag LIKE '%:%';
+```
+
+---
 
 ### Agent Disconnect Functionality
 **Status:** 📋 Planned (Not Implemented)

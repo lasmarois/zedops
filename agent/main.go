@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,13 +29,23 @@ type Agent struct {
 	permanentToken string
 	agentID        string
 	conn           *websocket.Conn
+	connMutex      sync.Mutex                    // Protects WebSocket writes
 	docker         *DockerClient
 	logStreams     map[string]context.CancelFunc // containerID -> cancel function
 	rconManager    *RCONManager                  // RCON session manager
+	logCapture     *LogCapture                   // Agent log capture for streaming
+	agentLogChan   chan AgentLogLine             // Channel for agent log subscription
+	agentLogMutex  sync.Mutex                    // Protects agent log subscription
 }
 
 func main() {
 	flag.Parse()
+
+	// Initialize log capture early (before any logging)
+	// This captures all log output for streaming to manager
+	logCapture := NewLogCapture(1000) // Keep last 1000 log lines
+	log.SetOutput(logCapture)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	// Validate required flags
 	if *managerURL == "" {
@@ -83,6 +95,7 @@ func main() {
 		docker:         dockerClient,
 		logStreams:     make(map[string]context.CancelFunc),
 		rconManager:    rconManager,
+		logCapture:     logCapture,
 	}
 
 	// Set up graceful shutdown
@@ -242,6 +255,8 @@ func (a *Agent) authenticate() error {
 }
 
 func (a *Agent) sendMessage(msg Message) error {
+	a.connMutex.Lock()
+	defer a.connMutex.Unlock()
 	return a.conn.WriteJSON(msg)
 }
 
@@ -288,6 +303,8 @@ func (a *Agent) receiveMessages() {
 			a.handleServerRebuild(msg)
 		case "server.checkdata":
 			a.handleServerCheckData(msg)
+		case "server.movedata":
+			a.handleServerMoveData(msg)
 		case "port.check":
 			a.handlePortCheck(msg)
 		case "rcon.connect":
@@ -296,6 +313,12 @@ func (a *Agent) receiveMessages() {
 			a.handleRCONCommand(msg)
 		case "rcon.disconnect":
 			a.handleRCONDisconnect(msg)
+		case "images.inspect":
+			a.handleImageInspect(msg)
+		case "agent.logs.subscribe":
+			a.handleAgentLogsSubscribe(msg)
+		case "agent.logs.unsubscribe":
+			a.handleAgentLogsUnsubscribe(msg)
 		case "error":
 			var errResp ErrorResponse
 			data, _ := json.Marshal(msg.Data)
@@ -721,6 +744,15 @@ func (a *Agent) handleServerCreate(msg Message) {
 		return
 	}
 
+	// Trim and validate dataPath to prevent space-prefixed paths
+	if req.DataPath != "" {
+		req.DataPath = strings.TrimSpace(req.DataPath)
+		if !strings.HasPrefix(req.DataPath, "/") {
+			a.sendServerErrorWithReply(req.ServerID, "", "create", "dataPath must be an absolute path (start with /)", "INVALID_DATA_PATH", msg.Reply)
+			return
+		}
+	}
+
 	log.Printf("Creating server: %s (registry: %s, tag: %s)", req.Name, req.Registry, req.ImageTag)
 
 	// Create server config
@@ -746,8 +778,30 @@ func (a *Agent) handleServerCreate(msg Message) {
 
 	log.Printf("Server created successfully: %s (container: %s)", req.Name, containerID)
 
-	// Send success response
-	a.sendServerSuccessWithReply(req.ServerID, containerID, "create", msg.Reply)
+	// Inspect container to get resolved image name
+	var resolvedImageName string
+	inspect, err := a.docker.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		log.Printf("Warning: failed to inspect container for image name: %v", err)
+		resolvedImageName = req.ImageTag // Fallback to requested tag
+	} else {
+		resolvedImageName = inspect.Config.Image
+		log.Printf("Resolved image name: %s", resolvedImageName)
+	}
+
+	// Send success response with resolved image name
+	response := Message{
+		Subject: msg.Reply,
+		Data: map[string]interface{}{
+			"success":     true,
+			"serverId":    req.ServerID,
+			"containerId": containerID,
+			"imageName":   resolvedImageName,
+			"operation":   "create",
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
 }
 
 // handleServerDelete handles server.delete messages
@@ -768,10 +822,10 @@ func (a *Agent) handleServerDelete(msg Message) {
 		return
 	}
 
-	log.Printf("Deleting server: containerID=%s, serverName=%s, removeVolumes=%v", req.ContainerID, req.ServerName, req.RemoveVolumes)
+	log.Printf("Deleting server: containerID=%s, serverName=%s, removeVolumes=%v, dataPath=%s", req.ContainerID, req.ServerName, req.RemoveVolumes, req.DataPath)
 
 	// Delete server (container and/or data)
-	err := a.docker.DeleteServer(ctx, req.ContainerID, req.ServerName, req.RemoveVolumes)
+	err := a.docker.DeleteServer(ctx, req.ContainerID, req.ServerName, req.RemoveVolumes, req.DataPath)
 	if err != nil {
 		log.Printf("Failed to delete server (container=%s, name=%s): %v", req.ContainerID, req.ServerName, err)
 		a.sendServerErrorWithReply("", req.ContainerID, "delete", err.Error(), "SERVER_DELETE_FAILED", msg.Reply)
@@ -804,8 +858,8 @@ func (a *Agent) handleServerRebuild(msg Message) {
 
 	log.Printf("Rebuilding server container: %s", req.ContainerID)
 
-	// Rebuild server
-	newContainerID, err := a.docker.RebuildServer(ctx, req.ContainerID)
+	// Rebuild server (pass full request for config update support)
+	newContainerID, err := a.docker.RebuildServerWithConfig(ctx, req)
 	if err != nil {
 		log.Printf("Failed to rebuild server %s: %v", req.ContainerID, err)
 		a.sendServerErrorWithReply("", req.ContainerID, "rebuild", err.Error(), "SERVER_REBUILD_FAILED", msg.Reply)
@@ -870,6 +924,112 @@ func (a *Agent) handleServerCheckData(msg Message) {
 				Success:  true,
 				Statuses: statuses,
 			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handleServerMoveData handles server.movedata messages
+func (a *Agent) handleServerMoveData(msg Message) {
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerMoveDataRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerMoveDataResponse{
+					Success: false,
+					Error:   "Invalid request format: " + err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	// Validate required fields
+	if req.ServerName == "" || req.OldPath == "" || req.NewPath == "" {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerMoveDataResponse{
+					Success: false,
+					Error:   "serverName, oldPath, and newPath are required",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	// Trim whitespace from paths to prevent accidental space-prefixed paths
+	req.OldPath = strings.TrimSpace(req.OldPath)
+	req.NewPath = strings.TrimSpace(req.NewPath)
+
+	// Validate paths are absolute (must start with /)
+	if !strings.HasPrefix(req.OldPath, "/") || !strings.HasPrefix(req.NewPath, "/") {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerMoveDataResponse{
+					Success: false,
+					Error:   "oldPath and newPath must be absolute paths (start with /)",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Moving server data: %s from %s to %s", req.ServerName, req.OldPath, req.NewPath)
+
+	// Create progress callback to stream updates via WebSocket
+	progressFn := func(progress MoveProgress) {
+		// Add server name to progress
+		progress.ServerName = req.ServerName
+
+		// Send progress message
+		progressMsg := Message{
+			Subject:   "move.progress",
+			Data:      progress,
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(progressMsg)
+	}
+
+	// Perform the move with progress streaming
+	result, err := a.docker.MoveServerData(req.ServerName, req.OldPath, req.NewPath, progressFn)
+	if err != nil {
+		log.Printf("Failed to move server data: %v", err)
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerMoveDataResponse{
+					Success:    false,
+					ServerName: req.ServerName,
+					OldPath:    req.OldPath,
+					NewPath:    req.NewPath,
+					Error:      err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Server data moved successfully: %s (%d files, %d bytes)", req.ServerName, result.FilesMoved, result.BytesMoved)
+
+	// Send success response
+	if msg.Reply != "" {
+		response := Message{
+			Subject:   msg.Reply,
+			Data:      result,
 			Timestamp: time.Now().Unix(),
 		}
 		a.sendMessage(response)
@@ -1128,4 +1288,204 @@ func (a *Agent) sendRCONError(sessionID, errorMsg, errorCode, replyTo string) {
 		Timestamp: time.Now().Unix(),
 	}
 	a.sendMessage(response)
+}
+
+// handleImageInspect handles images.inspect messages - returns default ENV variables from Docker image
+func (a *Agent) handleImageInspect(msg Message) {
+	ctx := context.Background()
+
+	// Parse request
+	var req struct {
+		ImageTag string `json:"imageTag"`
+	}
+	data, _ := json.Marshal(msg.Data)
+	if err := json.Unmarshal(data, &req); err != nil {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Invalid request: %v", err),
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+		return
+	}
+
+	// Validate image tag provided
+	if req.ImageTag == "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": false,
+				"error":   "imageTag is required",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+		return
+	}
+
+	log.Printf("Inspecting image for defaults: %s", req.ImageTag)
+
+	// Get image defaults
+	defaults, err := a.docker.GetImageDefaults(ctx, req.ImageTag)
+	if err != nil {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to inspect image: %v", err),
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+		return
+	}
+
+	// Send success response
+	response := Message{
+		Subject: msg.Reply,
+		Data: map[string]interface{}{
+			"success":  true,
+			"defaults": defaults,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+	a.sendMessage(response)
+}
+
+// handleAgentLogsSubscribe handles agent.logs.subscribe messages
+// This starts streaming the agent's own logs to the manager
+func (a *Agent) handleAgentLogsSubscribe(msg Message) {
+	a.agentLogMutex.Lock()
+	defer a.agentLogMutex.Unlock()
+
+	// Check if already subscribed
+	if a.agentLogChan != nil {
+		log.Println("Agent logs: Already streaming to manager")
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": true,
+					"message": "Already subscribed",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req struct {
+		Tail int `json:"tail"`
+	}
+	json.Unmarshal(data, &req)
+
+	// Default tail to 500 if not specified
+	if req.Tail == 0 {
+		req.Tail = 500
+	}
+
+	log.Printf("Agent logs: Starting stream (tail: %d)", req.Tail)
+
+	// Send history first
+	history := a.logCapture.GetHistory(req.Tail)
+	if len(history) > 0 {
+		historyMsg := Message{
+			Subject: "agent.logs.history",
+			Data: map[string]interface{}{
+				"lines": history,
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(historyMsg)
+	}
+
+	// Subscribe to new logs
+	a.agentLogChan = a.logCapture.Subscribe()
+
+	// Send acknowledgment
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": true,
+				"message": "Subscribed to agent logs",
+				"history": len(history),
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+
+	// Start goroutine to forward logs
+	go func() {
+		for logLine := range a.agentLogChan {
+			logMsg := Message{
+				Subject:   "agent.logs.line",
+				Data:      logLine,
+				Timestamp: time.Now().Unix(),
+			}
+			if err := a.sendMessage(logMsg); err != nil {
+				log.Printf("Agent logs: Failed to send log line: %v", err)
+				return
+			}
+		}
+		log.Println("Agent logs: Stream ended")
+	}()
+}
+
+// handleAgentLogsUnsubscribe handles agent.logs.unsubscribe messages
+func (a *Agent) handleAgentLogsUnsubscribe(msg Message) {
+	a.agentLogMutex.Lock()
+	defer a.agentLogMutex.Unlock()
+
+	if a.agentLogChan == nil {
+		log.Println("Agent logs: Not currently streaming")
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": true,
+					"message": "Not subscribed",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Println("Agent logs: Stopping stream")
+	a.logCapture.Unsubscribe(a.agentLogChan)
+	a.agentLogChan = nil
+
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": true,
+				"message": "Unsubscribed from agent logs",
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// cleanupOnDisconnect resets state when WebSocket connection is lost
+// This ensures log streaming can be re-established on reconnect
+func (a *Agent) cleanupOnDisconnect() {
+	a.agentLogMutex.Lock()
+	defer a.agentLogMutex.Unlock()
+
+	if a.agentLogChan != nil {
+		log.Println("Agent logs: Cleaning up stream on disconnect")
+		a.logCapture.Unsubscribe(a.agentLogChan)
+		a.agentLogChan = nil
+	}
 }

@@ -3,8 +3,10 @@
  */
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { CreateServerRequest, ServerConfig, PortSet, Server } from '../lib/api';
 import { usePortAvailability } from '../hooks/usePortAvailability';
+import { fetchAgentConfig } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,6 +55,17 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
   const [customUdpPort, setCustomUdpPort] = useState(editServer?.udp_port?.toString() || '');
   const [customRconPort, setCustomRconPort] = useState(editServer?.rcon_port?.toString() || '');
 
+  // Server data path (M9.8.23: Per-server path override)
+  const [customDataPath, setCustomDataPath] = useState('');
+  const [dataPathError, setDataPathError] = useState('');
+
+  // Fetch agent config for default data path display
+  const { data: agentConfig } = useQuery({
+    queryKey: ['agentConfig', agentId],
+    queryFn: () => fetchAgentConfig(agentId),
+    enabled: !!agentId,
+  });
+
   // Port availability query (manual trigger via checkPorts state)
   const portAvailability = usePortAvailability(agentId, 3, checkPorts);
 
@@ -70,10 +83,44 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     return true;
   };
 
+  const validateDataPath = (path: string): boolean => {
+    // Empty path is valid (will use agent default)
+    if (!path.trim()) {
+      setDataPathError('');
+      return true;
+    }
+
+    // Must be absolute path
+    if (!path.startsWith('/')) {
+      setDataPathError('Path must be absolute (start with /)');
+      return false;
+    }
+
+    // Cannot be root
+    if (path === '/') {
+      setDataPathError('Cannot use root directory');
+      return false;
+    }
+
+    // Cannot be system directories
+    const forbiddenPaths = ['/etc', '/var', '/usr', '/bin', '/sbin', '/boot', '/sys', '/proc', '/dev'];
+    if (forbiddenPaths.some(p => path === p || path.startsWith(p + '/'))) {
+      setDataPathError('Cannot use system directories');
+      return false;
+    }
+
+    setDataPathError('');
+    return true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateServerName(serverName)) {
+      return;
+    }
+
+    if (!validateDataPath(customDataPath)) {
       return;
     }
 
@@ -106,6 +153,11 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
       request.gamePort = parseInt(customGamePort);
       request.udpPort = parseInt(customUdpPort);
       request.rconPort = parseInt(customRconPort);
+    }
+
+    // Add custom data path if specified (M9.8.23)
+    if (customDataPath.trim()) {
+      request.server_data_path = customDataPath.trim();
     }
 
     // Pass serverIdToDelete if editing (to remove old failed server)
@@ -270,6 +322,31 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
             />
             <p className="text-xs text-muted-foreground">
               Optional: Password required to join server
+            </p>
+          </div>
+
+          {/* Server Data Path - M9.8.23 */}
+          <div className="space-y-2">
+            <Label htmlFor="customDataPath">
+              Server Data Path <span className="text-muted-foreground">(Optional)</span>
+            </Label>
+            <Input
+              id="customDataPath"
+              type="text"
+              value={customDataPath}
+              onChange={(e) => {
+                setCustomDataPath(e.target.value);
+                validateDataPath(e.target.value);
+              }}
+              placeholder={agentConfig?.server_data_path || 'Loading...'}
+              disabled={isSubmitting}
+              className={dataPathError ? 'border-destructive' : ''}
+            />
+            {dataPathError && (
+              <p className="text-sm text-destructive">{dataPathError}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Override the agent's default data path for this server only. Leave blank to use agent default.
             </p>
           </div>
 

@@ -15,6 +15,9 @@ import {
   restoreServer,
   syncServers,
   fetchServerMetrics,
+  updateServerConfig,
+  applyServerConfig,
+  fetchImageDefaults,
   type CreateServerRequest,
 } from '../lib/api';
 import { getToken } from '../lib/auth';
@@ -346,5 +349,97 @@ export function useServerMetrics(
     refetchInterval: 5000, // Refresh every 5 seconds
     retry: 1, // Only retry once on failure
     staleTime: 4000, // Consider data stale after 4 seconds
+  });
+}
+
+/**
+ * Hook to update server configuration (Save step - no restart)
+ * M9.8.32: Added image parameter for per-server registry override
+ */
+export function useUpdateServerConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+      config,
+      imageTag,
+      serverDataPath,
+      image,  // M9.8.32: Per-server registry override
+    }: {
+      agentId: string;
+      serverId: string;
+      config: Record<string, string>;
+      imageTag?: string;
+      serverDataPath?: string | null;
+      image?: string | null;  // M9.8.32
+    }) => updateServerConfig(agentId, serverId, config, imageTag, serverDataPath, image),
+    onSuccess: (_, variables) => {
+      // Invalidate server queries to refetch updated data
+      queryClient.invalidateQueries({
+        queryKey: ['server', variables.serverId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['servers', 'all'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to apply server configuration changes (restart container with new config)
+ */
+export function useApplyServerConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      serverId,
+      oldDataPath,
+    }: {
+      agentId: string;
+      serverId: string;
+      oldDataPath?: string; // M9.8.29: For data migration
+    }) => applyServerConfig(agentId, serverId, oldDataPath),
+    onSuccess: (_, variables) => {
+      // Invalidate all relevant queries to refetch updated data
+      queryClient.invalidateQueries({
+        queryKey: ['server', variables.serverId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['servers', 'all'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['servers', variables.agentId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['containers', variables.agentId],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to fetch Docker image default ENV variables
+ * Queries agent to inspect image and return default values
+ * Results are cached for 1 hour (image defaults rarely change)
+ */
+export function useImageDefaults(agentId: string | null, imageTag: string | null) {
+  return useQuery({
+    queryKey: ['image-defaults', agentId, imageTag],
+    queryFn: () => {
+      if (!agentId || !imageTag) {
+        throw new Error('Agent ID and image tag are required');
+      }
+      return fetchImageDefaults(agentId, imageTag);
+    },
+    enabled: !!agentId && !!imageTag,
+    staleTime: 1000 * 60 * 60, // Cache for 1 hour
+    retry: 1, // Only retry once (agent might be offline)
   });
 }

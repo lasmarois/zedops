@@ -15,13 +15,31 @@ export interface LogLine {
 }
 
 /**
- * Log subscriber (UI client)
+ * Single log line from the agent itself
+ */
+export interface AgentLogLine {
+  timestamp: number;      // Unix timestamp in milliseconds
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' | string;
+  message: string;
+}
+
+/**
+ * Log subscriber (UI client) - for container logs
  */
 export interface LogSubscriber {
   id: string;            // Unique subscriber ID
   ws: WebSocket;         // WebSocket connection to UI client
   containerId: string;   // Container being watched
   userId?: string;       // User ID for audit logging (optional for backward compatibility)
+}
+
+/**
+ * Agent log subscriber (UI client) - for agent's own logs
+ */
+export interface AgentLogSubscriber {
+  id: string;            // Unique subscriber ID
+  ws: WebSocket;         // WebSocket connection to UI client
+  userId?: string;       // User ID for audit logging
 }
 
 /**

@@ -76,3 +76,13 @@ pre,
 .font-mono {
   font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
 }
+
+/* Progress bar shimmer animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

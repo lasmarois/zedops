@@ -114,6 +114,7 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			// Connection closed, clean up and reconnect
 			heartbeatCancel()
 			a.conn.Close()
+			a.cleanupOnDisconnect() // Reset log streaming state
 			log.Println("Connection lost, reconnecting...")
 			time.Sleep(initialBackoff)
 			continue
