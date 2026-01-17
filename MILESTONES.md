@@ -610,13 +610,13 @@ Transform design artifacts from M8 into a fully functional, polished UI. This co
 
 ---
 
-## Milestone 9.5: Bridge Design to Functionality 🚧 In Progress
+## Milestone 9.5: Bridge Design to Functionality ✅ Complete
 
 **Goal:** Connect M9 visual redesign to real backend data and remove old navigation patterns
 
-**Duration:** 4-6 hours estimated
+**Duration:** ~2 hours (2026-01-13)
 
-**Started:** 2026-01-13
+**Completed:** 2026-01-13
 
 **Rationale:**
 M9 created beautiful new UI pages (Dashboard, ServerList, AgentDetail, ServerDetail), but they're not fully integrated with real data and old navigation patterns (M1-M7) are still active. This milestone bridges that gap so users actually see and use the new design.
@@ -806,13 +806,15 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | M7.5: UI Styling & Design System | 1-2 weeks | 8.25 hours | ✅ Complete |
 | M8: Visual Redesign - Design | 1-2 weeks | 1 day | ✅ Complete |
 | M9: Visual Redesign - Implementation | 2-3 weeks | ~5.5 hours | ✅ Complete |
-| M9.5: Bridge Design to Functionality | 4-6 hours | TBD | 🚧 In Progress |
+| M9.5: Bridge Design to Functionality | 4-6 hours | ~2 hours | ✅ Complete |
+| M9.6-9.7: UI/UX Consistency Fixes | 2-4 hours | ~3 hours | ✅ Complete |
+| M9.8: Polish & Production Readiness | 1-2 weeks | ~4 days | ✅ Complete |
 | M10: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 | M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 9/12 core milestones complete (75%) 🎉
+**Progress:** 12/14 core milestones complete (86%) 🎉
 
-**Active Milestone:** M9.5 (Bridge Design to Functionality) 🚧
+**Active Milestone:** None - Ready for M10 or new features
 
 **Total to MVP:** ~12 weeks estimated → ~3 weeks actual (current pace: 75% under estimate!)
 
@@ -822,7 +824,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** M9.5 - Bridge Design to Functionality 🚧
+**Active Milestone:** None - All M9.x milestones complete! Ready for M10 or new features.
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -844,18 +846,23 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - ✅ **Milestone 9 - Visual Redesign - Implementation Phase** (2026-01-13)
   - ✅ All 5 phases complete (~5.5 hours, 99.2% faster than estimate!)
   - Deployed to production
-
-**In Progress:**
-- 🚧 **Milestone 9.5 - Bridge Design to Functionality** (Started: 2026-01-13)
-  - Goal: Connect M9 visual redesign to real data and remove old navigation
-  - Phase 0: Planning (⏳ In Progress)
+- ✅ **Milestone 9.5 - Bridge Design to Functionality** (2026-01-13)
+  - ✅ All 6 phases complete (~2 hours)
+  - Connected UI to real backend data, removed old navigation
+- ✅ **Milestone 9.6-9.7 - UI/UX Consistency Fixes** (2026-01-13)
+  - ✅ Investigation + implementation (~3 hours)
+  - Fixed RCON password bug, navigation, button styling
+- ✅ **Milestone 9.8 - Polish & Production Readiness** (2026-01-13 to 2026-01-15)
+  - ✅ 37 sub-milestones complete (~4 days)
+  - Server status, container health, disk metrics, agent logs, UI polish
+  - See [MILESTONE-M98.md](MILESTONE-M98.md) for details
 
 **Deferred:**
-- **Milestone 10** - Agent Deployment & Polish (after M9)
-- **Milestone 11** - Testing & Verification (after M9)
-- **Documentation** - Comprehensive API and user documentation (after M11)
+- **Milestone 10** - Agent Deployment & Polish
+- **Milestone 11** - Testing & Verification
+- **Documentation** - Comprehensive API and user documentation
 
-**Current Planning:** M9.5 planning files created! Ready to implement backend API endpoints.
+**Next Steps:** M9.8.38 (Server Volume Sizes) or M10 (Agent Deployment)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements

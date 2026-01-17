@@ -544,6 +544,37 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
+### M9.8.36 - Container Health Visual Feedback ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** MEDIUM (UX Enhancement)
+**Duration:** ~2 hours
+**Completed:** 2026-01-15
+
+**Feature Implemented:** Visual feedback for container health states during startup:
+- **Starting** (health check pending) → Muted purple badge with spinning loader icon
+- **Running/Healthy** (health check passed) → Green badge with pulse icon
+- **Unhealthy** (health check failed) → Red badge with alert icon
+- Containers without health checks show "Running" (green) as before
+
+**Key Changes:**
+- **Agent:** `docker.go` - Added `Health` field, `ContainerInspect` calls for health status
+- **Manager:** `servers.ts`, `agents.ts` - Merged health status from containers into server responses
+- **Frontend:**
+  - Added `health?: string` to Container and Server interfaces
+  - `getContainerStatusDisplay()` in AgentServerList.tsx
+  - `getDisplayStatus()` in server-status.ts handles health states
+  - StatusBadge "starting" variant with purple color
+
+**UI Locations Updated:**
+- AgentServerList container rows
+- ServerDetail overview tab
+- ServerList page
+
+**Files:**
+- `planning-history/m9.8.36-container-health-visual-feedback/` - Full planning docs
+
+---
+
 ## Completion Criteria
 
 M9.8 complete when:
@@ -589,23 +620,58 @@ M9.8 complete when:
 
 ---
 
-### Container Health Visual Feedback
-**Status:** 📋 Planned (Not Implemented)
-**Priority:** MEDIUM (UX Enhancement)
+### M9.8.37 - Dynamic Disk Metrics ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** MEDIUM (Feature Enhancement)
+**Duration:** ~2 hours
+**Completed:** 2026-01-15
 
-**Issue:** When a container is starting but not yet healthy, the UI shows "running" without indicating the health check status.
+**Feature Implemented:** Agent disk metrics now show all unique filesystems used by server containers:
+- Parses `/proc/mounts` to discover mounted devices
+- Inspects ALL bind mounts from ALL ZedOps-managed containers
+- Deduplicates by device name (e.g., `/dev/mapper/main--array-petty`)
+- Shows mount point as label (e.g., `/Volumes/Petty`, `/Volumes/Data`, `/`)
+- Works with any path structure (handles both `servername/bin` and `bin.servername` patterns)
 
-**Proposed Enhancement:**
-- Show "Starting" status with different color shade when container is running but not healthy
-- Add visual distinction between:
-  - "Starting" (container running, health check pending) → Yellow/Amber
-  - "Running" (container running, health check passed) → Green
-  - "Unhealthy" (container running, health check failed) → Red/Orange
-- Possibly add health check progress indicator or spinner
-- Update status badge component to support health states
+**Key Changes:**
+- **Agent:** `metrics.go` - Added `parseMounts()`, `findMountForPath()`, rewrote `collectDiskMetrics()`
+- **Frontend:** Updated AgentList.tsx, AgentDetail.tsx, Dashboard.tsx for multi-disk display
+- **Backward Compatibility:** Frontend handles both old (single disk) and new (array) formats
 
-**UI Locations:**
-- AgentServerList container rows
-- ServerDetail overview tab
-- ServerList page
-- Dashboard stats (optional)
+**Bug Fixes:**
+1. Root mount point `/` not matching paths (fixed prefix check logic)
+2. Old naming convention `bin.servername` being skipped (now uses mount-based discovery)
+
+**Files Modified:**
+- `agent/metrics.go` - Major refactor
+- `frontend/src/components/AgentList.tsx` - Storage section with separator
+- `frontend/src/pages/AgentDetail.tsx` - Stacked progress bars
+- `frontend/src/pages/Dashboard.tsx` - Compact multi-disk display
+
+**Pending:** UI overflow handling for many storage volumes (see notes below)
+
+---
+
+### M9.8.38 - Server Volume Sizes (Brainstorm)
+**Status:** 📋 Not Started (Needs Discussion)
+**Priority:** LOW (Feature Enhancement)
+
+**Idea:** Display storage consumption for individual server volumes (bin/ and data/ directories).
+
+**Display Locations to Consider:**
+1. **Server card expansion** - Expandable row in agent server list & all servers list showing bin/data sizes
+2. **Server detail page** - Dedicated "Storage" section with full breakdown
+3. **Agent detail page** - Aggregate view of all server sizes on that agent
+
+**Info to Display Per Server:**
+- `bin/` directory size (game files)
+- `data/` directory size (saves, configs)
+- Total combined size
+- Which filesystem/mount it resides on (links to disk metrics)
+
+**Technical Considerations:**
+- Agent needs `du` or similar to calculate directory sizes
+- Could be expensive for large directories - consider caching/async
+- Batch requests for efficiency
+
+**Needs Further Discussion Before Implementation.**
