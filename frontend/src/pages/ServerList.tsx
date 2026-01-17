@@ -9,8 +9,10 @@ import { useAllServers, usePurgeServer, useRestoreServer, useCreateServer } from
 import { useAgents } from "@/hooks/useAgents"
 import { Plus, Search, Trash2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { getDisplayStatus } from "@/lib/server-status"
 import type { Server, CreateServerRequest } from "@/lib/api"
+import { ServerCard } from "@/components/ServerCard"
+import { ServerCardLayoutToggle } from "@/components/ServerCardLayoutToggle"
+import { useServerCardLayout } from "@/contexts/ServerCardLayoutContext"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +58,7 @@ export function ServerList() {
   const navigate = useNavigate()
   const { data: serversData, isLoading } = useAllServers()
   const { data: agentsData } = useAgents()
+  const { layout } = useServerCardLayout()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [showDeletedServers, setShowDeletedServers] = useState(false)
@@ -254,6 +257,7 @@ export function ServerList() {
           <option value="stopped">Stopped</option>
           <option value="failed">Failed</option>
         </select>
+        <ServerCardLayoutToggle />
       </div>
 
       {/* Server List */}
@@ -319,23 +323,21 @@ export function ServerList() {
       ) : (
         <div className="space-y-3">
           {filteredServers.map(server => {
-            // Compute display status based on agent connectivity
-            // Note: We don't have all Server fields in ServerWithAgent, but getDisplayStatus
-            // only needs agent_status and status fields
-            const displayStatus = getDisplayStatus({
+            // Convert ServerWithAgent to Server format for ServerCard
+            const serverData: Server = {
               id: server.id,
               name: server.name,
-              status: server.status as any,
+              status: server.status as Server['status'],
               health: server.health,
               agent_id: server.agentId,
               agent_name: server.agentName,
               agent_status: server.agentStatus,
               agent_server_data_path: server.agentServerDataPath,
-              steam_zomboid_registry: null, // M9.8.32: Not needed for display status
+              steam_zomboid_registry: null,
               game_port: server.gamePort,
               udp_port: server.udpPort,
               rcon_port: server.rconPort,
-              image: null, // M9.8.32: Not needed for display status
+              image: null,
               image_tag: server.imageTag,
               created_at: server.createdAt,
               container_id: server.containerId,
@@ -344,58 +346,15 @@ export function ServerList() {
               data_exists: server.dataExists,
               deleted_at: server.deletedAt,
               updated_at: server.updatedAt,
-            });
-
-            // Border color based on display status
-            const borderColor =
-              displayStatus.variant === 'success' ? '#3DDC97' :
-              displayStatus.variant === 'starting' ? '#a78bbd' :
-              displayStatus.variant === 'warning' ? '#FFA500' :
-              displayStatus.variant === 'error' ? '#F75555' : '#6c757d';
-
-            // Icon based on display status
-            const icon: "dot" | "pulse" | "loader" | "check" | "alert" | "cross" | "info" =
-              displayStatus.status === 'running' ? 'pulse' :
-              displayStatus.status === 'starting' ? 'loader' :
-              displayStatus.status === 'agent_offline' ? 'cross' :
-              displayStatus.status === 'stopped' ? 'dot' : 'cross';
+            };
 
             return (
-            <Card
-              key={server.id}
-              className="hover:shadow-md transition-all duration-200 cursor-pointer border-l-4"
-              style={{ borderLeftColor: borderColor }}
-              onClick={() => navigate(`/servers/${server.id}`)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 flex-1">
-                    <StatusBadge
-                      variant={displayStatus.variant as "success" | "warning" | "error" | "info" | "muted" | "starting"}
-                      icon={icon}
-                      iconOnly
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-lg truncate">{server.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Agent: {server.agentName} | Tag: {server.imageTag}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 text-sm text-muted-foreground flex-shrink-0">
-                    <div>
-                      <span className="font-medium">Game:</span> {server.gamePort}
-                    </div>
-                    <div>
-                      <span className="font-medium">UDP:</span> {server.udpPort}
-                    </div>
-                    <div>
-                      <span className="font-medium">RCON:</span> {server.rconPort}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <ServerCard
+                key={server.id}
+                server={serverData}
+                layout={layout}
+                showAgent={true}
+              />
             );
           })}
         </div>

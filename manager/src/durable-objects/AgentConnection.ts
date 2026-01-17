@@ -162,6 +162,24 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Server get data path endpoint (M9.8.36: Query actual container mounts)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/datapath") && request.method === "GET") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleServerGetDataPathRequest(serverId);
+      }
+    }
+
+    // Server storage endpoint (M9.8.38: Query volume sizes)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/storage") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverName = parts[2];
+      if (serverName) {
+        return this.handleServerStorageRequest(request, serverName);
+      }
+    }
+
     // Image defaults endpoint (inspect Docker image for ENV defaults)
     if (url.pathname === "/images/defaults" && request.method === "GET") {
       const imageTag = url.searchParams.get("tag");
@@ -2248,6 +2266,186 @@ export class AgentConnection extends DurableObject {
       console.error(`[AgentConnection] Server data move error:`, error);
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Server data move failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * M9.8.36: HTTP handler for getting server data path from container mounts
+   * Inspects the container to determine actual bind mount paths
+   * This is used when DB config might be stale (e.g., agent path changed after server creation)
+   */
+  private async handleServerGetDataPathRequest(serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Get container ID from DB for this server
+    const server = await this.env.DB.prepare(
+      "SELECT container_id FROM servers WHERE id = ?"
+    ).bind(serverId).first();
+
+    if (!server || !server.container_id) {
+      return new Response(JSON.stringify({
+        error: "Server not found or has no container",
+      }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const containerId = server.container_id as string;
+    console.log(`[AgentConnection] Getting data path from container: ${containerId}`);
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (30 seconds should be plenty for container inspect)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Get data path timeout"));
+      }, 30000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send server.getdatapath request to agent
+    this.send({
+      subject: "server.getdatapath",
+      data: {
+        containerId,
+      },
+      reply: inbox,
+    });
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      if (success) {
+        console.log(`[AgentConnection] Got data path: ${reply.data.dataPath}`);
+      } else {
+        console.error(`[AgentConnection] Get data path failed: ${reply.data.error}`);
+      }
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error(`[AgentConnection] Get data path error:`, error);
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Get data path failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Handle server storage request (M9.8.38: Volume sizes)
+   * Returns bin/ and data/ directory sizes for a server
+   */
+  private async handleServerStorageRequest(request: Request, serverName: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body to get dataPath
+    let dataPath: string;
+    try {
+      const body = await request.json() as { dataPath?: string };
+      if (!body.dataPath) {
+        return new Response(JSON.stringify({
+          error: "Missing dataPath in request body",
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      dataPath = body.dataPath;
+    } catch (e) {
+      return new Response(JSON.stringify({
+        error: "Invalid JSON in request body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[AgentConnection] Getting storage for server: ${serverName} (dataPath: ${dataPath})`);
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      // Set timeout (30 seconds - disk scan can take time for large directories)
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Get storage timeout"));
+      }, 30000);
+
+      // Store reply handler
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        this.pendingReplies.delete(inbox);
+        resolve(msg);
+      });
+    });
+
+    // Send volume sizes request to agent
+    this.send(
+      createMessage("server.volumesizes", {
+        serverName: serverName,
+        dataPath: dataPath,
+      }, inbox)
+    );
+
+    try {
+      // Wait for reply
+      const reply = await replyPromise;
+
+      // Check if operation succeeded
+      const success = reply.data.success !== false;
+
+      if (success) {
+        console.log(`[AgentConnection] Storage for ${serverName}: bin=${reply.data.sizes?.binBytes}, data=${reply.data.sizes?.dataBytes}, total=${reply.data.sizes?.totalBytes}`);
+      } else {
+        console.error(`[AgentConnection] Get storage failed: ${reply.data.error}`);
+      }
+
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error(`[AgentConnection] Get storage error:`, error);
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Get storage failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },

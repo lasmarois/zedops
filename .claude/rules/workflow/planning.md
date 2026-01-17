@@ -3,9 +3,9 @@
 ## Starting a Milestone
 
 1. Use `/planning-with-files` skill to create planning files in root:
-   - `task_plan.md` - Phases and tasks
-   - `findings.md` - Research notes
-   - `progress.md` - Status tracking
+   - @task_plan.md - Phases and tasks
+   - @findings.md - Research notes
+   - @progress.md - Status tracking
 
 2. Break milestone into 3-5 phases
 3. Track status in @MILESTONES.md

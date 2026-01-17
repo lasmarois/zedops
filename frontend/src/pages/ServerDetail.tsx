@@ -19,6 +19,7 @@ import { RconHistoryProvider, useRconHistory } from "@/contexts/RconHistoryConte
 import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { ErrorDialog } from "@/components/ui/error-dialog"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -74,6 +75,10 @@ function ServerDetailContent() {
   // Confirmation dialogs state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false)
+  const [showApplyConfigConfirm, setShowApplyConfigConfirm] = useState(false)
+
+  // Error dialog state
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // RCON history from context
   const { history: rconHistory } = useRconHistory()
@@ -150,7 +155,7 @@ function ServerDetailContent() {
           setIsEditMode(false)
         },
         onError: (error) => {
-          alert(`Failed to save configuration: ${error.message}`)
+          setErrorMessage(`Failed to save configuration: ${error.message}`)
         }
       }
     )
@@ -159,14 +164,14 @@ function ServerDetailContent() {
   const handleApplyConfig = () => {
     if (!id) return
     const agentId = serverData?.server?.agent_id
-    const serverName = serverData?.server?.name
     if (!agentId) return
+    setShowApplyConfigConfirm(true)
+  }
 
-    const message = pendingChanges?.dataPathChanged
-      ? `Apply configuration changes to "${serverName}"?\n\nThis will restart the server and migrate data to the new path. This may take several minutes depending on data size.`
-      : `Apply configuration changes to "${serverName}"?\n\nThis will restart the server (~30 seconds downtime).`
-
-    if (!confirm(message)) return
+  const confirmApplyConfig = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
 
     // M9.8.31: Start migration tracking if data path is changing
     if (pendingChanges?.dataPathChanged) {
@@ -186,7 +191,7 @@ function ServerDetailContent() {
         onError: (error) => {
           setIsMigrating(false)
           resetMoveProgress()
-          alert(`Failed to apply configuration: ${error.message}`)
+          setErrorMessage(`Failed to apply configuration: ${error.message}`)
         }
       }
     )
@@ -761,6 +766,27 @@ function ServerDetailContent() {
         description="Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable."
         confirmText="Rebuild"
         onConfirm={confirmRebuild}
+      />
+
+      {/* Apply Config Confirmation Dialog */}
+      <ConfirmDialog
+        open={showApplyConfigConfirm}
+        onOpenChange={setShowApplyConfigConfirm}
+        title="Apply Configuration"
+        description={
+          pendingChanges?.dataPathChanged
+            ? `Apply configuration changes to "${serverName}"? This will restart the server and migrate data to the new path. This may take several minutes depending on data size.`
+            : `Apply configuration changes to "${serverName}"? This will restart the server (~30 seconds downtime).`
+        }
+        confirmText={pendingChanges?.dataPathChanged ? "Apply & Migrate" : "Apply Changes"}
+        onConfirm={confirmApplyConfig}
+      />
+
+      {/* Error Dialog */}
+      <ErrorDialog
+        open={!!errorMessage}
+        onOpenChange={(open) => !open && setErrorMessage(null)}
+        message={errorMessage || ''}
       />
     </div>
   )

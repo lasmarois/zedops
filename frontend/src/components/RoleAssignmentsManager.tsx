@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface RoleAssignmentsManagerProps {
   user: UserAccount;
@@ -50,6 +51,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
   const [scope, setScope] = useState<'global' | 'agent' | 'server'>('agent');
   const [resourceId, setResourceId] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null); // assignment ID to revoke
 
   const handleGrantRoleAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,10 +100,14 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
     }
   };
 
-  const handleRevokeRoleAssignment = async (assignmentId: string) => {
-    if (!confirm('Are you sure you want to revoke this role assignment?')) {
-      return;
-    }
+  const handleRevokeRoleAssignment = (assignmentId: string) => {
+    setConfirmRevoke(assignmentId);
+  };
+
+  const confirmRevokeRoleAssignment = async () => {
+    const assignmentId = confirmRevoke;
+    setConfirmRevoke(null);
+    if (!assignmentId) return;
 
     try {
       await revokeMutation.mutateAsync({ assignmentId, userId: user.id });
@@ -359,6 +365,17 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
           )}
         </div>
       )}
+
+      {/* Revoke Role Assignment Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmRevoke}
+        onOpenChange={(open) => !open && setConfirmRevoke(null)}
+        title="Revoke Role Assignment"
+        description="Are you sure you want to revoke this role assignment? The user will lose access to the associated resources."
+        confirmText="Revoke"
+        variant="destructive"
+        onConfirm={confirmRevokeRoleAssignment}
+      />
     </div>
   );
 }

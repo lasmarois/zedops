@@ -22,8 +22,14 @@ var (
 	agentName  = flag.String("name", "", "Agent name (default: hostname)")
 )
 
+// volumeSizeCache holds cached volume sizes with expiry
+type volumeSizeCache struct {
+	sizes     *ServerVolumeSizes
+	expiresAt time.Time
+}
+
 type Agent struct {
-	managerURL    string
+	managerURL     string
 	agentName      string
 	ephemeralToken string
 	permanentToken string
@@ -36,6 +42,8 @@ type Agent struct {
 	logCapture     *LogCapture                   // Agent log capture for streaming
 	agentLogChan   chan AgentLogLine             // Channel for agent log subscription
 	agentLogMutex  sync.Mutex                    // Protects agent log subscription
+	volumeCache    map[string]*volumeSizeCache   // serverName -> cached sizes
+	volumeCacheMu  sync.RWMutex                  // Protects volumeCache
 }
 
 func main() {
@@ -96,6 +104,7 @@ func main() {
 		logStreams:     make(map[string]context.CancelFunc),
 		rconManager:    rconManager,
 		logCapture:     logCapture,
+		volumeCache:    make(map[string]*volumeSizeCache),
 	}
 
 	// Set up graceful shutdown
@@ -303,6 +312,10 @@ func (a *Agent) receiveMessages() {
 			a.handleServerRebuild(msg)
 		case "server.checkdata":
 			a.handleServerCheckData(msg)
+		case "server.getdatapath":
+			a.handleServerGetDataPath(msg)
+		case "server.volumesizes":
+			a.handleServerVolumeSizes(msg)
 		case "server.movedata":
 			a.handleServerMoveData(msg)
 		case "port.check":
@@ -925,6 +938,143 @@ func (a *Agent) handleServerCheckData(msg Message) {
 				Statuses: statuses,
 			},
 			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handleServerGetDataPath handles server.getdatapath messages
+// This extracts the actual data path from a container's bind mounts
+func (a *Agent) handleServerGetDataPath(msg Message) {
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerGetDataPathRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerGetDataPathResponse{
+					Success: false,
+					Error:   "Invalid request format: " + err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Getting data path from container: %s", req.ContainerID)
+
+	// Get the actual data path from container mounts
+	ctx := context.Background()
+	dataPath, err := a.docker.GetContainerDataPath(ctx, req.ContainerID)
+
+	if msg.Reply != "" {
+		var response Message
+		if err != nil {
+			response = Message{
+				Subject: msg.Reply,
+				Data: ServerGetDataPathResponse{
+					Success: false,
+					Error:   err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+		} else {
+			response = Message{
+				Subject: msg.Reply,
+				Data: ServerGetDataPathResponse{
+					Success:  true,
+					DataPath: dataPath,
+				},
+				Timestamp: time.Now().Unix(),
+			}
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handleServerVolumeSizes handles server.volumesizes messages
+// Returns the storage usage for a server's bin/ and data/ directories
+// Results are cached for 5 minutes to avoid expensive disk scans
+func (a *Agent) handleServerVolumeSizes(msg Message) {
+	// Parse request
+	data, _ := json.Marshal(msg.Data)
+	var req ServerVolumeSizesRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerVolumeSizesResponse{
+					Success: false,
+					Error:   "Invalid request format: " + err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Getting volume sizes for server: %s (dataPath: %s)", req.ServerName, req.DataPath)
+
+	// Check cache first
+	cacheKey := req.ServerName + ":" + req.DataPath
+	a.volumeCacheMu.RLock()
+	cached, found := a.volumeCache[cacheKey]
+	a.volumeCacheMu.RUnlock()
+
+	if found && time.Now().Before(cached.expiresAt) {
+		log.Printf("Returning cached volume sizes for %s", req.ServerName)
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: ServerVolumeSizesResponse{
+					Success: true,
+					Sizes:   cached.sizes,
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	// Calculate fresh sizes
+	sizes, err := GetServerVolumeSizes(req.ServerName, req.DataPath)
+
+	if msg.Reply != "" {
+		var response Message
+		if err != nil {
+			response = Message{
+				Subject: msg.Reply,
+				Data: ServerVolumeSizesResponse{
+					Success: false,
+					Error:   err.Error(),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+		} else {
+			// Cache the result for 5 minutes
+			a.volumeCacheMu.Lock()
+			a.volumeCache[cacheKey] = &volumeSizeCache{
+				sizes:     sizes,
+				expiresAt: time.Now().Add(5 * time.Minute),
+			}
+			a.volumeCacheMu.Unlock()
+
+			log.Printf("Volume sizes for %s: bin=%d bytes, data=%d bytes, total=%d bytes",
+				req.ServerName, sizes.BinBytes, sizes.DataBytes, sizes.TotalBytes)
+
+			response = Message{
+				Subject: msg.Reply,
+				Data: ServerVolumeSizesResponse{
+					Success: true,
+					Sizes:   sizes,
+				},
+				Timestamp: time.Now().Unix(),
+			}
 		}
 		a.sendMessage(response)
 	}

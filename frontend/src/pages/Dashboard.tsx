@@ -218,7 +218,11 @@ export function Dashboard() {
                 const metrics = agent.metadata?.metrics
                 const cpuPercent = metrics?.cpuPercent
                 const memPercent = metrics ? (metrics.memoryUsedMB / metrics.memoryTotalMB) * 100 : null
-                const diskPercent = metrics?.diskPercent
+                // Use first disk for compact display, or show volume count
+                // Fallback to legacy diskPercent if disks array not available
+                const primaryDisk = metrics?.disks?.[0]
+                const diskCount = metrics?.disks?.length || 0
+                const legacyDiskPercent = metrics?.diskPercent
 
                 return (
                   <div
@@ -249,7 +253,14 @@ export function Dashboard() {
                             MEM: {memPercent?.toFixed(1)}%
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            DISK: {diskPercent?.toFixed(1)}%
+                            {diskCount > 1
+                              ? `DISK: ${diskCount} vols`
+                              : diskCount === 1
+                              ? `DISK: ${primaryDisk?.percent?.toFixed(1) ?? 'N/A'}%`
+                              : legacyDiskPercent !== undefined
+                              ? `DISK: ${legacyDiskPercent.toFixed(1)}%`
+                              : 'DISK: N/A'
+                            }
                           </span>
                         </div>
                       )}

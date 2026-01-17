@@ -2276,6 +2276,99 @@ agents.get('/:id/servers/:serverId/metrics', async (c) => {
 });
 
 /**
+ * GET /api/agents/:id/servers/:serverId/storage
+ * Get storage consumption for a server's bin/ and data/ directories
+ *
+ * Returns: { success, sizes: { binBytes, dataBytes, totalBytes, mountPoint } }
+ * Permission: View access required
+ *
+ * Agent caches results for 5 minutes to avoid expensive disk scans
+ */
+agents.get('/:id/servers/:serverId/storage', async (c) => {
+  console.log('[Server Storage] Request received for storage endpoint');
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+  console.log(`[Server Storage] agentId=${agentId}, serverId=${serverId}, userId=${user.id}`);
+
+  // Check permission to view server
+  const hasPermission = await canViewServer(c.env.DB, user.id, user.role, serverId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - you do not have permission to view this server' }, 403);
+  }
+
+  try {
+    // Get server and agent details
+    const server = await c.env.DB.prepare(
+      `SELECT s.id, s.name, s.status, s.agent_id, s.server_data_path,
+              a.name as agent_name, a.status as agent_status, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ? AND s.agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Check if agent is online
+    if (server.agent_status !== 'online') {
+      return c.json({
+        error: 'Agent offline',
+        message: 'Cannot retrieve storage info - agent is not connected',
+      }, 503);
+    }
+
+    // Get AgentConnection DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Use server's custom path if set, otherwise use agent default
+    const dataPath = server.server_data_path || server.agent_server_data_path;
+
+    console.log(`[Server Storage] Requesting storage for ${server.name} (dataPath: ${dataPath})`);
+
+    // Forward storage request to agent via DO
+    const storageResponse = await stub.fetch(
+      `http://do/servers/${server.name}/storage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataPath }),
+      }
+    );
+
+    if (!storageResponse.ok) {
+      const errorData = await storageResponse.json() as { error?: string };
+      return c.json({ error: errorData.error || 'Failed to get storage info' }, storageResponse.status);
+    }
+
+    const storageData = await storageResponse.json() as {
+      success: boolean;
+      sizes?: { binBytes: number; dataBytes: number; totalBytes: number; mountPoint?: string };
+      error?: string;
+    };
+
+    if (!storageData.success) {
+      return c.json({ error: storageData.error || 'Failed to get storage info' }, 500);
+    }
+
+    console.log(`[Server Storage] ${server.name}: bin=${storageData.sizes?.binBytes}, data=${storageData.sizes?.dataBytes}, total=${storageData.sizes?.totalBytes}`);
+
+    return c.json({
+      success: true,
+      sizes: storageData.sizes,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[Server Storage API] Error getting storage:', errorMessage, error);
+    return c.json({ error: `Failed to get server storage info: ${errorMessage}` }, 500);
+  }
+});
+
+/**
  * PATCH /api/agents/:id/servers/:serverId/config
  * Update server configuration (Save step - no container restart)
  *
@@ -2445,7 +2538,7 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
     return c.json({ error: 'Forbidden - you do not have permission to control this server' }, 403);
   }
 
-  // M9.8.29: Parse optional oldDataPath from request body
+  // M9.8.29: Parse optional oldDataPath from request body (may be stale, will verify from container)
   let oldDataPath: string | undefined;
   try {
     const body = await c.req.json();
@@ -2496,11 +2589,40 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
       RCON_PORT: server.rcon_port.toString(),
     };
 
-    // Determine data path (custom override or agent default)
+    // Determine target data path (custom override or agent default)
     const dataPath = server.server_data_path || server.agent_server_data_path;
 
-    // M9.8.29: If oldDataPath provided and different from current, move data first
+    // M9.8.36: Query ACTUAL data path from container mounts (DB config may be stale)
+    // This handles cases where agent path changed after server was created
     if (oldDataPath && dataPath && oldDataPath !== dataPath) {
+      console.log(`[Agents API] Data path change requested: ${oldDataPath} -> ${dataPath}`);
+      console.log(`[Agents API] Querying actual data path from container mounts...`);
+
+      try {
+        const dataPathResponse = await agentStub.fetch(`http://do/servers/${serverId}/datapath`, {
+          method: 'GET',
+        });
+
+        if (dataPathResponse.ok) {
+          const dataPathResult = await dataPathResponse.json() as { success: boolean; dataPath?: string; error?: string };
+          if (dataPathResult.success && dataPathResult.dataPath) {
+            const actualOldPath = dataPathResult.dataPath;
+            console.log(`[Agents API] Actual data path from container: ${actualOldPath}`);
+
+            // Use actual path if different from what frontend provided
+            if (actualOldPath !== oldDataPath) {
+              console.log(`[Agents API] Correcting oldDataPath: ${oldDataPath} -> ${actualOldPath}`);
+              oldDataPath = actualOldPath;
+            }
+          }
+        } else {
+          console.warn(`[Agents API] Could not query container data path, using provided value: ${oldDataPath}`);
+        }
+      } catch (err) {
+        console.warn(`[Agents API] Error querying container data path:`, err);
+        // Continue with provided oldDataPath
+      }
+
       console.log(`[Agents API] Moving server data from ${oldDataPath} to ${dataPath}`);
 
       const moveResponse = await agentStub.fetch(`http://do/servers/${serverId}/move`, {
@@ -2534,7 +2656,7 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
     // M9.8.32: Use server's custom image if set, otherwise use agent's registry
     const imageRef = server.image || server.steam_zomboid_registry;
 
-    const response = await agentStub.fetch(`http://do/servers/${serverId}/rebuild`, {
+    let response = await agentStub.fetch(`http://do/servers/${serverId}/rebuild`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2551,6 +2673,87 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
       }),
     });
 
+    // M9.8.36: Auto-recovery for missing containers
+    // If rebuild fails because container doesn't exist, try to create a new one
+    if (!response.ok) {
+      const errorData = await response.json() as { error?: string };
+      const errorMsg = errorData.error || '';
+
+      // Check if this is a "no such container" error
+      if (errorMsg.toLowerCase().includes('no such container') ||
+          errorMsg.toLowerCase().includes('container not found')) {
+        console.log(`[Agents API] Container missing, attempting auto-recovery by creating new container`);
+
+        // Check if data exists on disk to determine the correct source path
+        let actualDataPath = dataPath;
+        try {
+          const checkDataResponse = await agentStub.fetch(`http://do/servers/checkdata`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              servers: [server.name],
+              dataPath: dataPath,
+            }),
+          });
+
+          if (checkDataResponse.ok) {
+            const checkResult = await checkDataResponse.json() as { success: boolean; statuses?: Array<{ dataExists: boolean }> };
+            if (checkResult.success && checkResult.statuses?.[0]?.dataExists) {
+              console.log(`[Agents API] Data exists at target path: ${dataPath}`);
+            } else if (oldDataPath) {
+              // Check if data exists at old path
+              const checkOldResponse = await agentStub.fetch(`http://do/servers/checkdata`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  servers: [server.name],
+                  dataPath: oldDataPath,
+                }),
+              });
+
+              if (checkOldResponse.ok) {
+                const checkOldResult = await checkOldResponse.json() as { success: boolean; statuses?: Array<{ dataExists: boolean }> };
+                if (checkOldResult.success && checkOldResult.statuses?.[0]?.dataExists) {
+                  console.log(`[Agents API] Data exists at old path: ${oldDataPath}, using that for container`);
+                  actualDataPath = oldDataPath;
+
+                  // Also update server's data path in DB to match where data actually is
+                  await c.env.DB.prepare(
+                    `UPDATE servers SET server_data_path = ?, updated_at = ? WHERE id = ?`
+                  )
+                    .bind(actualDataPath, Date.now(), serverId)
+                    .run();
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[Agents API] Error checking data existence:`, err);
+        }
+
+        // Try to create a new container
+        response = await agentStub.fetch(`http://do/servers/${serverId}/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serverId: serverId,
+            name: server.name,
+            registry: imageRef,
+            imageTag: server.image_tag,
+            config: configWithRconPort,
+            gamePort: server.game_port,
+            udpPort: server.udp_port,
+            rconPort: server.rcon_port,
+            dataPath: actualDataPath,
+          }),
+        });
+
+        if (response.ok) {
+          console.log(`[Agents API] Auto-recovery successful - new container created for ${server.name}`);
+        }
+      }
+    }
+
     if (!response.ok) {
       // Update status back to failed
       await c.env.DB.prepare(
@@ -2559,18 +2762,21 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
         .bind(Date.now(), serverId)
         .run();
 
-      const errorData = await response.json();
+      const errorData = await response.json() as { error?: string };
       return c.json({ error: errorData.error || 'Failed to apply configuration' }, response.status);
     }
 
-    const result = await response.json() as { success: boolean; newContainerID: string };
+    const result = await response.json() as { success: boolean; newContainerID?: string; containerId?: string };
+
+    // Get container ID from either rebuild response (newContainerID) or create response (containerId)
+    const newContainerId = result.newContainerID || result.containerId;
 
     // Update database with new container_id and running status
     const now = Date.now();
     await c.env.DB.prepare(
       `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
     )
-      .bind(result.newContainerID, now, serverId)
+      .bind(newContainerId, now, serverId)
       .run();
 
     // Fetch updated server

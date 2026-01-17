@@ -18,6 +18,7 @@ import {
   updateServerConfig,
   applyServerConfig,
   fetchImageDefaults,
+  getServerStorage,
   type CreateServerRequest,
 } from '../lib/api';
 import { getToken } from '../lib/auth';
@@ -440,6 +441,37 @@ export function useImageDefaults(agentId: string | null, imageTag: string | null
     },
     enabled: !!agentId && !!imageTag,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour
+    retry: 1, // Only retry once (agent might be offline)
+  });
+}
+
+/**
+ * Hook to fetch storage consumption for a server's bin/ and data/ directories
+ * Results are cached for 5 minutes (matches agent-side cache TTL)
+ */
+export function useServerStorage(
+  agentId: string | null,
+  serverId: string | null,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['server-storage', agentId, serverId],
+    queryFn: async () => {
+      if (!agentId || !serverId) {
+        throw new Error('Agent ID and server ID are required');
+      }
+      console.log(`[useServerStorage] Fetching storage for agent=${agentId}, server=${serverId}`);
+      try {
+        const result = await getServerStorage(agentId, serverId);
+        console.log(`[useServerStorage] Result:`, result);
+        return result;
+      } catch (err) {
+        console.error(`[useServerStorage] Error:`, err);
+        throw err;
+      }
+    },
+    enabled: enabled && !!agentId && !!serverId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes (matches agent cache)
     retry: 1, // Only retry once (agent might be offline)
   });
 }

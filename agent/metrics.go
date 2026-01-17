@@ -2,23 +2,35 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 )
+
+// DiskMetric represents disk usage for a single volume/filesystem
+type DiskMetric struct {
+	Path       string  `json:"path"`       // Original path checked (e.g., "/data/servers")
+	MountPoint string  `json:"mountPoint"` // Resolved mount point (e.g., "/data")
+	Label      string  `json:"label"`      // Human-readable label
+	UsedGB     int64   `json:"usedGB"`
+	TotalGB    int64   `json:"totalGB"`
+	Percent    float64 `json:"percent"`
+}
 
 // HostMetrics represents collected host system metrics
 type HostMetrics struct {
-	CPUPercent     float64 `json:"cpuPercent"`
-	MemoryUsedMB   int64   `json:"memoryUsedMB"`
-	MemoryTotalMB  int64   `json:"memoryTotalMB"`
-	DiskUsedGB     int64   `json:"diskUsedGB"`
-	DiskTotalGB    int64   `json:"diskTotalGB"`
-	DiskPercent    float64 `json:"diskPercent"`
-	Timestamp      int64   `json:"timestamp"`
+	CPUPercent    float64      `json:"cpuPercent"`
+	MemoryUsedMB  int64        `json:"memoryUsedMB"`
+	MemoryTotalMB int64        `json:"memoryTotalMB"`
+	Disks         []DiskMetric `json:"disks"`
+	Timestamp     int64        `json:"timestamp"`
 }
 
 // cpuStats stores CPU stats for delta calculation
@@ -30,7 +42,8 @@ type cpuStats struct {
 var lastCPUStats *cpuStats
 
 // CollectHostMetrics collects CPU, memory, and disk metrics from the host
-func CollectHostMetrics() (*HostMetrics, error) {
+// dc is optional - if nil, only root filesystem is checked for disk metrics
+func CollectHostMetrics(dc *DockerClient) (*HostMetrics, error) {
 	metrics := &HostMetrics{
 		Timestamp: time.Now().Unix(),
 	}
@@ -50,18 +63,12 @@ func CollectHostMetrics() (*HostMetrics, error) {
 	metrics.MemoryUsedMB = memUsed
 	metrics.MemoryTotalMB = memTotal
 
-	// Collect disk usage (try /var/lib/zedops first, fallback to /)
-	diskUsed, diskTotal, diskPercent, err := getDiskUsage("/var/lib/zedops")
+	// Collect disk usage for all server data volumes
+	disks, err := collectDiskMetrics(dc)
 	if err != nil {
-		// Fallback to root filesystem if /var/lib/zedops doesn't exist
-		diskUsed, diskTotal, diskPercent, err = getDiskUsage("/")
-		if err != nil {
-			return nil, fmt.Errorf("disk collection failed: %w", err)
-		}
+		return nil, fmt.Errorf("disk collection failed: %w", err)
 	}
-	metrics.DiskUsedGB = diskUsed
-	metrics.DiskTotalGB = diskTotal
-	metrics.DiskPercent = diskPercent
+	metrics.Disks = disks
 
 	return metrics, nil
 }
@@ -207,4 +214,197 @@ func getDiskUsage(path string) (usedGB, totalGB int64, percent float64, err erro
 	}
 
 	return usedGB, totalGB, percent, nil
+}
+
+// getDiskMetricWithDeviceID gets disk usage and returns device ID string for deduplication
+func getDiskMetricWithDeviceID(path, label string) (*DiskMetric, string, error) {
+	var stat syscall.Statfs_t
+	err := syscall.Statfs(path, &stat)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to statfs %s: %w", path, err)
+	}
+
+	// Calculate disk usage
+	totalBytes := stat.Blocks * uint64(stat.Bsize)
+	availableBytes := stat.Bavail * uint64(stat.Bsize)
+	usedBytes := totalBytes - availableBytes
+
+	totalGB := int64(totalBytes / (1024 * 1024 * 1024))
+	usedGB := int64(usedBytes / (1024 * 1024 * 1024))
+
+	var percent float64
+	if totalGB > 0 {
+		percent = float64(usedGB) / float64(totalGB) * 100.0
+	}
+
+	// Use Fsid as device identifier for deduplication
+	// Use string representation for cross-platform compatibility
+	deviceID := fmt.Sprintf("%v", stat.Fsid)
+
+	metric := &DiskMetric{
+		Path:       path,
+		MountPoint: path, // We'll use the path as mount point for now
+		Label:      label,
+		UsedGB:     usedGB,
+		TotalGB:    totalGB,
+		Percent:    percent,
+	}
+
+	return metric, deviceID, nil
+}
+
+// mountInfo represents a mounted filesystem
+type mountInfo struct {
+	Device     string // e.g., "/dev/mapper/main--array-petty"
+	MountPoint string // e.g., "/Volumes/Petty"
+}
+
+// parseMounts reads /proc/mounts and returns a list of mount points
+func parseMounts() ([]mountInfo, error) {
+	file, err := os.Open("/proc/mounts")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open /proc/mounts: %w", err)
+	}
+	defer file.Close()
+
+	var mounts []mountInfo
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 2 {
+			continue
+		}
+		device := fields[0]
+		mountPoint := fields[1]
+
+		// Skip virtual filesystems
+		if strings.HasPrefix(device, "/dev/") {
+			mounts = append(mounts, mountInfo{
+				Device:     device,
+				MountPoint: mountPoint,
+			})
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading /proc/mounts: %w", err)
+	}
+
+	return mounts, nil
+}
+
+// findMountForPath finds the mount point that contains the given path (longest prefix match)
+func findMountForPath(path string, mounts []mountInfo) *mountInfo {
+	var bestMatch *mountInfo
+	bestLen := 0
+
+	for i := range mounts {
+		mp := mounts[i].MountPoint
+		// Check if path starts with this mount point
+		if strings.HasPrefix(path, mp) {
+			// Ensure it's a proper prefix:
+			// - exact match (path == mount point)
+			// - root mount point "/" matches everything
+			// - mount point followed by "/" in path
+			if len(mp) > bestLen && (len(path) == len(mp) || mp == "/" || path[len(mp)] == '/') {
+				bestMatch = &mounts[i]
+				bestLen = len(mp)
+			}
+		}
+	}
+
+	return bestMatch
+}
+
+// collectDiskMetrics discovers unique filesystems used by container bind mounts
+func collectDiskMetrics(dc *DockerClient) ([]DiskMetric, error) {
+	// Parse system mounts
+	mounts, err := parseMounts()
+	if err != nil {
+		// Fallback to root if we can't parse mounts
+		metric, _, err := getDiskMetricWithDeviceID("/", "Root")
+		if err != nil {
+			return nil, err
+		}
+		return []DiskMetric{*metric}, nil
+	}
+
+	// Track unique devices
+	seenDevices := make(map[string]bool)
+	var metrics []DiskMetric
+
+	// If no DockerClient, fallback to root filesystem only
+	if dc == nil {
+		metric, _, err := getDiskMetricWithDeviceID("/", "Root")
+		if err != nil {
+			return nil, err
+		}
+		return []DiskMetric{*metric}, nil
+	}
+
+	// List all ZedOps-managed containers
+	ctx := context.Background()
+	containerFilters := filters.NewArgs()
+	containerFilters.Add("label", "zedops.managed=true")
+
+	containers, err := dc.cli.ContainerList(ctx, container.ListOptions{
+		All:     true, // Include stopped containers
+		Filters: containerFilters,
+	})
+	if err != nil {
+		// Fallback to root if we can't list containers
+		metric, _, err := getDiskMetricWithDeviceID("/", "Root")
+		if err != nil {
+			return nil, err
+		}
+		return []DiskMetric{*metric}, nil
+	}
+
+	// Collect ALL bind mount source paths from each container
+	for _, c := range containers {
+		inspect, err := dc.cli.ContainerInspect(ctx, c.ID)
+		if err != nil {
+			continue // Skip containers we can't inspect
+		}
+
+		for _, mount := range inspect.Mounts {
+			if mount.Type != "bind" {
+				continue
+			}
+
+			// Find which filesystem this path belongs to
+			mountInfo := findMountForPath(mount.Source, mounts)
+			if mountInfo == nil {
+				continue
+			}
+
+			// Skip if we've already seen this device
+			if seenDevices[mountInfo.Device] {
+				continue
+			}
+			seenDevices[mountInfo.Device] = true
+
+			// Get disk metrics for this mount point
+			metric, _, err := getDiskMetricWithDeviceID(mountInfo.MountPoint, mountInfo.MountPoint)
+			if err != nil {
+				continue
+			}
+
+			// Use mount point as both path and label
+			metric.Path = mountInfo.MountPoint
+			metric.Label = mountInfo.MountPoint
+			metrics = append(metrics, *metric)
+		}
+	}
+
+	// If no volumes found from containers, fallback to root
+	if len(metrics) == 0 {
+		metric, _, err := getDiskMetricWithDeviceID("/", "Root")
+		if err != nil {
+			return nil, err
+		}
+		return []DiskMetric{*metric}, nil
+	}
+
+	return metrics, nil
 }

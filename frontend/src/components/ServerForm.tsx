@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ErrorDialog } from '@/components/ui/error-dialog';
 
 interface ServerFormProps {
   agentId: string;
@@ -58,6 +59,9 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
   // Server data path (M9.8.23: Per-server path override)
   const [customDataPath, setCustomDataPath] = useState('');
   const [dataPathError, setDataPathError] = useState('');
+
+  // Error dialog state
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch agent config for default data path display
   const { data: agentConfig } = useQuery({
@@ -125,7 +129,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     }
 
     if (!adminPassword) {
-      alert('Admin password is required');
+      setErrorMessage('Admin password is required');
       return;
     }
 
@@ -533,6 +537,14 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* Error Dialog */}
+      <ErrorDialog
+        open={!!errorMessage}
+        onOpenChange={(open) => !open && setErrorMessage(null)}
+        title="Validation Error"
+        message={errorMessage || ''}
+      />
     </Dialog>
   );
 }

@@ -140,8 +140,8 @@ func (a *Agent) sendHeartbeats(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			// Collect host metrics
-			metrics, err := CollectHostMetrics()
+			// Collect host metrics (pass DockerClient for disk path discovery)
+			metrics, err := CollectHostMetrics(a.docker)
 			if err != nil {
 				log.Printf("Warning: Failed to collect metrics: %v", err)
 				// Send heartbeat without metrics (backward compatible)
@@ -165,9 +165,16 @@ func (a *Agent) sendHeartbeats(ctx context.Context) {
 				log.Printf("Failed to send heartbeat: %v", err)
 				return
 			}
-			log.Printf("Heartbeat sent with metrics (CPU: %.1f%%, Mem: %dMB/%dMB, Disk: %dGB/%dGB)",
-				metrics.CPUPercent, metrics.MemoryUsedMB, metrics.MemoryTotalMB,
-				metrics.DiskUsedGB, metrics.DiskTotalGB)
+			// Log summary of metrics
+			diskSummary := ""
+			for i, disk := range metrics.Disks {
+				if i > 0 {
+					diskSummary += ", "
+				}
+				diskSummary += fmt.Sprintf("%s: %dGB/%dGB", disk.Label, disk.UsedGB, disk.TotalGB)
+			}
+			log.Printf("Heartbeat sent with metrics (CPU: %.1f%%, Mem: %dMB/%dMB, Disks: [%s])",
+				metrics.CPUPercent, metrics.MemoryUsedMB, metrics.MemoryTotalMB, diskSummary)
 		case <-ctx.Done():
 			return
 		}

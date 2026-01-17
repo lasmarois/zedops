@@ -34,14 +34,26 @@ function handleAuthError(response: Response): void {
   }
 }
 
+export interface DiskMetric {
+  path: string;
+  mountPoint: string;
+  label: string;
+  usedGB: number;
+  totalGB: number;
+  percent: number;
+}
+
 export interface HostMetrics {
   cpuPercent: number;
   memoryUsedMB: number;
   memoryTotalMB: number;
-  diskUsedGB: number;
-  diskTotalGB: number;
-  diskPercent: number;
-  lastUpdate: number;
+  disks?: DiskMetric[];  // New format (array of volumes)
+  // Legacy fields for backward compatibility with old agent
+  diskUsedGB?: number;
+  diskTotalGB?: number;
+  diskPercent?: number;
+  timestamp?: number;
+  lastUpdate?: number;
 }
 
 export interface Agent {
@@ -1254,6 +1266,54 @@ export async function acceptInvitation(token: string, password: string): Promise
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.error || 'Failed to accept invitation');
+  }
+
+  return response.json();
+}
+
+// ==================== Server Storage ====================
+
+/**
+ * Server storage sizes response
+ */
+export interface ServerStorageSizes {
+  binBytes: number;
+  dataBytes: number;
+  totalBytes: number;
+  mountPoint?: string;
+}
+
+export interface ServerStorageResponse {
+  success: boolean;
+  sizes?: ServerStorageSizes;
+  error?: string;
+}
+
+/**
+ * Get storage consumption for a server's bin/ and data/ directories
+ * Returns sizes in bytes; agent caches results for 5 minutes
+ */
+export async function getServerStorage(
+  agentId: string,
+  serverId: string
+): Promise<ServerStorageResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/storage`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 503) {
+      throw new Error('Agent not connected');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to get server storage');
   }
 
   return response.json();

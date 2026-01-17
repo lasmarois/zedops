@@ -211,6 +211,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                   {/* Metrics for online agents */}
                   {isOnline && metrics ? (
                     <div className="space-y-2">
+                      {/* CPU & Memory */}
                       <ResourceMeter
                         icon={Cpu}
                         label="CPU"
@@ -221,11 +222,49 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                         label="MEM"
                         value={(metrics.memoryUsedMB / metrics.memoryTotalMB) * 100}
                       />
-                      <ResourceMeter
-                        icon={HardDrive}
-                        label="DISK"
-                        value={metrics.diskPercent}
-                      />
+                      {/* Storage section with separator */}
+                      {metrics.disks && metrics.disks.length > 0 ? (
+                        <>
+                          <div className="border-t pt-2 mt-2">
+                            <span className="text-xs text-muted-foreground">Storage</span>
+                          </div>
+                          {metrics.disks.map((disk, idx) => {
+                            // Use last path segment as label
+                            const label = disk.path.split('/').filter(Boolean).pop() || disk.path;
+                            const color = getMetricColor(disk.percent);
+                            return (
+                              <div key={idx} className="flex items-center gap-2">
+                                <HardDrive className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <span
+                                  className="text-xs font-medium text-muted-foreground w-28 truncate"
+                                  title={disk.path}
+                                >
+                                  {label}
+                                </span>
+                                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${Math.min(disk.percent, 100)}%`,
+                                      backgroundColor: color,
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-xs tabular-nums w-10 text-right text-muted-foreground">
+                                  {disk.percent.toFixed(0)}%
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : metrics.diskPercent !== undefined ? (
+                        // Fallback to legacy single disk format
+                        <ResourceMeter
+                          icon={HardDrive}
+                          label="DISK"
+                          value={metrics.diskPercent}
+                        />
+                      ) : null}
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground py-4">

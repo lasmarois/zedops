@@ -10,11 +10,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAgents } from "@/hooks/useAgents"
-import { Laptop, Server, HardDrive } from "lucide-react"
+import { HardDrive, Cpu, MemoryStick } from "lucide-react"
 import { AgentServerList } from "@/components/AgentServerList"
 import { AgentConfigModal } from "@/components/AgentConfigModal"
 import { AgentLogViewer } from "@/components/AgentLogViewer"
 import { fetchAgentConfig, updateAgentConfig, type AgentConfig } from "@/lib/api"
+
+// Helper to get color based on percentage
+function getMetricColor(value: number): string {
+  if (value > 80) return '#F75555'
+  if (value > 60) return '#FFC952'
+  return '#3DDC97'
+}
 
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -80,9 +87,7 @@ export function AgentDetail() {
   const memUsedGB = metrics ? (metrics.memoryUsedMB / 1024).toFixed(1) : null
   const memTotalGB = metrics ? (metrics.memoryTotalMB / 1024).toFixed(1) : null
   const memPercent = metrics ? (metrics.memoryUsedMB / metrics.memoryTotalMB) * 100 : null
-  const diskUsedGB = metrics?.diskUsedGB
-  const diskTotalGB = metrics?.diskTotalGB
-  const diskPercent = metrics?.diskPercent
+  const disks = metrics?.disks || []
 
   return (
     <div className="p-8 space-y-6">
@@ -142,14 +147,13 @@ export function AgentDetail() {
           {/* Host Metrics */}
           <div>
             <h2 className="text-xl font-semibold mb-4">Host Metrics</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* CPU Card */}
+
+            {/* CPU and Memory Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    CPU Usage
-                  </CardTitle>
-                  <Laptop className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium text-muted-foreground">CPU Usage</CardTitle>
+                  <Cpu className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   {agent.status === 'online' && cpuPercent !== null && cpuPercent !== undefined ? (
@@ -157,13 +161,7 @@ export function AgentDetail() {
                       <div className="text-3xl font-bold">{cpuPercent.toFixed(1)}%</div>
                       <div className="mt-4">
                         <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${Math.min(cpuPercent, 100)}%`,
-                              backgroundColor: cpuPercent > 80 ? '#F75555' : cpuPercent > 60 ? '#FFC952' : '#3DDC97'
-                            }}
-                          />
+                          <div className="h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(cpuPercent, 100)}%`, backgroundColor: getMetricColor(cpuPercent) }} />
                         </div>
                       </div>
                     </>
@@ -172,64 +170,19 @@ export function AgentDetail() {
                   )}
                 </CardContent>
               </Card>
-
-              {/* Memory Card */}
               <Card className="hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Memory Usage
-                  </CardTitle>
-                  <Server className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Memory Usage</CardTitle>
+                  <MemoryStick className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
                   {agent.status === 'online' && memPercent !== null && memPercent !== undefined ? (
                     <>
                       <div className="text-3xl font-bold">{memPercent.toFixed(1)}%</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {memUsedGB}GB / {memTotalGB}GB
-                      </div>
+                      <div className="text-sm text-muted-foreground mt-1">{memUsedGB}GB / {memTotalGB}GB</div>
                       <div className="mt-4">
                         <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${Math.min(memPercent, 100)}%`,
-                              backgroundColor: memPercent > 80 ? '#F75555' : memPercent > 60 ? '#FFC952' : '#3DDC97'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-muted-foreground">No data</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Disk Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Disk Usage
-                  </CardTitle>
-                  <HardDrive className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  {agent.status === 'online' && diskPercent !== null && diskPercent !== undefined ? (
-                    <>
-                      <div className="text-3xl font-bold">{diskPercent.toFixed(1)}%</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {diskUsedGB?.toFixed(0)}GB / {diskTotalGB?.toFixed(0)}GB
-                      </div>
-                      <div className="mt-4">
-                        <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${Math.min(diskPercent, 100)}%`,
-                              backgroundColor: diskPercent > 80 ? '#F75555' : diskPercent > 60 ? '#FFC952' : '#3DDC97'
-                            }}
-                          />
+                          <div className="h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(memPercent, 100)}%`, backgroundColor: getMetricColor(memPercent) }} />
                         </div>
                       </div>
                     </>
@@ -239,6 +192,48 @@ export function AgentDetail() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Storage Table */}
+            <Card className="mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <HardDrive className="h-4 w-4" />
+                  Storage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {agent.status === 'online' && disks.length > 0 ? (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left text-xs font-medium text-muted-foreground p-3">Mount</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground p-3">Used</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground p-3">Total</th>
+                        <th className="text-left text-xs font-medium text-muted-foreground p-3 w-48">Usage</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground p-3">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {disks.map((disk, index) => (
+                        <tr key={index} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="p-3 text-sm font-medium truncate max-w-[200px]" title={disk.path}>{disk.label || disk.path}</td>
+                          <td className="p-3 text-sm text-right text-muted-foreground">{disk.usedGB} GB</td>
+                          <td className="p-3 text-sm text-right text-muted-foreground">{disk.totalGB} GB</td>
+                          <td className="p-3">
+                            <div className="w-full bg-muted rounded-full h-2">
+                              <div className="h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(disk.percent, 100)}%`, backgroundColor: getMetricColor(disk.percent) }} />
+                            </div>
+                          </td>
+                          <td className="p-3 text-sm text-right font-semibold" style={{ color: getMetricColor(disk.percent) }}>{disk.percent.toFixed(0)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="p-4 text-muted-foreground">No data</div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Servers on This Agent */}

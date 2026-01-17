@@ -593,6 +593,18 @@ type ServerCheckDataResponse struct {
 	Error    string             `json:"error,omitempty"`
 }
 
+// ServerGetDataPathRequest represents a server.getdatapath message payload
+type ServerGetDataPathRequest struct {
+	ContainerID string `json:"containerId"`
+}
+
+// ServerGetDataPathResponse represents the response to a server.getdatapath message
+type ServerGetDataPathResponse struct {
+	Success  bool   `json:"success"`
+	DataPath string `json:"dataPath,omitempty"` // Base path extracted from container mounts
+	Error    string `json:"error,omitempty"`
+}
+
 // CheckServerData checks if server data directories exist on the host
 func (dc *DockerClient) CheckServerData(serverName, dataPath string) ServerDataStatus {
 	binPath := filepath.Join(dataPath, serverName, "bin")
@@ -845,6 +857,33 @@ func (dc *DockerClient) MoveServerData(serverName, oldBasePath, newBasePath stri
 	}, nil
 }
 
+// GetContainerDataPath inspects a container and returns its actual data path from mounts
+// This is used when the database config might be stale (e.g., agent path changed after server creation)
+func (dc *DockerClient) GetContainerDataPath(ctx context.Context, containerID string) (string, error) {
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Look for the bin mount (Target: /home/steam/zomboid-dedicated)
+	// The Source will be {basePath}/bin, so we strip the /bin suffix
+	for _, m := range inspect.HostConfig.Mounts {
+		if m.Target == "/home/steam/zomboid-dedicated" {
+			// Source is like /path/to/data/servername/bin
+			// We want to return /path/to/data (the base path, not including server name)
+			binPath := m.Source
+			// Remove /bin suffix to get server path
+			serverPath := strings.TrimSuffix(binPath, "/bin")
+			// Remove server name to get base path
+			basePath := filepath.Dir(serverPath)
+			log.Printf("Extracted data path from container mounts: %s (from bin mount: %s)", basePath, binPath)
+			return basePath, nil
+		}
+	}
+
+	return "", fmt.Errorf("no bin mount found in container (expected mount at /home/steam/zomboid-dedicated)")
+}
+
 // copyFile copies a single file preserving permissions
 func copyFile(src, dst string, mode os.FileMode) error {
 	srcFile, err := os.Open(src)
@@ -866,4 +905,78 @@ func copyFile(src, dst string, mode os.FileMode) error {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// ==================== Volume Sizes ====================
+
+// ServerVolumeSizesRequest represents a server.volumesizes message payload
+type ServerVolumeSizesRequest struct {
+	ServerName string `json:"serverName"`
+	DataPath   string `json:"dataPath"` // Base path (e.g., /var/lib/zedops/servers)
+}
+
+// ServerVolumeSizes represents the storage usage for a server
+type ServerVolumeSizes struct {
+	BinBytes   int64  `json:"binBytes"`
+	DataBytes  int64  `json:"dataBytes"`
+	TotalBytes int64  `json:"totalBytes"`
+	MountPoint string `json:"mountPoint,omitempty"`
+}
+
+// ServerVolumeSizesResponse represents the response to a server.volumesizes message
+type ServerVolumeSizesResponse struct {
+	Success bool               `json:"success"`
+	Sizes   *ServerVolumeSizes `json:"sizes,omitempty"`
+	Error   string             `json:"error,omitempty"`
+}
+
+// GetServerVolumeSizes calculates the storage usage for a server's bin/ and data/ directories
+func GetServerVolumeSizes(serverName, dataPath string) (*ServerVolumeSizes, error) {
+	basePath := filepath.Join(dataPath, serverName)
+	binPath := filepath.Join(basePath, "bin")
+	dataFolderPath := filepath.Join(basePath, "data")
+
+	// Calculate bin/ size
+	binSize, err := getDirSize(binPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to calculate bin size: %w", err)
+	}
+
+	// Calculate data/ size
+	dataSize, err := getDirSize(dataFolderPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to calculate data size: %w", err)
+	}
+
+	return &ServerVolumeSizes{
+		BinBytes:   binSize,
+		DataBytes:  dataSize,
+		TotalBytes: binSize + dataSize,
+		MountPoint: dataPath,
+	}, nil
+}
+
+// getDirSize calculates the total size of a directory recursively
+func getDirSize(path string) (int64, error) {
+	var size int64
+
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Skip files we can't access
+			if os.IsPermission(err) {
+				return nil
+			}
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return size, nil
 }

@@ -33,10 +33,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Play, Square, RotateCw, Wrench, Trash2, Terminal, Gamepad2 } from 'lucide-react';
+import { MoreVertical, Play, Square, RotateCw, Trash2, Terminal } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +45,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ServerCard } from '@/components/ServerCard';
+import { ServerCardLayoutToggle } from '@/components/ServerCardLayoutToggle';
+import { useServerCardLayout } from '@/contexts/ServerCardLayoutContext';
 
 interface AgentServerListProps {
   agentId: string;
@@ -57,6 +59,7 @@ interface AgentServerListProps {
 export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: AgentServerListProps) {
   const { data, isLoading, error } = useContainers(agentId);
   const { data: serversData } = useServers(agentId);
+  const { layout } = useServerCardLayout();
   const startMutation = useStartContainer();
   const stopMutation = useStopContainer();
   const restartMutation = useRestartContainer();
@@ -86,6 +89,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   const [confirmPurge, setConfirmPurge] = useState<{ serverId: string; serverName: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ serverId: string; serverName: string } | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState<{ serverId: string; serverName: string } | null>(null);
+  const [confirmCleanup, setConfirmCleanup] = useState<number | null>(null); // Number of failed servers to clean
   const [rconServer, setRconServer] = useState<Server | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
@@ -332,16 +336,25 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     setShowServerForm(true);
   };
 
-  const handleCleanupFailedServers = async () => {
+  const handleCleanupFailedServers = () => {
     const failedCount = serversData?.servers.filter(s => s.status === 'failed').length || 0;
     if (failedCount === 0) {
-      alert('No failed servers to clean up');
+      setServerMessage({
+        message: 'No failed servers to clean up',
+        type: 'error',
+      });
+      setTimeout(() => setServerMessage(null), 3000);
       return;
     }
+    setConfirmCleanup(failedCount);
+  };
 
-    if (!confirm(`Clean up ${failedCount} failed server(s)? Containers will be removed but data will be preserved.`)) {
-      return;
-    }
+  const confirmCleanupServers = async () => {
+    // Capture count before closing dialog
+    const count = confirmCleanup;
+    setConfirmCleanup(null);
+
+    if (!count) return;
 
     try {
       const result = await cleanupFailedServersMutation.mutateAsync({
@@ -727,7 +740,8 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
           </Button>
           <h1 className="text-3xl font-bold">Zomboid Servers on {agentName}</h1>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          <ServerCardLayoutToggle />
           <Button onClick={() => setShowServerForm(true)} size="lg">
             + Create Server
           </Button>
@@ -790,92 +804,85 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                   const server = item.server;
                   const isRunning = container ? container.state.toLowerCase() === 'running' : server?.status === 'running';
 
-                  // Get border color
-                  const getBorderColor = () => {
-                    if (container) {
-                      // Check health for running containers
-                      if (container.state.toLowerCase() === 'running' && container.health === 'starting') {
-                        return '#a78bbd'; // purple-500
-                      }
-                      switch (container.state.toLowerCase()) {
-                        case 'running': return '#22c55e';
-                        case 'exited': return '#ef4444';
-                        case 'paused': return '#f59e0b';
-                        case 'restarting': return '#3b82f6';
-                        default: return '#6b7280';
-                      }
-                    }
-                    if (server) {
-                      const displayStatus = getDisplayStatus(server);
-                      switch (displayStatus.variant) {
-                        case 'success': return '#22c55e';
-                        case 'error': return '#ef4444';
-                        case 'warning': return '#f59e0b';
-                        case 'info': return '#3b82f6';
-                        case 'starting': return '#a78bbd'; // purple-500
-                        default: return '#6b7280';
-                      }
-                    }
-                    return '#6b7280';
-                  };
+                  // Use ServerCard for managed servers
+                  if (isManaged && server) {
+                    return (
+                      <ServerCard
+                        key={item.id}
+                        server={server}
+                        container={container}
+                        layout={layout}
+                        isManaged={true}
+                        onStart={() => {
+                          if (container) {
+                            handleStart(container.id);
+                          } else {
+                            handleServerStart(server.id, server.name);
+                          }
+                        }}
+                        onStop={() => container && handleStop(container.id)}
+                        onRestart={() => container && handleRestart(container.id)}
+                        onDelete={() => handleDeleteServer(server.id, server.name)}
+                        onRebuild={() => handleRebuildServer(server.id, server.name)}
+                        onRcon={() => setRconServer(server)}
+                        onEdit={() => handleEditServer(server)}
+                        isStarting={
+                          (container && startMutation.isPending && startMutation.variables?.containerId === container.id) ||
+                          (!container && startServerMutation.isPending && startServerMutation.variables?.serverId === server.id)
+                        }
+                        isStopping={container && stopMutation.isPending && stopMutation.variables?.containerId === container.id}
+                        isRestarting={container && restartMutation.isPending && restartMutation.variables?.containerId === container.id}
+                      />
+                    );
+                  }
 
-                  // Get status badge
-                  const getStatusBadge = () => {
-                    if (container) {
-                      const display = getContainerStatusDisplay(container);
-                      return <StatusBadge variant={display.variant} icon={display.icon} iconOnly>{display.label}</StatusBadge>;
+                  // Unmanaged containers - keep simple card
+                  const getUnmanagedBorderColor = () => {
+                    if (!container) return '#6b7280';
+                    switch (container.state.toLowerCase()) {
+                      case 'running': return '#22c55e';
+                      case 'exited': return '#ef4444';
+                      case 'paused': return '#f59e0b';
+                      case 'restarting': return '#3b82f6';
+                      default: return '#6b7280';
                     }
-                    if (server) {
-                      const badge = getServerStatusBadge(server);
-                      return <StatusBadge variant={badge.variant} icon={badge.icon} iconOnly>{badge.text}</StatusBadge>;
-                    }
-                    return null;
                   };
 
                   return (
                     <Card
                       key={item.id}
-                      className={`transition-all duration-200 border-l-4 ${
-                        isManaged && server
-                          ? 'cursor-pointer hover:shadow-lg hover:bg-accent/5 hover:scale-[1.01]'
-                          : 'hover:shadow-md'
-                      }`}
-                      style={{ borderLeftColor: getBorderColor() }}
-                      onClick={() => server && navigate(`/servers/${server.id}`)}
+                      className="transition-all duration-200 border-l-4 hover:shadow-md"
+                      style={{ borderLeftColor: getUnmanagedBorderColor() }}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between gap-4">
-                          {/* Left: Badge + Info */}
                           <div className="flex items-center gap-4 flex-1 min-w-0">
-                            {getStatusBadge()}
+                            {container && (
+                              <StatusBadge
+                                variant={getContainerStatusDisplay(container).variant}
+                                icon={getContainerStatusDisplay(container).icon}
+                                iconOnly
+                              >
+                                {getContainerStatusDisplay(container).label}
+                              </StatusBadge>
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <div className="font-semibold text-lg truncate">{item.name}</div>
-                                {isManaged ? (
-                                  <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
-                                    Managed
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs border-2 text-muted-foreground">
-                                    Unmanaged
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-sm text-muted-foreground truncate">
-                                {container && container.image}
-                                {server && !container && `Game: ${server.game_port} | UDP: ${server.udp_port} | RCON: ${server.rcon_port}`}
+                                <Badge variant="outline" className="text-xs border-2 text-muted-foreground">
+                                  Unmanaged
+                                </Badge>
                               </div>
                               {container && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  {container.status}
-                                </div>
+                                <>
+                                  <div className="text-sm text-muted-foreground truncate">{container.image}</div>
+                                  <div className="text-xs text-muted-foreground mt-1">{container.status}</div>
+                                </>
                               )}
                             </div>
                           </div>
 
-                          {/* Right: Quick Actions + Dropdown */}
-                          <div className="flex gap-2 items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Quick action buttons for containers */}
+                          <div className="flex gap-2 items-center flex-shrink-0">
                             {container && !isRunning && (
                               <Button
                                 size="sm"
@@ -909,96 +916,24 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                 </Button>
                               </>
                             )}
-
-                            {/* Quick action buttons for servers without containers */}
-                            {server && !container && (
-                              <>
-                                {server.status === 'stopped' && (
-                                  <Button
-                                    size="sm"
-                                    variant="success"
-                                    onClick={() => handleServerStart(server.id, server.name)}
-                                    disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
-                                  >
-                                    <Play className="h-4 w-4 mr-1" />
-                                    Start
+                            {container && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="ghost">
+                                    <MoreVertical className="h-4 w-4" />
                                   </Button>
-                                )}
-                                {server.status === 'failed' && (
-                                  <Button
-                                    size="sm"
-                                    variant="warning"
-                                    onClick={() => {
-                                      setEditServer(server);
-                                      setShowServerForm(true);
-                                    }}
-                                  >
-                                    <Wrench className="h-4 w-4 mr-1" />
-                                    Edit & Retry
-                                  </Button>
-                                )}
-                              </>
-                            )}
-
-                            {/* More Actions Dropdown */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="ghost">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {/* View Logs - always available if container exists */}
-                                {container && (
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
                                   <DropdownMenuItem onSelect={() => onViewLogs(container.id, item.name)}>
                                     <Terminal className="h-4 w-4 mr-2" />
                                     View Logs
                                   </DropdownMenuItem>
-                                )}
-
-                                {/* Managed server actions */}
-                                {isManaged && server && (
-                                  <>
-                                    {isRunning && container && (
-                                      <DropdownMenuItem onSelect={() => setRconServer(server)}>
-                                        <Gamepad2 className="h-4 w-4 mr-2" />
-                                        RCON
-                                      </DropdownMenuItem>
-                                    )}
-                                    {server.status === 'running' && (
-                                      <DropdownMenuItem
-                                        onSelect={() => handleRebuildServer(server.id, server.name)}
-                                        disabled={rebuildServerMutation.isPending && rebuildServerMutation.variables?.serverId === server.id}
-                                      >
-                                        <Wrench className="h-4 w-4 mr-2" />
-                                        Rebuild
-                                      </DropdownMenuItem>
-                                    )}
-                                    {server.status === 'failed' && !container && (
-                                      <DropdownMenuItem onSelect={() => handleEditServer(server)}>
-                                        <Wrench className="h-4 w-4 mr-2" />
-                                        Edit & Retry
-                                      </DropdownMenuItem>
-                                    )}
-
-                                    <DropdownMenuSeparator />
-
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onSelect={() => handleDeleteServer(server.id, server.name)}
-                                      disabled={deleteServerMutation.isPending && deleteServerMutation.variables?.serverId === server.id}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete Server
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </div>
                         </div>
 
-                        {/* Operation status feedback */}
                         {container && operationStatus && operationStatus.containerId === container.id && (
                           <Alert variant={operationStatus.type === 'success' ? 'success' : 'destructive'} className="mt-3">
                             <AlertDescription className="text-xs">{operationStatus.message}</AlertDescription>
@@ -1008,8 +943,8 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                     </Card>
                   );
                 })}
-        </div>
-      )}
+              </div>
+            )}
 
             {/* Issues & Recovery Section */}
             {issues.length > 0 && (
@@ -1187,6 +1122,17 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         description={`Rebuild server "${confirmRebuild?.serverName}"? This will pull the latest image and recreate the container. Game data will be preserved.`}
         confirmText="Rebuild"
         onConfirm={confirmRebuildServer}
+      />
+
+      {/* Cleanup Failed Servers Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmCleanup}
+        onOpenChange={(open) => !open && setConfirmCleanup(null)}
+        title="Cleanup Failed Servers"
+        description={`Clean up ${confirmCleanup} failed server(s)? Containers will be removed but data will be preserved.`}
+        confirmText="Cleanup"
+        variant="destructive"
+        onConfirm={confirmCleanupServers}
       />
 
       {showServerForm && (

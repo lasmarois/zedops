@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface UserListProps {
   onBack: () => void;
@@ -44,6 +45,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ userId: string; userEmail: string } | null>(null);
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,13 +74,17 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userEmail: string) => {
-    if (!confirm(`Are you sure you want to delete user ${userEmail}?`)) {
-      return;
-    }
+  const handleDeleteUser = (userId: string, userEmail: string) => {
+    setConfirmDelete({ userId, userEmail });
+  };
+
+  const confirmDeleteUser = async () => {
+    const userToDelete = confirmDelete;
+    setConfirmDelete(null);
+    if (!userToDelete) return;
 
     try {
-      await deleteUserMutation.mutateAsync(userId);
+      await deleteUserMutation.mutateAsync(userToDelete.userId);
       setMessage({ type: 'success', text: 'User deleted successfully' });
     } catch (err) {
       setMessage({
@@ -311,6 +317,17 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
           </Table>
         </div>
       )}
+
+      {/* Delete User Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        title="Delete User"
+        description={`Are you sure you want to delete user ${confirmDelete?.userEmail}? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteUser}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContext';
+import { ServerCardLayoutProvider } from './contexts/ServerCardLayoutContext';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { ComponentShowcase } from './components/ComponentShowcase';
@@ -59,7 +60,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <UserProvider>
-          <AppContent />
+          <ServerCardLayoutProvider>
+            <AppContent />
+          </ServerCardLayoutProvider>
         </UserProvider>
       </BrowserRouter>
     </QueryClientProvider>
