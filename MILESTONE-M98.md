@@ -652,26 +652,46 @@ M9.8 complete when:
 
 ---
 
-### M9.8.38 - Server Volume Sizes (Brainstorm)
-**Status:** 📋 Not Started (Needs Discussion)
+### M9.8.38 - Server Volume Sizes ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** LOW (Feature Enhancement)
+**Duration:** ~3 hours (across multiple sessions)
+**Completed:** 2026-01-17
 
-**Idea:** Display storage consumption for individual server volumes (bin/ and data/ directories).
+**Feature Implemented:** Display storage consumption for individual server volumes (bin/ and data/ directories).
 
-**Display Locations to Consider:**
-1. **Server card expansion** - Expandable row in agent server list & all servers list showing bin/data sizes
-2. **Server detail page** - Dedicated "Storage" section with full breakdown
-3. **Agent detail page** - Aggregate view of all server sizes on that agent
+**What Was Built:**
+- **Agent:** `server.volumesizes` message handler with `filepath.Walk` for size calculation
+- **Agent:** 5-minute cache to avoid expensive disk scans on every request
+- **Manager:** `GET /api/agents/:id/servers/:serverId/storage` endpoint
+- **Manager:** DO handler `handleServerStorageRequest` forwarding to agent
+- **Frontend:** `useServerStorage` hook with React Query
+- **Frontend:** Unified `ServerCard` component with two layout options:
+  - Expandable layout: click to expand, shows storage inline
+  - Compact layout: hover tooltip for storage details
+- **Frontend:** `ServerCardLayoutToggle` for switching layouts (persisted to localStorage)
 
-**Info to Display Per Server:**
-- `bin/` directory size (game files)
-- `data/` directory size (saves, configs)
-- Total combined size
-- Which filesystem/mount it resides on (links to disk metrics)
+**Display Locations:**
+- ✅ Server cards in AgentServerList (Agent Detail page)
+- ✅ Server cards in ServerList (All Servers page)
+- ✅ Both layouts show: bin/ size, data/ size, total size
 
-**Technical Considerations:**
-- Agent needs `du` or similar to calculate directory sizes
-- Could be expensive for large directories - consider caching/async
-- Batch requests for efficiency
+**Bug Fixed During Implementation:**
+- `this.sendToAgent is not a function` → Changed to `this.send()` in AgentConnection.ts
 
-**Needs Further Discussion Before Implementation.**
+**Planning Files:** [planning-history/m9.8.38-server-volume-sizes/](planning-history/m9.8.38-server-volume-sizes/)
+
+---
+
+### M9.8.39 - Audit Logs Revamp 📋 PLANNED
+**Status:** 📋 Not Started (Needs Discussion)
+**Priority:** TBD
+
+**Idea:** Revamp the audit logs UI with a new design.
+
+**Discussion Points:**
+- New design concept to be discussed in next session
+- Current audit log implementation: basic table view
+- Potential improvements: TBD
+
+**Needs Discussion Before Implementation.**
