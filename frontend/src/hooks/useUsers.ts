@@ -40,6 +40,7 @@ export function useInviteUser() {
     mutationFn: (request: InviteUserRequest) => inviteUser(request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -54,6 +55,7 @@ export function useDeleteUser() {
     mutationFn: (userId: string) => deleteUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -91,6 +93,7 @@ export function useGrantPermission() {
     }) => grantPermission(userId, resourceType, resourceId, permission),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['userPermissions', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -106,6 +109,7 @@ export function useRevokePermission() {
       revokePermission(permissionId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['userPermissions', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -147,6 +151,7 @@ export function useGrantRoleAssignment() {
     }) => grantRoleAssignment(userId, role, scope, resourceId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['userRoleAssignments', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -162,6 +167,7 @@ export function useRevokeRoleAssignment() {
       revokeRoleAssignment(assignmentId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['userRoleAssignments', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }

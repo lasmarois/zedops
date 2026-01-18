@@ -117,6 +117,7 @@ export function useCreateServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -145,6 +146,7 @@ export function useDeleteServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -171,6 +173,7 @@ export function useRebuildServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -197,6 +200,7 @@ export function useCleanupFailedServers() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -223,6 +227,7 @@ export function useStartServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -249,6 +254,7 @@ export function useStopServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -280,6 +286,7 @@ export function usePurgeServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -306,6 +313,7 @@ export function useRestoreServer() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -326,6 +334,7 @@ export function useSyncServers() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -387,6 +396,7 @@ export function useUpdateServerConfig() {
       queryClient.invalidateQueries({
         queryKey: ['servers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }
@@ -421,6 +431,7 @@ export function useApplyServerConfig() {
       queryClient.invalidateQueries({
         queryKey: ['containers', variables.agentId],
       });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });
 }

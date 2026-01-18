@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -22,6 +23,7 @@ export function QuickActions({
   serverId,
   onNavigateToRcon,
 }: QuickActionsProps) {
+  const queryClient = useQueryClient()
   const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -32,21 +34,16 @@ export function QuickActions({
   const [broadcastError, setBroadcastError] = useState<string | null>(null)
 
   const handleSaveWorld = async () => {
-    console.log('[QuickActions] handleSaveWorld called', { isRunning, saveStatus, agentId, serverId })
-    if (!isRunning || saveStatus === 'loading') {
-      console.log('[QuickActions] Early return - not running or already loading')
-      return
-    }
+    if (!isRunning || saveStatus === 'loading') return
 
     setSaveStatus('loading')
     setSaveError(null)
 
     try {
-      console.log('[QuickActions] Calling executeRconCommand', { agentId, serverId, command: 'save' })
       const result = await executeRconCommand(agentId, serverId, 'save')
-      console.log('[QuickActions] executeRconCommand result:', result)
       if (result.success) {
         setSaveStatus('success')
+        queryClient.invalidateQueries({ queryKey: ['auditLogs'] })
         // Reset to idle after 3 seconds
         setTimeout(() => setSaveStatus('idle'), 3000)
       } else {
@@ -55,7 +52,6 @@ export function QuickActions({
         setTimeout(() => setSaveStatus('idle'), 5000)
       }
     } catch (error) {
-      console.error('[QuickActions] executeRconCommand error:', error)
       setSaveStatus('error')
       setSaveError(error instanceof Error ? error.message : 'Save failed')
       setTimeout(() => setSaveStatus('idle'), 5000)
@@ -106,6 +102,7 @@ export function QuickActions({
       const result = await executeRconCommand(agentId, serverId, `servermsg "${broadcastMessage.trim()}"`)
       if (result.success) {
         setBroadcastStatus('success')
+        queryClient.invalidateQueries({ queryKey: ['auditLogs'] })
         setTimeout(() => {
           setBroadcastStatus('idle')
           setBroadcastOpen(false)
