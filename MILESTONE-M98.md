@@ -683,15 +683,33 @@ M9.8 complete when:
 
 ---
 
-### M9.8.39 - Audit Logs Revamp 📋 PLANNED
-**Status:** 📋 Not Started (Needs Discussion)
-**Priority:** TBD
+### M9.8.39 - Audit Logs Revamp ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** LOW (Polish/UX Enhancement)
+**Completed:** 2026-01-17
 
-**Idea:** Revamp the audit logs UI with a new design.
+**Implementation:**
+Redesigned audit logs from vertical timeline to compact horizontal log lines.
 
-**Discussion Points:**
-- New design concept to be discussed in next session
-- Current audit log implementation: basic table view
-- Potential improvements: TBD
+**Features:**
+- New `CompactAuditLog` component with grid-based layout
+- Lucide icons for actions (play, stop, trash, login, etc.) and targets (server, user, agent)
+- Color-coded actions and targets
+- User icon next to actor name
+- Timestamp on far left for log-style readability
+- Full ID resolution: UUIDs resolved to names via servers/users/agents lookup
+- Inline expandable details with timestamp and IP address
+- Dashboard Recent Activity aligned with same format
 
-**Needs Discussion Before Implementation.**
+**Layout:**
+```
+[time ago] | [action icon] action | [user icon] actor | [target icon] target | [expand v]
+```
+
+**Files:**
+- `frontend/src/components/ui/compact-audit-log.tsx` - New component
+- `frontend/src/components/AuditLogViewer.tsx` - Updated to use CompactAuditLog
+- `frontend/src/pages/Dashboard.tsx` - Recent Activity aligned
+- `frontend/src/lib/audit-colors.ts` - Added icon mapping functions
+
+**Planning Files:** [planning-history/m9.8.39-audit-logs-revamp/](planning-history/m9.8.39-audit-logs-revamp/)
