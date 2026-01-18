@@ -47,12 +47,20 @@ export function CompactAuditLog({ entries }: CompactAuditLogProps) {
           <div key={entry.id}>
             <div
               className={cn(
-                "grid grid-cols-[180px_120px_1fr_70px_auto] items-center gap-4 px-3 py-2 rounded-md text-sm",
+                "grid items-center gap-4 px-3 py-2 rounded-md text-sm",
+                entry.details
+                  ? "grid-cols-[70px_180px_120px_1fr_auto]"
+                  : "grid-cols-[70px_180px_120px_1fr]",
                 "hover:bg-muted/50 transition-colors cursor-pointer",
                 isExpanded && "bg-muted/30"
               )}
               onClick={() => setExpanded(isExpanded ? null : entry.id)}
             >
+              {/* Timestamp - far left */}
+              <span className="text-muted-foreground text-xs">
+                {entry.timestamp}
+              </span>
+
               {/* Action: icon + text */}
               <div className={cn("flex items-center gap-2", colorClasses[actionColor])}>
                 <ActionIcon className="h-4 w-4 flex-shrink-0" />
@@ -75,13 +83,8 @@ export function CompactAuditLog({ entries }: CompactAuditLogProps) {
                 </span>
               </div>
 
-              {/* Timestamp */}
-              <span className="text-muted-foreground text-xs text-right">
-                {entry.timestamp}
-              </span>
-
-              {/* Expand button */}
-              {entry.details ? (
+              {/* Expand button (only if details exist) */}
+              {entry.details && (
                 <button
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors justify-end"
                   onClick={(e) => {
@@ -95,8 +98,6 @@ export function CompactAuditLog({ entries }: CompactAuditLogProps) {
                     <ChevronDown className="h-4 w-4" />
                   )}
                 </button>
-              ) : (
-                <span />
               )}
             </div>
 

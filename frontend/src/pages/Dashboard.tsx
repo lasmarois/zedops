@@ -1,9 +1,10 @@
+import { useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { Breadcrumb } from "@/components/layout/Breadcrumb"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { ActivityTimeline, type ActivityEvent } from "@/components/ui/activity-timeline"
+import { CompactAuditLog, type AuditLogEntry } from "@/components/ui/compact-audit-log"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgents } from "@/hooks/useAgents"
 import { useAllServers } from "@/hooks/useServers"
@@ -12,7 +13,6 @@ import { useAuditLogs } from "@/hooks/useAuditLogs"
 import { Server as ServerIcon, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { getDisplayStatus } from "@/lib/server-status"
-import { getAuditActionColor } from "@/lib/audit-colors"
 import type { Server } from "@/lib/api"
 
 export function Dashboard() {
@@ -37,19 +37,77 @@ export function Dashboard() {
 
   const totalUsers = usersData?.users.length || 0
 
-  // Convert audit logs to activity events
-  const activityEvents: ActivityEvent[] = (auditLogsData?.logs || []).slice(0, 5).map(log => {
-    const details = log.details ? JSON.parse(log.details) : {}
-    const targetName = details.name || details.serverName || log.target_id
+  // Create lookup map for ID -> name resolution
+  const nameLookup = useMemo(() => {
+    const lookup: Record<string, string> = {}
+    if (serversData?.servers) {
+      for (const server of serversData.servers) {
+        lookup[server.id] = server.name
+      }
+    }
+    if (usersData?.users) {
+      for (const user of usersData.users) {
+        lookup[user.id] = user.email.split('@')[0]
+      }
+    }
+    if (agentsData?.agents) {
+      for (const agent of agentsData.agents) {
+        lookup[agent.id] = agent.name
+      }
+    }
+    return lookup
+  }, [serversData, usersData, agentsData])
+
+  // Helper to check if a string looks like a UUID
+  const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
+
+  // Convert audit logs to compact entries
+  const auditEntries: AuditLogEntry[] = (auditLogsData?.logs || []).slice(0, 5).map(log => {
+    const rawDetails = log.details ? JSON.parse(log.details) : {}
+
+    // Find name from details, resolving UUIDs
+    const findName = (obj: Record<string, unknown>): string => {
+      const nameKeys = ['name', 'servername', 'server_name', 'username', 'user_name', 'agentname', 'agent_name']
+      for (const [key, value] of Object.entries(obj)) {
+        if (nameKeys.includes(key.toLowerCase()) && typeof value === 'string' && value) {
+          if (isUuid(value)) {
+            return nameLookup[value] || value
+          }
+          return value
+        }
+      }
+      return ''
+    }
+
+    const targetId = log.target_id || ''
+    const targetName = findName(rawDetails) || nameLookup[targetId] || targetId
+
+    // Resolve IDs in details for display
+    const resolvedDetails: Record<string, string> = {}
+    for (const [key, value] of Object.entries(rawDetails)) {
+      if (typeof value === 'string') {
+        if (isUuid(value) && nameLookup[value]) {
+          resolvedDetails[key] = nameLookup[value]
+        } else {
+          resolvedDetails[key] = value
+        }
+      } else if (value !== null && value !== undefined) {
+        resolvedDetails[key] = String(value)
+      }
+    }
 
     return {
       id: log.id,
       timestamp: formatDistanceToNow(new Date(log.timestamp), { addSuffix: true }),
-      user: log.user_email.split('@')[0], // Use email username part
-      action: log.action.replace(/\./g, ' '),
-      target: log.target_type ? `${log.target_type} ${targetName || ''}`.trim() : '',
-      actionColor: getAuditActionColor(log.action),
-      details: log.details ? JSON.parse(log.details) : undefined,
+      user: log.user_email.split('@')[0],
+      action: log.action,
+      targetType: log.target_type || '',
+      targetName: targetName,
+      details: {
+        'Timestamp': new Date(log.timestamp).toLocaleString(),
+        'IP Address': log.ip_address,
+        ...resolvedDetails,
+      },
     }
   })
 
@@ -296,13 +354,13 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           {auditLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <Skeleton key={i} className="h-16 w-full" />
+            <div className="space-y-1">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
               ))}
             </div>
-          ) : activityEvents.length > 0 ? (
-            <ActivityTimeline events={activityEvents} />
+          ) : auditEntries.length > 0 ? (
+            <CompactAuditLog entries={auditEntries} />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               No recent activity

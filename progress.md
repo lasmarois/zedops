@@ -56,3 +56,33 @@ Updated `findNameInDetails()` to check if name field values are UUIDs, and if so
 
 ### Deployment
 - Version: `2a75e382-6e12-4a26-8dee-64687bb2f316`
+
+---
+
+## Iteration 4: Dashboard Alignment
+
+### Changes
+- Updated Dashboard's Recent Activity to use CompactAuditLog component
+- Added nameLookup map for ID resolution (servers, users, agents)
+- Removed ActivityTimeline usage from Dashboard
+- Consistent styling between Dashboard and Audit Logs page
+
+### Deployment
+- Version: `019fa082-b017-4bff-8b92-769c82bb7744`
+
+---
+
+## Iteration 5: Layout Polish
+
+### Changes
+- Moved timestamp to far left for better log-style readability
+- Added expandable details to Dashboard's Recent Activity
+- Dynamic grid: 4 columns without details, 5 columns with expand button
+
+### Final Layout
+```
+[time ago] | [action icon] action | [user icon] actor | [target icon] target | [expand v]
+```
+
+### Deployment
+- Version: `2333139f-9e1c-4e5d-be7a-8f87ed268e95`
