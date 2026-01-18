@@ -971,8 +971,24 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
+### M9.8.45 - Restore Managed Badge on Server Cards
+**Status:** 📋 Not Started
+**Priority:** LOW (UI Polish)
+
+**Issue:**
+The "Managed" badge on server cards was removed and replaced by the players count display. Need to restore the badge while keeping the players count.
+
+**Proposed Fix:**
+- Show both "Managed" badge AND players count on server cards
+- Badge indicates ZedOps-managed vs unmanaged containers
+- Players count shows alongside status info
+
+**Location:** `frontend/src/components/ServerCard.tsx` or `AgentServerList.tsx`
+
+---
+
 ### Priority Order (Suggested)
-1. **P7** - Server IP (simple, high visibility)
+1. ~~**P7** - Server IP~~ ✅ COMPLETE
 2. **P2** - RCON Status (leverages existing infrastructure)
 3. **P3** - Disk Space (leverages M9.8.38 endpoint)
 4. **P4** - Save World (simple RCON command)
