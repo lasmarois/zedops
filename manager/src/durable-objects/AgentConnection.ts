@@ -741,11 +741,22 @@ export class AgentConnection extends DurableObject {
       return this.ws;
     }
 
-    console.log(`[AgentConnection] getActiveWebSocket: ws=${!!this.ws}, isRegistered=${this.isRegistered}, agentId=${this.agentId}`);
+    // If we have a WebSocket but not registered, try to restore state from storage first
+    // This handles the case where the WebSocket was accepted with server.accept() (not ctx.acceptWebSocket)
+    if (this.ws && !this.isRegistered) {
+      const storedAgentId = await this.ctx.storage.get<string>('agentId');
+      const storedAgentName = await this.ctx.storage.get<string>('agentName');
+
+      if (storedAgentId && storedAgentName) {
+        this.agentId = storedAgentId;
+        this.agentName = storedAgentName;
+        this.isRegistered = true;
+        return this.ws;
+      }
+    }
 
     // Fallback to ctx.getWebSockets() for hibernation scenarios
     const sockets = this.ctx.getWebSockets();
-    console.log(`[AgentConnection] getActiveWebSocket: found ${sockets.length} sockets`);
 
     if (sockets.length > 0) {
       // Update instance variable for future calls
@@ -753,25 +764,19 @@ export class AgentConnection extends DurableObject {
 
       // Restore agent state from storage if not already registered
       if (!this.isRegistered) {
-        console.log(`[AgentConnection] Attempting to restore state from storage...`);
         const storedAgentId = await this.ctx.storage.get<string>('agentId');
         const storedAgentName = await this.ctx.storage.get<string>('agentName');
-        console.log(`[AgentConnection] Storage read: agentId=${storedAgentId}, agentName=${storedAgentName}`);
 
         if (storedAgentId && storedAgentName) {
           this.agentId = storedAgentId;
           this.agentName = storedAgentName;
           this.isRegistered = true;
-          console.log(`[AgentConnection] Restored agent state from storage: ${storedAgentName} (${storedAgentId})`);
-        } else {
-          console.error(`[AgentConnection] Failed to restore state: agentId or agentName not found in storage`);
         }
       }
 
       return sockets[0];
     }
 
-    console.log(`[AgentConnection] No WebSocket found`);
     return null;
   }
 
@@ -2918,10 +2923,13 @@ export class AgentConnection extends DurableObject {
    * Connects to RCON, executes command, disconnects, returns response
    */
   private async handleOneShotRconCommand(request: Request): Promise<Response> {
-    if (!this.isRegistered || !this.agentId) {
+    // IMPORTANT: Call getActiveWebSocket first to restore state from storage if needed
+    const ws = await this.getActiveWebSocket();
+
+    if (!this.isRegistered || !this.agentId || !ws) {
       return new Response(JSON.stringify({
         success: false,
-        error: "Agent not registered",
+        error: "Agent not registered or not connected",
       }), {
         status: 503,
         headers: { "Content-Type": "application/json" },
@@ -2988,7 +2996,10 @@ export class AgentConnection extends DurableObject {
           data: { sessionId },
         });
 
+        console.log(`[AgentConnection] RCON command reply:`, JSON.stringify(commandReply.data));
+
         if (!commandReply.data.success) {
+          console.log(`[AgentConnection] RCON command failed:`, commandReply.data.error);
           return new Response(JSON.stringify({
             success: false,
             error: commandReply.data.error || "RCON command failed",
@@ -2998,6 +3009,7 @@ export class AgentConnection extends DurableObject {
           });
         }
 
+        console.log(`[AgentConnection] RCON command succeeded, response:`, commandReply.data.response);
         return new Response(JSON.stringify({
           success: true,
           response: commandReply.data.response || "",

@@ -1412,20 +1412,17 @@ func (a *Agent) handleRCONDisconnect(msg Message) {
 		return
 	}
 
-	// Send success response
-	subject := "rcon.disconnect.response"
+	// Only send response if replyTo was provided (otherwise it's fire-and-forget)
 	if msg.Reply != "" {
-		subject = msg.Reply
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": true,
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
 	}
-
-	response := Message{
-		Subject: subject,
-		Data: map[string]interface{}{
-			"success": true,
-		},
-		Timestamp: time.Now().Unix(),
-	}
-	a.sendMessage(response)
 }
 
 // sendRCONError sends an error response for RCON operations

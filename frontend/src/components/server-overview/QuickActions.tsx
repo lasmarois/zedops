@@ -32,13 +32,19 @@ export function QuickActions({
   const [broadcastError, setBroadcastError] = useState<string | null>(null)
 
   const handleSaveWorld = async () => {
-    if (!isRunning || saveStatus === 'loading') return
+    console.log('[QuickActions] handleSaveWorld called', { isRunning, saveStatus, agentId, serverId })
+    if (!isRunning || saveStatus === 'loading') {
+      console.log('[QuickActions] Early return - not running or already loading')
+      return
+    }
 
     setSaveStatus('loading')
     setSaveError(null)
 
     try {
+      console.log('[QuickActions] Calling executeRconCommand', { agentId, serverId, command: 'save' })
       const result = await executeRconCommand(agentId, serverId, 'save')
+      console.log('[QuickActions] executeRconCommand result:', result)
       if (result.success) {
         setSaveStatus('success')
         // Reset to idle after 3 seconds
@@ -49,6 +55,7 @@ export function QuickActions({
         setTimeout(() => setSaveStatus('idle'), 5000)
       }
     } catch (error) {
+      console.error('[QuickActions] executeRconCommand error:', error)
       setSaveStatus('error')
       setSaveError(error instanceof Error ? error.message : 'Save failed')
       setTimeout(() => setSaveStatus('idle'), 5000)

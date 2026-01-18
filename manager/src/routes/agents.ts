@@ -18,7 +18,7 @@ import {
   getUserRoleAssignments,
   getEffectiveRoleForAgent,
 } from '../lib/permissions';
-import { logServerCreated, logServerOperation } from '../lib/audit';
+import { logServerCreated, logServerOperation, logRconCommand } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -2967,10 +2967,10 @@ agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
     }
 
     const server = await c.env.DB.prepare(
-      'SELECT id, name, container_id, config FROM servers WHERE id = ? AND agent_id = ?'
+      'SELECT id, name, container_id, config, rcon_port FROM servers WHERE id = ? AND agent_id = ?'
     )
       .bind(serverId, agentId)
-      .first() as { id: string; name: string; container_id: string | null; config: string | null } | null;
+      .first() as { id: string; name: string; container_id: string | null; config: string | null; rcon_port: number } | null;
 
     if (!server) {
       return c.json({ error: 'Server not found' }, 404);
@@ -2980,9 +2980,9 @@ agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
       return c.json({ error: 'Server has no container' }, 400);
     }
 
-    // Parse config to get RCON port and password
+    // Get RCON port from server table and password from config
     const config = server.config ? JSON.parse(server.config) : {};
-    const rconPort = parseInt(config.RCON_PORT || '27015', 10);
+    const rconPort = server.rcon_port;
     const rconPassword = config.RCON_PASSWORD;
 
     if (!rconPassword) {
@@ -2992,7 +2992,6 @@ agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
     // Get agent's Durable Object
     const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
     const agentStub = c.env.AGENT_CONNECTION.get(doId);
-
     // Forward request to Durable Object
     const response = await agentStub.fetch(
       `http://do/rcon/command`,
@@ -3013,13 +3012,7 @@ agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
 
     // Audit log the command
     if (data.success) {
-      await logAuditEvent(c.env.DB, c, 'rcon.command', {
-        targetType: 'server',
-        targetId: serverId,
-        targetName: server.name,
-        details: { command },
-        actorId: user.id,
-      });
+      await logRconCommand(c.env.DB, c, user.id, serverId, server.name, command);
     }
 
     return c.json(data, response.ok ? 200 : (response.status as 400 | 500));
