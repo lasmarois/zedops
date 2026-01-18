@@ -968,13 +968,19 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### P5: Quick Actions - Broadcast Message
-**Current State:** Navigates to RCON tab
-**Required Implementation:**
-- Modal dialog to input message
-- Send `servermsg "message"` via RCON
-- Show loading state and success/error toast
-- Character limit validation
+### P5: Quick Actions - Broadcast Message ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
+
+**Implementation:**
+- Modal dialog with message input (max 200 characters)
+- Sends `servermsg "message"` via one-shot RCON endpoint
+- Loading/success/error states on button and in modal
+- Enter key to send, auto-closes on success
+- Character counter in modal
+
+**Files Modified:**
+- `frontend/src/components/server-overview/QuickActions.tsx` - Added modal, broadcast state, handler
 
 ---
 
@@ -1057,6 +1063,7 @@ Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and config
 2. ~~**P2** - RCON Status~~ ✅ COMPLETE
 3. ~~**P3** - Disk Space~~ ✅ COMPLETE
 4. ~~**P4** - Save World~~ ✅ COMPLETE
-5. **P5** - Broadcast Message (RCON + modal)
+5. ~~**P5** - Broadcast Message~~ ✅ COMPLETE
 6. **P1** - Sparklines (requires D1 schema, agent changes)
 7. **P6** - Backup Now (requires full backup infrastructure)
+8. **P8** - Agent Hostname Configuration
