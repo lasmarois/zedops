@@ -620,6 +620,29 @@ M9.8 complete when:
 
 ---
 
+### Beta Branch Migration / World Reset
+**Status:** 📋 Planned (Not Implemented)
+**Priority:** MEDIUM
+**Discovered:** 2026-01-18 (during M9.8.42 testing)
+
+**Issue:**
+When switching a server between stable and unstable (or vice versa), the server fails to start because existing world/save files are incompatible with the new game version.
+
+**Current Behavior:**
+- User changes BETABRANCH in Configuration
+- Applies config (container recreated with new branch)
+- Server fails to start due to incompatible save data
+
+**Proposed Solutions:**
+1. **Warning Dialog:** Show warning when changing beta branch that world data may need to be reset
+2. **Backup & Reset Option:** Offer to backup current data and start fresh
+3. **Auto-Detection:** Detect version mismatch on startup failure and suggest reset
+4. **Data Migration:** If possible, provide migration path (likely not feasible due to game limitations)
+
+**User Impact:** Currently requires manual deletion of world files via SSH/file manager
+
+---
+
 ### M9.8.37 - Dynamic Disk Metrics ✅ COMPLETE
 **Status:** ✅ Deployed
 **Priority:** MEDIUM (Feature Enhancement)
