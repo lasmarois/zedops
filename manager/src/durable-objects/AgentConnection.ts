@@ -34,6 +34,7 @@ export class AgentConnection extends DurableObject {
   private agentId: string | null = null;
   private agentName: string | null = null;
   private isRegistered: boolean = false;
+  private clientIp: string | null = null; // Agent's public IP from CF-Connecting-IP
   private pendingReplies: Map<string, (msg: Message) => void> = new Map();
 
   // Log streaming pub/sub (container logs)
@@ -248,7 +249,10 @@ export class AgentConnection extends DurableObject {
     server.accept();
     this.ws = server;
 
-    console.log("[AgentConnection] WebSocket connection established");
+    // Capture client IP from Cloudflare headers
+    this.clientIp = request.headers.get("CF-Connecting-IP") || null;
+
+    console.log(`[AgentConnection] WebSocket connection established from IP: ${this.clientIp}`);
 
     // Set up message handlers
     server.addEventListener("message", (event) => {
@@ -466,10 +470,10 @@ export class AgentConnection extends DurableObject {
       // Store agent in D1
       const now = Math.floor(Date.now() / 1000);
       await this.env.DB.prepare(
-        `INSERT INTO agents (id, name, token_hash, status, last_seen, created_at, metadata)
-         VALUES (?, ?, ?, 'online', ?, ?, ?)`
+        `INSERT INTO agents (id, name, token_hash, status, last_seen, created_at, metadata, public_ip)
+         VALUES (?, ?, ?, 'online', ?, ?, ?, ?)`
       )
-        .bind(agentId, agentName, tokenHash, now, now, JSON.stringify({}))
+        .bind(agentId, agentName, tokenHash, now, now, JSON.stringify({}), this.clientIp)
         .run();
 
       // Mark as registered
@@ -570,12 +574,12 @@ export class AgentConnection extends DurableObject {
       await this.ctx.storage.put('agentId', agentId);
       await this.ctx.storage.put('agentName', agentName);
 
-      // Update status to online and last_seen
+      // Update status to online, last_seen, and public_ip
       const now = Math.floor(Date.now() / 1000);
       await this.env.DB.prepare(
-        `UPDATE agents SET status = 'online', last_seen = ? WHERE id = ?`
+        `UPDATE agents SET status = 'online', last_seen = ?, public_ip = ? WHERE id = ?`
       )
-        .bind(now, agentId)
+        .bind(now, this.clientIp, agentId)
         .run();
 
       console.log(`[AgentConnection] Agent authenticated: ${agentName} (${agentId})`);

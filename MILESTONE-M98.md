@@ -950,13 +950,24 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### P7: Connection Card - Server IP
-**Current State:** Shows "your-server-ip" placeholder
-**Required Implementation:**
-- Expose agent's public IP via API (agent config or auto-detection)
-- Store in agent record or fetch dynamically
-- Display actual IP in connection card
-- Consider: Multiple IPs, NAT scenarios, manual override option
+### P7: Connection Card - Server IP ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
+
+**Implementation:**
+- Capture agent's public IP from `CF-Connecting-IP` header during WebSocket connection
+- Store `public_ip` in agents table (migration 0012)
+- Update IP on every agent auth (reconnection)
+- Pass through API: agents → servers → frontend → ConnectionCard
+
+**Files Modified:**
+- `manager/migrations/0012_add_agent_public_ip.sql` - Added column
+- `manager/src/durable-objects/AgentConnection.ts` - Capture IP on connect, store on register/auth
+- `manager/src/routes/agents.ts` - Include publicIp in agent responses
+- `manager/src/routes/servers.ts` - Include agent_public_ip in server responses
+- `frontend/src/lib/api.ts` - Added types
+- `frontend/src/components/server-overview/ServerOverview.tsx` - Pass IP to ConnectionCard
+- `frontend/src/pages/ServerDetail.tsx` - Pass agentPublicIp prop
 
 ---
 

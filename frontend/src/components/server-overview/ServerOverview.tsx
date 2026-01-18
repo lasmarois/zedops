@@ -23,6 +23,7 @@ interface ServerOverviewProps {
     players?: string[] | null
   }
   agentDefaultDataPath?: string | null
+  agentPublicIp?: string | null // P7: Agent's public IP for connection card
   metrics?: {
     uptime?: string
     cpuPercent?: number
@@ -41,6 +42,7 @@ const DEFAULT_LAYOUT: OverviewLayout = 'sidebar'
 export function ServerOverview({
   server,
   agentDefaultDataPath,
+  agentPublicIp,
   metrics,
   onPlayersClick,
   onNavigateToRcon,
@@ -100,6 +102,7 @@ export function ServerOverview({
 
   const connectionCard = (
     <ConnectionCard
+      serverIp={agentPublicIp}
       gamePort={server.game_port}
       udpPort={server.udp_port}
     />

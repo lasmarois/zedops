@@ -62,6 +62,7 @@ export interface Agent {
   status: 'online' | 'offline';
   lastSeen: number;
   createdAt: number;
+  publicIp?: string | null; // P7: Agent's public IP for server connection
   metadata: {
     metrics?: HostMetrics;
   };
@@ -362,6 +363,7 @@ export interface Server {
   agent_name: string;
   agent_status: 'online' | 'offline';
   agent_server_data_path: string | null; // Agent's default data path
+  agent_public_ip?: string | null; // P7: Agent's public IP for connection card
   steam_zomboid_registry: string | null; // M9.8.32: Agent's default registry
   name: string;
   container_id: string | null;

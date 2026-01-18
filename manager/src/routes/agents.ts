@@ -99,11 +99,11 @@ agents.get('/', async (c) => {
 
     if (agentIds === null) {
       // Admin or global access: Fetch all agents
-      query = `SELECT id, name, status, last_seen, created_at, metadata FROM agents ORDER BY created_at DESC`;
+      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents ORDER BY created_at DESC`;
     } else {
       // Specific agent access: Fetch only accessible agents
       const placeholders = Array.from(agentIds).map(() => '?').join(',');
-      query = `SELECT id, name, status, last_seen, created_at, metadata FROM agents WHERE id IN (${placeholders}) ORDER BY created_at DESC`;
+      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents WHERE id IN (${placeholders}) ORDER BY created_at DESC`;
       params = Array.from(agentIds);
     }
 
@@ -117,6 +117,7 @@ agents.get('/', async (c) => {
       lastSeen: row.last_seen,
       createdAt: row.created_at,
       metadata: row.metadata ? JSON.parse(row.metadata) : {},
+      publicIp: row.public_ip || null,
     }));
 
     return c.json({
@@ -148,7 +149,7 @@ agents.get('/:id', async (c) => {
   // Query agent from D1
   try {
     const result = await c.env.DB.prepare(
-      `SELECT id, name, status, last_seen, created_at, metadata FROM agents WHERE id = ?`
+      `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -164,6 +165,7 @@ agents.get('/:id', async (c) => {
       lastSeen: result.last_seen,
       createdAt: result.created_at,
       metadata: result.metadata ? JSON.parse(result.metadata as string) : {},
+      publicIp: result.public_ip || null,
     };
 
     return c.json(agent);

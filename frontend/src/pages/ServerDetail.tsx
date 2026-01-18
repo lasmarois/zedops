@@ -362,6 +362,7 @@ function ServerDetailContent() {
               max_players: server.max_players,
               players: server.players,
             }}
+            agentPublicIp={server.agent_public_ip}
             metrics={metricsData?.metrics}
             onPlayersClick={() => setShowPlayersDialog(true)}
             onNavigateToRcon={() => {
