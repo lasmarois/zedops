@@ -713,3 +713,27 @@ Redesigned audit logs from vertical timeline to compact horizontal log lines.
 - `frontend/src/lib/audit-colors.ts` - Added icon mapping functions
 
 **Planning Files:** [planning-history/m9.8.39-audit-logs-revamp/](planning-history/m9.8.39-audit-logs-revamp/)
+
+---
+
+### M9.8.40 - Segmented Action Buttons ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** LOW (UI Polish)
+**Completed:** 2026-01-17
+
+**Implementation:**
+Redesigned server action buttons with glass morphism segmented style.
+
+**Updated Components:**
+- `ServerDetail.tsx` - Header action buttons (Start/Stop/Restart | Rebuild/Delete)
+- `ServerCard.tsx` - Managed server action buttons
+- `AgentServerList.tsx` - Unmanaged container buttons + Issues/Recovery buttons
+
+**Design Features:**
+- Glass morphism container (`border-white/10 bg-white/5 backdrop-blur-md`)
+- Segmented dividers between related actions
+- Color-coded text (success/warning/info/destructive)
+- Inner glow on hover matching button color
+- Loading animations (spin for actions, pulse for stop/delete)
+
+**Planning Files:** [planning-history/m9.8.40-segmented-buttons/](planning-history/m9.8.40-segmented-buttons/)
