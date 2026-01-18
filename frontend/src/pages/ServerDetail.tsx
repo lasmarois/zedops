@@ -248,7 +248,12 @@ function ServerDetailContent() {
   // Extract metrics or use placeholders (metrics fetched at top of component)
   const metrics = metricsData?.metrics
   const uptime = metrics?.uptime || "N/A"
-  const players = { current: 0, max: 32 } // TODO: Get from RCON (separate feature)
+  // M9.8.41: Get player count from server data (RCON polling)
+  const players = {
+    current: serverData?.server?.player_count ?? 0,
+    max: serverData?.server?.max_players ?? 32,
+    names: serverData?.server?.players ?? [],
+  }
   const cpuPercent = metrics?.cpuPercent ? metrics.cpuPercent.toFixed(1) : 0
   const memoryUsedGB = metrics ? (metrics.memoryUsedMB / 1024).toFixed(1) : 0
   const memoryLimitGB = metrics ? (metrics.memoryLimitMB / 1024).toFixed(1) : 0

@@ -1046,10 +1046,13 @@ agents.post('/:id/servers', async (c) => {
     const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
     const stub = c.env.AGENT_CONNECTION.get(id);
 
-    // Add RCON_PORT to config so container knows what port to listen on
-    const configWithRconPort = {
+    // Add port env vars to config so container knows what ports to use
+    // M9.8.42: Added SERVER_DEFAULT_PORT and SERVER_UDP_PORT (were missing, causing INI to use defaults)
+    const configWithPorts = {
       ...body.config,
       RCON_PORT: rconPort.toString(),
+      SERVER_DEFAULT_PORT: gamePort.toString(),
+      SERVER_UDP_PORT: udpPort.toString(),
     };
 
     // Forward server.create message to Durable Object
@@ -1063,7 +1066,7 @@ agents.post('/:id/servers', async (c) => {
         name: body.name,
         registry: body.image || agent.steam_zomboid_registry,
         imageTag: body.imageTag,
-        config: configWithRconPort,
+        config: configWithPorts,
         gamePort,
         udpPort,
         rconPort,
@@ -1392,11 +1395,14 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
         .bind(Date.now(), serverId)
         .run();
 
-      // Parse config from DB and add RCON_PORT
+      // Parse config from DB and add port env vars
+      // M9.8.42: Added SERVER_DEFAULT_PORT and SERVER_UDP_PORT (were missing, causing INI to use defaults)
       const config = JSON.parse(server.config as string);
-      const configWithRconPort = {
+      const configWithPorts = {
         ...config,
         RCON_PORT: (server.rcon_port as number).toString(),
+        SERVER_DEFAULT_PORT: (server.game_port as number).toString(),
+        SERVER_UDP_PORT: (server.udp_port as number).toString(),
       };
 
       // Call server.create on agent
@@ -1414,7 +1420,7 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
           name: server.name,
           registry: imageRef,
           imageTag: server.image_tag,
-          config: configWithRconPort,
+          config: configWithPorts,
           gamePort: server.game_port,
           udpPort: server.udp_port,
           rconPort: server.rcon_port,
@@ -1998,9 +2004,13 @@ agents.post('/:id/servers/:serverId/rebuild', async (c) => {
   }
 
   try {
-    // Verify server exists and belongs to agent
+    // Verify server exists and belongs to agent - fetch full config for rebuild
+    // M9.8.42: Need full server config to pass correct port env vars
     const server = await c.env.DB.prepare(
-      `SELECT id, container_id, name FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT s.*, a.name as agent_name, a.steam_zomboid_registry, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ? AND s.agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -2020,27 +2030,37 @@ agents.post('/:id/servers/:serverId/rebuild', async (c) => {
       .bind(Date.now(), serverId)
       .run();
 
-    // Get agent name for Durable Object
-    const agent = await c.env.DB.prepare(
-      `SELECT name FROM agents WHERE id = ?`
-    )
-      .bind(agentId)
-      .first();
-
-    if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404);
-    }
-
     // Get Durable Object for this agent
-    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
     const agentStub = c.env.AGENT_CONNECTION.get(doId);
 
-    // Forward server.rebuild message to Durable Object
+    // M9.8.42: Build full config with port env vars for rebuild
+    const config = server.config ? JSON.parse(server.config as string) : {};
+    const configWithPorts = {
+      ...config,
+      RCON_PORT: (server.rcon_port as number).toString(),
+      SERVER_DEFAULT_PORT: (server.game_port as number).toString(),
+      SERVER_UDP_PORT: (server.udp_port as number).toString(),
+    };
+
+    // Determine paths and image
+    const dataPath = server.server_data_path || server.agent_server_data_path;
+    const imageRef = server.image || server.steam_zomboid_registry;
+
+    // Forward server.rebuild message to Durable Object with full config
     const response = await agentStub.fetch(`http://do/servers/${serverId}/rebuild`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         containerId: server.container_id,
+        name: server.name,
+        registry: imageRef,
+        imageTag: server.image_tag,
+        config: configWithPorts,
+        gamePort: server.game_port,
+        udpPort: server.udp_port,
+        rconPort: server.rcon_port,
+        dataPath: dataPath,
       }),
     });
 
@@ -2582,11 +2602,14 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
     const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
     const agentStub = c.env.AGENT_CONNECTION.get(doId);
 
-    // Parse config and add RCON_PORT
+    // Parse config and add port env vars
+    // M9.8.42: Added SERVER_DEFAULT_PORT and SERVER_UDP_PORT (were missing, causing INI to use defaults)
     const config = server.config ? JSON.parse(server.config as string) : {};
-    const configWithRconPort = {
+    const configWithPorts = {
       ...config,
       RCON_PORT: server.rcon_port.toString(),
+      SERVER_DEFAULT_PORT: server.game_port.toString(),
+      SERVER_UDP_PORT: server.udp_port.toString(),
     };
 
     // Determine target data path (custom override or agent default)
@@ -2665,7 +2688,7 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
         name: server.name,
         registry: imageRef,
         imageTag: server.image_tag,
-        config: configWithRconPort,
+        config: configWithPorts,
         gamePort: server.game_port,
         udpPort: server.udp_port,
         rconPort: server.rcon_port,
@@ -2740,7 +2763,7 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
             name: server.name,
             registry: imageRef,
             imageTag: server.image_tag,
-            config: configWithRconPort,
+            config: configWithPorts,
             gamePort: server.game_port,
             udpPort: server.udp_port,
             rconPort: server.rcon_port,

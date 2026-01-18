@@ -122,11 +122,14 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			// Graceful shutdown
 			heartbeatCancel()
 			log.Println("Shutting down...")
+			// Use mutex to prevent concurrent writes during shutdown
+			a.connMutex.Lock()
 			err := a.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
 				log.Println("Error sending close message:", err)
 			}
 			a.conn.Close()
+			a.connMutex.Unlock()
 			return ctx.Err()
 		}
 	}

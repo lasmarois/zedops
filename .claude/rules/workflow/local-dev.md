@@ -77,22 +77,44 @@ This will:
 
 ### Deploy Agent to Host
 
-The agent binary must be manually updated on the host server:
+**IMPORTANT: No systemd service yet!** Until the agent installation milestone is complete, the agent runs as a manual process. Do NOT attempt to use systemctl commands - they will fail.
+
+#### Build the Agent
 
 ```bash
-# Build the agent using Docker (cross-compilation)
-cd agent && ./scripts/build.sh
-
-# Copy binary to host and restart service
-scp bin/zedops-agent user@host:/tmp/
-ssh user@host "sudo systemctl stop zedops-agent && sudo cp /tmp/zedops-agent /usr/local/bin/ && sudo systemctl start zedops-agent"
+cd /Volumes/Data/docker_composes/zedops/agent && ./scripts/build.sh
 ```
 
-Or if you have direct access:
+#### Stop the Running Agent
+
 ```bash
-sudo systemctl stop zedops-agent
-sudo cp bin/zedops-agent /usr/local/bin/
-sudo systemctl start zedops-agent
+sudo pkill -f zedops-agent
+# Wait for process to stop AND for backend to register disconnect
+# (5 seconds minimum - prevents backend confusion about which agent is real)
+sleep 5
+ps aux | grep zedops-agent | grep -v grep || echo "Agent stopped"
+```
+
+#### Start the Agent
+
+```bash
+cd /Volumes/Data/docker_composes/zedops/agent && nohup sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver > /tmp/zedops-agent.log 2>&1 &
+```
+
+#### Full Rebuild & Restart (One-liner)
+
+```bash
+cd /Volumes/Data/docker_composes/zedops/agent && ./scripts/build.sh && sudo pkill -f zedops-agent; sleep 5; nohup sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver > /tmp/zedops-agent.log 2>&1 &
+```
+
+#### Check Agent Status & Logs
+
+```bash
+# Check if running
+ps aux | grep zedops-agent | grep -v grep
+
+# View logs
+tail -f /tmp/zedops-agent.log
 ```
 
 ### Deployment Checklist
@@ -137,5 +159,7 @@ Then update `manager/src/index.ts` to match:
 | Build frontend only | `cd frontend && npm run build` |
 | Deploy to Cloudflare | `cd frontend && npm run build && cd ../manager && npx wrangler deploy` |
 | Build agent binary | `cd agent && ./scripts/build.sh` |
+| Stop agent | `sudo pkill -f zedops-agent` |
+| Start agent | `cd agent && nohup sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver > /tmp/zedops-agent.log 2>&1 &` |
+| View agent logs | `tail -f /tmp/zedops-agent.log` |
 | Check production | `https://zedops.mail-bcf.workers.dev` |
-| View agent logs | `sudo journalctl -u zedops-agent -f` |

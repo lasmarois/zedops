@@ -52,6 +52,10 @@ interface ServerWithAgent {
   dataExists: boolean
   deletedAt: number | null
   updatedAt: number
+  // M9.8.41: Player stats
+  playerCount: number | null
+  maxPlayers: number | null
+  players: string[] | null
 }
 
 export function ServerList() {
@@ -95,6 +99,10 @@ export function ServerList() {
     dataExists: server.data_exists,
     deletedAt: server.deleted_at,
     updatedAt: server.updated_at,
+    // M9.8.41: Player stats
+    playerCount: server.player_count,
+    maxPlayers: server.max_players,
+    players: server.players,
   })) || []
 
   // Separate active and deleted servers
@@ -346,6 +354,10 @@ export function ServerList() {
               data_exists: server.dataExists,
               deleted_at: server.deletedAt,
               updated_at: server.updatedAt,
+              // M9.8.41: Player stats
+              player_count: server.playerCount,
+              max_players: server.maxPlayers,
+              players: server.players,
             };
 
             return (

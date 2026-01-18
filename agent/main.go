@@ -39,6 +39,7 @@ type Agent struct {
 	docker         *DockerClient
 	logStreams     map[string]context.CancelFunc // containerID -> cancel function
 	rconManager    *RCONManager                  // RCON session manager
+	playerStats    *PlayerStatsCollector         // Player stats collector
 	logCapture     *LogCapture                   // Agent log capture for streaming
 	agentLogChan   chan AgentLogLine             // Channel for agent log subscription
 	agentLogMutex  sync.Mutex                    // Protects agent log subscription
@@ -105,6 +106,13 @@ func main() {
 		rconManager:    rconManager,
 		logCapture:     logCapture,
 		volumeCache:    make(map[string]*volumeSizeCache),
+	}
+
+	// Initialize player stats collector (requires Docker client and agent for messaging)
+	if dockerClient != nil {
+		agent.playerStats = NewPlayerStatsCollector(dockerClient, agent)
+		agent.playerStats.Start()
+		defer agent.playerStats.Stop()
 	}
 
 	// Set up graceful shutdown

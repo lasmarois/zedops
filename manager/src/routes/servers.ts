@@ -68,12 +68,20 @@ servers.get('/', async (c) => {
       }
     }
 
-    // Fetch containers from each online agent in parallel
+    // Player stats map (serverId -> stats)
+    const playerStatsMap: Record<string, { playerCount: number; maxPlayers: number; players: string[] }> = {};
+
+    // Fetch containers and player stats from each online agent in parallel
     const fetchPromises = Array.from(onlineAgents.entries()).map(async ([agentName]) => {
       try {
         const id = c.env.AGENT_CONNECTION.idFromName(agentName);
         const stub = c.env.AGENT_CONNECTION.get(id);
-        const containerResponse = await stub.fetch(`http://do/containers`, { method: 'GET' });
+
+        // Fetch containers and players in parallel
+        const [containerResponse, playersResponse] = await Promise.all([
+          stub.fetch(`http://do/containers`, { method: 'GET' }),
+          stub.fetch(`http://do/players`, { method: 'GET' }),
+        ]);
 
         if (containerResponse.ok) {
           const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
@@ -85,9 +93,22 @@ servers.get('/', async (c) => {
             }
           }
         }
+
+        if (playersResponse.ok) {
+          const playersData = await playersResponse.json() as { players?: Array<{ serverId: string; playerCount: number; maxPlayers: number; players: string[] }> };
+          if (playersData.players) {
+            for (const stats of playersData.players) {
+              playerStatsMap[stats.serverId] = {
+                playerCount: stats.playerCount,
+                maxPlayers: stats.maxPlayers,
+                players: stats.players,
+              };
+            }
+          }
+        }
       } catch (err) {
-        // If container fetch fails for this agent, continue without health data
-        console.log(`[Servers API] Could not fetch container health from ${agentName}:`, err);
+        // If fetch fails for this agent, continue without data
+        console.log(`[Servers API] Could not fetch data from ${agentName}:`, err);
       }
     });
 
@@ -111,6 +132,10 @@ servers.get('/', async (c) => {
       server_data_path: row.server_data_path, // Per-server override (NULL = use agent default)
       status: row.status,
       health: row.container_id ? containerHealthMap[row.container_id] : undefined, // Container health status
+      // Player stats from RCON polling
+      player_count: playerStatsMap[row.id]?.playerCount ?? null,
+      max_players: playerStatsMap[row.id]?.maxPlayers ?? null,
+      players: playerStatsMap[row.id]?.players ?? null,
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
       created_at: row.created_at,

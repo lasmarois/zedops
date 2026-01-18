@@ -161,7 +161,7 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
               <span>{fullRef} <Badge variant="outline" className="ml-2 text-xs">Custom</Badge></span>
             ) : fullRef
           })())}
-          {renderField('Beta Branch', config.BETA_BRANCH || 'none (stable)')}
+          {renderField('Beta Branch', config.BETABRANCH || 'none (stable)')}
           {renderField('Data Path', dataPathDisplay)}
           {renderField('Timezone', config.TZ || `${getDefault('TZ', 'UTC')} (image default)`)}
           {renderField('User ID (PUID)', config.PUID || `${getDefault('PUID', '1430')} (image default)`)}

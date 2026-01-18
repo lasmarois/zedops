@@ -395,6 +395,9 @@ export function ServerCard({
                 <div className="text-sm text-muted-foreground truncate">
                   {showAgent && <span>{server.agent_name} • </span>}
                   {imageTag} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                  {server.player_count !== null && server.player_count !== undefined && (
+                    <span className="text-info"> • {server.player_count}/{server.max_players || 32} players</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -446,6 +449,9 @@ export function ServerCard({
                   <span className="text-sm text-muted-foreground truncate hidden sm:inline">
                     {showAgent && <span>{server.agent_name} • </span>}
                     {imageTag} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                    {server.player_count !== null && server.player_count !== undefined && (
+                      <span className="text-info"> • {server.player_count}/{server.max_players || 32}</span>
+                    )}
                   </span>
                 </div>
 

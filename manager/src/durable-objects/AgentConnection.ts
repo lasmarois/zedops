@@ -48,6 +48,16 @@ export class AgentConnection extends DurableObject {
   // RCON session tracking
   private rconSessions: Map<string, { sessionId: string; serverId: string }> = new Map(); // sessionId -> { sessionId, serverId }
 
+  // Player stats tracking (from agent RCON polling)
+  private playerStats: Map<string, {
+    serverId: string;
+    serverName: string;
+    playerCount: number;
+    maxPlayers: number;
+    players: string[];
+    lastUpdate: number;
+  }> = new Map(); // serverId -> player stats
+
   // UI WebSocket tracking (for audit logging)
   private uiWebSockets: Map<WebSocket, string> = new Map(); // UI WebSocket -> userId
 
@@ -92,6 +102,16 @@ export class AgentConnection extends DurableObject {
     // Container list endpoint
     if (url.pathname === "/containers" && request.method === "GET") {
       return this.handleContainersRequest();
+    }
+
+    // Player stats endpoint
+    if (url.pathname === "/players" && request.method === "GET") {
+      return new Response(JSON.stringify({
+        success: true,
+        players: this.getPlayerStats(),
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Container operation endpoint
@@ -350,6 +370,11 @@ export class AgentConnection extends DurableObject {
       case "move.progress":
         // M9.8.31: Forward data move progress to all connected frontends
         await this.handleMoveProgress(message);
+        break;
+
+      case "players.update":
+        // M9.8.41: Handle player stats update from agent
+        this.handlePlayersUpdate(message);
         break;
 
       default:
@@ -614,6 +639,69 @@ export class AgentConnection extends DurableObject {
     this.send(createMessage("agent.heartbeat.ack", {
       timestamp: Date.now(),
     }));
+  }
+
+  /**
+   * Handle players.update message from agent
+   * Store player stats for serving via API
+   */
+  private handlePlayersUpdate(message: Message): void {
+    const servers = message.data?.servers || [];
+
+    // Update player stats for each server
+    for (const stats of servers) {
+      this.playerStats.set(stats.serverId, {
+        serverId: stats.serverId,
+        serverName: stats.serverName,
+        playerCount: stats.playerCount || 0,
+        maxPlayers: stats.maxPlayers || 32,
+        players: stats.players || [],
+        lastUpdate: stats.lastUpdate || Math.floor(Date.now() / 1000),
+      });
+    }
+
+    // Broadcast to connected UI WebSockets
+    const updateMessage = createMessage("players.update", { servers });
+    for (const [ws] of this.uiWebSockets) {
+      try {
+        ws.send(JSON.stringify(updateMessage));
+      } catch (err) {
+        console.error("[AgentConnection] Failed to send player update to UI:", err);
+      }
+    }
+
+    // Log summary
+    const totalPlayers = servers.reduce((sum: number, s: any) => sum + (s.playerCount || 0), 0);
+    console.log(`[AgentConnection] Player stats update: ${servers.length} servers, ${totalPlayers} total players`);
+  }
+
+  /**
+   * Get current player stats for all servers
+   * Used by API endpoints
+   */
+  public getPlayerStats(): Array<{
+    serverId: string;
+    serverName: string;
+    playerCount: number;
+    maxPlayers: number;
+    players: string[];
+    lastUpdate: number;
+  }> {
+    return Array.from(this.playerStats.values());
+  }
+
+  /**
+   * Get player stats for a specific server
+   */
+  public getServerPlayerStats(serverId: string): {
+    serverId: string;
+    serverName: string;
+    playerCount: number;
+    maxPlayers: number;
+    players: string[];
+    lastUpdate: number;
+  } | null {
+    return this.playerStats.get(serverId) || null;
   }
 
   /**

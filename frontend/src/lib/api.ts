@@ -374,6 +374,10 @@ export interface Server {
   server_data_path: string | null; // M9.8.23: Per-server data path override (NULL = use agent default)
   status: 'creating' | 'running' | 'stopped' | 'failed' | 'deleting' | 'missing' | 'deleted';
   health?: string; // Container health check status: "starting", "healthy", "unhealthy", or undefined
+  // M9.8.41: Player stats from RCON polling
+  player_count: number | null;
+  max_players: number | null;
+  players: string[] | null;
   data_exists: boolean;
   deleted_at: number | null;
   created_at: number;

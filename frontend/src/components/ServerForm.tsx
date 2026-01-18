@@ -42,7 +42,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
 
   const [serverName, setServerName] = useState(editServer?.name || '');
   const [imageTag, setImageTag] = useState(editServer?.image_tag || 'latest');
-  const [betaBranch, setBetaBranch] = useState(editConfig?.BETA_BRANCH || 'none');
+  const [betaBranch, setBetaBranch] = useState(editConfig?.BETABRANCH || 'none');
   const [serverPublicName, setServerPublicName] = useState(editConfig?.SERVER_PUBLIC_NAME || '');
   const [adminPassword, setAdminPassword] = useState(editConfig?.ADMIN_PASSWORD || '');
   const [serverPassword, setServerPassword] = useState(editConfig?.SERVER_PASSWORD || '');
@@ -143,7 +143,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
 
     // Add beta branch if specified (don't add if "none")
     if (betaBranch && betaBranch !== 'none') {
-      config.BETA_BRANCH = betaBranch;
+      config.BETABRANCH = betaBranch;
     }
 
     const request: CreateServerRequest = {

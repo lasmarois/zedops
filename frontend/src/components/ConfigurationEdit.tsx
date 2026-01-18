@@ -33,7 +33,7 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
   const [image, setImage] = useState(server.image || '')
   const [imageTag, setImageTag] = useState(server.image_tag || 'latest')
   const [serverDataPath, setServerDataPath] = useState(server.server_data_path || '')
-  const [betaBranch, setBetaBranch] = useState(config.BETA_BRANCH || 'none')
+  const [betaBranch, setBetaBranch] = useState(config.BETABRANCH || 'none')
   const [timezone, setTimezone] = useState(config.TZ || 'UTC')
   const [puid, setPuid] = useState(config.PUID || '')
 
@@ -70,7 +70,7 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
       newConfig.SERVER_PASSWORD = serverPassword
     }
     if (betaBranch && betaBranch !== 'none') {
-      newConfig.BETA_BRANCH = betaBranch
+      newConfig.BETABRANCH = betaBranch
     }
     if (timezone) {
       newConfig.TZ = timezone

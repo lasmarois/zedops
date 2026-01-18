@@ -737,3 +737,75 @@ Redesigned server action buttons with glass morphism segmented style.
 - Loading animations (spin for actions, pulse for stop/delete)
 
 **Planning Files:** [planning-history/m9.8.40-segmented-buttons/](planning-history/m9.8.40-segmented-buttons/)
+
+---
+
+### M9.8.41 - Real-Time Player Count Display ✅ COMPLETE
+**Status:** ✅ Deployed (blocker M9.8.42 resolved)
+**Priority:** MEDIUM (Feature Enhancement)
+**Completed:** 2026-01-18
+
+**Feature Implemented:** Real-time player count display for running servers using RCON polling.
+
+**Architecture:**
+```
+Agent (playerstats.go)
+  └─ Persistent RCON connections per server
+  └─ 10-second polling interval
+  └─ Sends `players.update` message via WebSocket
+
+Manager (AgentConnection.ts)
+  └─ Receives `players.update` messages
+  └─ Stores in memory (playerStats Map)
+  └─ Exposes via /players endpoint
+  └─ Merges into server API responses
+
+Frontend
+  └─ ServerCard shows "X/Y players" in info line
+  └─ ServerDetail uses real player data
+```
+
+**Key Components:**
+- **Agent:** `playerstats.go` - PlayerStatsCollector with persistent RCON connections
+- **Manager:** `AgentConnection.ts` - Player stats storage and API endpoint
+- **Frontend:** `ServerCard.tsx`, `ServerDetail.tsx`, `api.ts` - Display integration
+
+**Bug Fixed:**
+- Race condition during shutdown - added mutex lock in `reconnect.go`
+
+**Planning Files:** [planning-history/m9.8.41-player-count/](planning-history/m9.8.41-player-count/)
+
+---
+
+### M9.8.42 - Server Port & Env Var Configuration Fix ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** HIGH (Bug Fix)
+**Completed:** 2026-01-18
+
+**Issues Fixed:**
+
+1. **Port env vars not passed to container**
+   - `SERVER_DEFAULT_PORT` and `SERVER_UDP_PORT` were not being added to config
+   - Only `RCON_PORT` was being added
+   - Fixed in 5 locations in `manager/src/routes/agents.ts`:
+     - Server create flow
+     - Server recreate flow
+     - Rebuild route (was only sending containerId, not full config)
+     - Apply-config rebuild flow
+     - Apply-config auto-recovery flow
+
+2. **BETABRANCH env var name mismatch**
+   - Frontend was using `BETA_BRANCH` (with underscore)
+   - Docker image expects `BETABRANCH` (no underscore)
+   - Fixed in 3 frontend files: ServerForm, ConfigurationDisplay, ConfigurationEdit
+   - Migrated existing database configs with SQL REPLACE
+
+**Verified:**
+```
+SERVER_DEFAULT_PORT=16285 ✅
+SERVER_UDP_PORT=16286 ✅
+BETABRANCH=unstable ✅
+RCON_PORT=27027 ✅
+```
+
+**Planning Files:** [planning-history/m9.8.42-port-config-fix/](planning-history/m9.8.42-port-config-fix/)
