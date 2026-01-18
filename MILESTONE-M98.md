@@ -1024,6 +1024,34 @@ The "Managed" badge on server cards was removed and replaced by the players coun
 
 ---
 
+### P8: Agent Hostname Configuration
+**Status:** 📋 Not Started
+**Priority:** MEDIUM (Feature Enhancement)
+
+**Request:**
+Allow agents to have a configurable hostname for users who set up DNS to point to their public IP.
+
+**Current Behavior:**
+- Connection Card shows agent's public IP (captured from CF-Connecting-IP header)
+- IP is auto-detected on each connection
+
+**Proposed Implementation:**
+- Add `hostname` column to agents table (nullable)
+- Add hostname field to Agent settings/configuration UI
+- Connection Card displays hostname if set, otherwise falls back to public IP
+- Default behavior remains unchanged (IP-based)
+
+**Use Case:**
+Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and configure it in ZedOps, so players always have a stable address to connect to.
+
+**Files to Modify:**
+- `manager/migrations/` - Add hostname column
+- `manager/src/routes/agents.ts` - API to update hostname
+- `frontend/src/pages/AgentDetail.tsx` - Settings UI for hostname
+- `frontend/src/components/server-overview/ConnectionCard.tsx` - Use hostname if available
+
+---
+
 ### Priority Order (Suggested)
 1. ~~**P7** - Server IP~~ ✅ COMPLETE
 2. ~~**P2** - RCON Status~~ ✅ COMPLETE
