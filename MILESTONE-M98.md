@@ -880,7 +880,7 @@ RCON_PORT=27027 ✅
 **Files Created:**
 - `frontend/src/components/server-overview/*.tsx` (9 files)
 
-**Planning Files:** [planning-history/m98-41-43/](planning-history/m98-41-43/), root `task_plan.md`, `progress.md`, `findings.md`
+**Planning Files:** [planning-history/m9.8.44-server-overview-redesign/](planning-history/m9.8.44-server-overview-redesign/)
 
 ---
 
