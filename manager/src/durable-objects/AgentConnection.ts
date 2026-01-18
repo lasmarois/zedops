@@ -104,7 +104,7 @@ export class AgentConnection extends DurableObject {
       return this.handleContainersRequest();
     }
 
-    // Player stats endpoint
+    // Player stats endpoint (all servers)
     if (url.pathname === "/players" && request.method === "GET") {
       return new Response(JSON.stringify({
         success: true,
@@ -112,6 +112,20 @@ export class AgentConnection extends DurableObject {
       }), {
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    // Player stats endpoint (single server)
+    if (url.pathname.startsWith("/players/") && request.method === "GET") {
+      const serverId = url.pathname.split("/")[2];
+      if (serverId) {
+        const stats = this.getServerPlayerStats(serverId);
+        return new Response(JSON.stringify({
+          success: true,
+          stats: stats,
+        }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Container operation endpoint

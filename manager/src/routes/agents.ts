@@ -1178,13 +1178,19 @@ agents.get('/:id/servers', async (c) => {
       serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
     }
 
-    // Fetch container health from agent (if online)
+    // Fetch container health and player stats from agent (if online)
     let containerHealthMap: Record<string, string> = {};
+    let playerStatsMap: Record<string, { playerCount: number; maxPlayers: number; players: string[] }> = {};
     if (agent.status === 'online') {
       try {
         const id = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
         const stub = c.env.AGENT_CONNECTION.get(id);
-        const containerResponse = await stub.fetch(`http://do/containers`, { method: 'GET' });
+
+        // Fetch containers and players in parallel
+        const [containerResponse, playersResponse] = await Promise.all([
+          stub.fetch(`http://do/containers`, { method: 'GET' }),
+          stub.fetch(`http://do/players`, { method: 'GET' }),
+        ]);
 
         if (containerResponse.ok) {
           const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
@@ -1196,9 +1202,23 @@ agents.get('/:id/servers', async (c) => {
             }
           }
         }
+
+        // M9.8.41: Fetch player stats
+        if (playersResponse.ok) {
+          const playersData = await playersResponse.json() as { players?: Array<{ serverId: string; playerCount: number; maxPlayers: number; players: string[] }> };
+          if (playersData.players) {
+            for (const stats of playersData.players) {
+              playerStatsMap[stats.serverId] = {
+                playerCount: stats.playerCount,
+                maxPlayers: stats.maxPlayers,
+                players: stats.players,
+              };
+            }
+          }
+        }
       } catch (err) {
-        // If container fetch fails, continue without health data
-        console.log('[Agents API] Could not fetch container health:', err);
+        // If fetch fails, continue without health/player data
+        console.log('[Agents API] Could not fetch container health/players:', err);
       }
     }
 
@@ -1215,6 +1235,10 @@ agents.get('/:id/servers', async (c) => {
       rcon_port: row.rcon_port,
       status: row.status,
       health: row.container_id ? containerHealthMap[row.container_id] : undefined, // Container health status
+      // M9.8.41: Player stats from RCON polling
+      player_count: playerStatsMap[row.id]?.playerCount ?? null,
+      max_players: playerStatsMap[row.id]?.maxPlayers ?? null,
+      players: playerStatsMap[row.id]?.players ?? null,
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
       created_at: row.created_at,

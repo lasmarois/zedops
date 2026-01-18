@@ -20,6 +20,8 @@ import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench
 import { getDisplayStatus } from "@/lib/server-status"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { ErrorDialog } from "@/components/ui/error-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -76,6 +78,7 @@ function ServerDetailContent() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false)
   const [showApplyConfigConfirm, setShowApplyConfigConfirm] = useState(false)
+  const [showPlayersDialog, setShowPlayersDialog] = useState(false)
 
   // Error dialog state
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -431,18 +434,45 @@ function ServerDetailContent() {
                 </CardContent>
               </Card>
 
-              {/* Players Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Players
-                  </CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{players.current}/{players.max}</div>
-                </CardContent>
-              </Card>
+              {/* Players Card - Hover for tooltip, click for dialog (mobile) */}
+              <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <Card
+                      className="hover:shadow-md transition-shadow duration-200 cursor-pointer hover:border-primary/50"
+                      onClick={() => setShowPlayersDialog(true)}
+                    >
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Players
+                        </CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{players.current}/{players.max}</div>
+                        {players.current > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    {players.current === 0 ? (
+                      <p>No players connected</p>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="font-medium text-xs text-muted-foreground mb-2">Connected Players:</p>
+                        {players.names.map((name: string, i: number) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                            <span>{name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
@@ -822,6 +852,42 @@ function ServerDetailContent() {
         onOpenChange={(open) => !open && setErrorMessage(null)}
         message={errorMessage || ''}
       />
+
+      {/* Players List Dialog */}
+      <Dialog open={showPlayersDialog} onOpenChange={setShowPlayersDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Connected Players ({players.current}/{players.max})
+            </DialogTitle>
+            <DialogDescription>
+              Players currently connected to {serverName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {players.current === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No players currently connected
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {players.names.map((playerName: string, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-primary" />
+                    </div>
+                    <span className="font-medium">{playerName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
