@@ -1,9 +1,30 @@
 /**
  * Audit Action Color Utility
  *
- * Maps audit action types to semantic colors for consistent UI representation.
+ * Maps audit action types to semantic colors and icons for consistent UI representation.
  * Used by Dashboard Recent Activity widget and Audit Log page.
  */
+
+import {
+  Play,
+  Square,
+  Plus,
+  Trash2,
+  LogIn,
+  LogOut,
+  UserPlus,
+  UserMinus,
+  ShieldCheck,
+  ShieldX,
+  RefreshCw,
+  Settings,
+  Activity,
+  Server,
+  User,
+  Bot,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react'
 
 export type AuditActionColor = "success" | "warning" | "error" | "info" | "muted"
 
@@ -113,4 +134,71 @@ export function getAuditActionBadgeStyle(action: string): string {
     default:
       return '' // Use default styling
   }
+}
+
+/**
+ * Get Lucide icon for an audit action
+ *
+ * Maps action keywords to appropriate icons.
+ */
+export function getAuditActionIcon(action: string): LucideIcon {
+  const lowerAction = action.toLowerCase()
+
+  // Server actions
+  if (lowerAction.includes('started')) return Play
+  if (lowerAction.includes('stopped')) return Square
+  if (lowerAction.includes('restarted') || lowerAction.includes('rebuilt')) return RefreshCw
+
+  // Create/Delete actions
+  if (lowerAction.includes('created') || lowerAction.includes('registered')) return Plus
+  if (lowerAction.includes('deleted') || lowerAction.includes('purged')) return Trash2
+
+  // User auth actions
+  if (lowerAction.includes('login')) return LogIn
+  if (lowerAction.includes('logout')) return LogOut
+
+  // User management
+  if (lowerAction.includes('user') && lowerAction.includes('created')) return UserPlus
+  if (lowerAction.includes('user') && lowerAction.includes('deleted')) return UserMinus
+
+  // Permission actions
+  if (lowerAction.includes('granted')) return ShieldCheck
+  if (lowerAction.includes('revoked')) return ShieldX
+
+  // Change/Update actions
+  if (lowerAction.includes('changed') || lowerAction.includes('modified') || lowerAction.includes('updated')) {
+    return Settings
+  }
+
+  // Default
+  return Activity
+}
+
+/**
+ * Get Lucide icon for a target type
+ */
+export function getTargetTypeIcon(targetType: string): LucideIcon {
+  const lower = targetType.toLowerCase()
+
+  if (lower === 'server') return Server
+  if (lower === 'user') return User
+  if (lower === 'agent') return Bot
+  if (lower === 'permission') return Shield
+
+  // Default
+  return Activity
+}
+
+/**
+ * Get color for a target type (for consistent item coloring)
+ */
+export function getTargetTypeColor(targetType: string): AuditActionColor {
+  const lower = targetType.toLowerCase()
+
+  if (lower === 'server') return 'info'
+  if (lower === 'user') return 'warning'
+  if (lower === 'agent') return 'success'
+  if (lower === 'permission') return 'error'
+
+  return 'muted'
 }

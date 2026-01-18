@@ -2,15 +2,16 @@
  * Audit log viewer component
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuditLogs } from '../hooks/useAuditLogs';
 import { useUsers } from '../hooks/useUsers';
+import { useAllServers } from '../hooks/useServers';
+import { useAgents } from '../hooks/useAgents';
 import type { AuditLogsQuery } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getAuditActionColor } from '@/lib/audit-colors';
-import { ActivityTimeline, type ActivityEvent } from '@/components/ui/activity-timeline';
+import { CompactAuditLog, type AuditLogEntry } from '@/components/ui/compact-audit-log';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,36 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
 
   const { data, isLoading, error } = useAuditLogs(query);
   const { data: usersData } = useUsers();
+  const { data: serversData } = useAllServers();
+  const { data: agentsData } = useAgents();
+
+  // Create lookup maps for ID -> name resolution
+  const nameLookup = useMemo(() => {
+    const lookup: Record<string, string> = {};
+
+    // Add servers
+    if (serversData?.servers) {
+      for (const server of serversData.servers) {
+        lookup[server.id] = server.name;
+      }
+    }
+
+    // Add users
+    if (usersData?.users) {
+      for (const user of usersData.users) {
+        lookup[user.id] = user.email.split('@')[0];
+      }
+    }
+
+    // Add agents
+    if (agentsData?.agents) {
+      for (const agent of agentsData.agents) {
+        lookup[agent.id] = agent.name;
+      }
+    }
+
+    return lookup;
+  }, [serversData, usersData, agentsData]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({
@@ -73,24 +104,69 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
-  // Transform audit logs to activity events
-  const activityEvents: ActivityEvent[] = data?.logs.map(log => {
-    const details = log.details
+  // Helper to check if a string looks like a UUID
+  const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+  // Helper to resolve IDs in details object
+  const resolveDetails = (details: Record<string, unknown>): Record<string, string> => {
+    const resolved: Record<string, string> = {};
+    for (const [key, value] of Object.entries(details)) {
+      if (typeof value === 'string') {
+        // If it looks like a UUID, try to resolve it
+        if (isUuid(value) && nameLookup[value]) {
+          resolved[key] = nameLookup[value];
+        } else {
+          resolved[key] = value;
+        }
+      } else if (value !== null && value !== undefined) {
+        resolved[key] = String(value);
+      }
+    }
+    return resolved;
+  };
+
+  // Transform audit logs to compact entries
+  const auditEntries: AuditLogEntry[] = data?.logs.map(log => {
+    const rawDetails = log.details
       ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details)
       : {};
-    const targetName = details.name || details.serverName || log.target_id;
+
+    // Resolve target name: try details first, then lookup by ID, fallback to ID
+    const targetId = log.target_id || '';
+
+    // Find name from details by checking all keys that might contain a name
+    const findNameInDetails = (obj: Record<string, unknown>): string => {
+      const nameKeys = ['name', 'servername', 'server_name', 'username', 'user_name', 'agentname', 'agent_name'];
+      for (const [key, value] of Object.entries(obj)) {
+        const lowerKey = key.toLowerCase();
+        if (nameKeys.includes(lowerKey) && typeof value === 'string' && value) {
+          // If the value is a UUID, resolve it through nameLookup
+          if (isUuid(value)) {
+            return nameLookup[value] || value;
+          }
+          return value;
+        }
+      }
+      return '';
+    };
+
+    const detailsName = findNameInDetails(rawDetails as Record<string, unknown>);
+    const targetName = detailsName || nameLookup[targetId] || targetId;
+
+    // Build clean details object with resolved IDs
+    const resolvedDetails = resolveDetails(rawDetails);
 
     return {
       id: log.id,
       timestamp: formatDateRelative(log.timestamp),
       user: log.user_email.split('@')[0],
-      action: log.action.replace(/\./g, ' ').replace(/_/g, ' '),
-      target: log.target_type ? `${log.target_type} ${targetName || ''}`.trim() : '',
-      actionColor: getAuditActionColor(log.action),
+      action: log.action,
+      targetType: log.target_type || '',
+      targetName: targetName,
       details: {
+        'Timestamp': formatDate(log.timestamp),
         'IP Address': log.ip_address,
-        'Full Timestamp': formatDate(log.timestamp),
-        ...details,
+        ...resolvedDetails,
       },
     };
   }) || [];
@@ -113,15 +189,9 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
             <Skeleton className="h-9 w-[80px]" />
           </div>
         </div>
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex gap-4">
-              <Skeleton className="h-20 w-1 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-5 w-[60%]" />
-                <Skeleton className="h-4 w-[40%]" />
-              </div>
-            </div>
+        <div className="space-y-1">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <Skeleton key={i} className="h-10 w-full rounded-md" />
           ))}
         </div>
       </div>
@@ -263,8 +333,8 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
         )}
       </div>
 
-      {activityEvents.length > 0 ? (
-        <ActivityTimeline events={activityEvents} />
+      {auditEntries.length > 0 ? (
+        <CompactAuditLog entries={auditEntries} />
       ) : (
         <div className="text-center p-8 bg-muted rounded-md">
           No audit logs found.
