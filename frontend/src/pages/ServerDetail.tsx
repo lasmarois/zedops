@@ -288,33 +288,62 @@ function ServerDetailContent() {
           )}
         </div>
 
-        <div className="flex gap-2">
-          {status === 'stopped' && (
-            <Button variant="success" onClick={handleStart} disabled={startServerMutation.isPending}>
-              <PlayCircle className="h-4 w-4" />
-              {startServerMutation.isPending ? 'Starting...' : 'Start'}
-            </Button>
-          )}
-          {status === 'running' && (
-            <>
-              <Button variant="warning" onClick={handleStop} disabled={stopServerMutation.isPending}>
-                <StopCircle className="h-4 w-4" />
-                {stopServerMutation.isPending ? 'Stopping...' : 'Stop'}
-              </Button>
-              <Button variant="info" onClick={handleRestart} disabled={restartContainerMutation.isPending}>
-                <RefreshCw className="h-4 w-4" />
-                {restartContainerMutation.isPending ? 'Restarting...' : 'Restart'}
-              </Button>
-            </>
-          )}
-          <Button variant="info" onClick={handleRebuild} disabled={rebuildServerMutation.isPending}>
-            <Wrench className="h-4 w-4" />
-            {rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}
-          </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleteServerMutation.isPending}>
-            <Trash2 className="h-4 w-4" />
-            {deleteServerMutation.isPending ? 'Deleting...' : 'Delete'}
-          </Button>
+        {/* Segmented Action Buttons */}
+        <div className="flex items-center gap-3">
+          {/* Primary Actions Group */}
+          <div className="flex items-center rounded-xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
+            {status === 'stopped' ? (
+              <button
+                onClick={handleStart}
+                disabled={startServerMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_20px_rgba(61,220,151,0.2)] disabled:opacity-50"
+              >
+                <PlayCircle className={`h-4 w-4 ${startServerMutation.isPending ? 'animate-spin' : ''}`} />
+                <span className="font-medium">{startServerMutation.isPending ? 'Starting...' : 'Start'}</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleStop}
+                  disabled={stopServerMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_20px_rgba(255,201,82,0.2)] disabled:opacity-50"
+                >
+                  <StopCircle className={`h-4 w-4 ${stopServerMutation.isPending ? 'animate-pulse' : ''}`} />
+                  <span className="font-medium">{stopServerMutation.isPending ? 'Stopping...' : 'Stop'}</span>
+                </button>
+                <div className="w-px h-6 bg-white/10" />
+                <button
+                  onClick={handleRestart}
+                  disabled={restartContainerMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_20px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${restartContainerMutation.isPending ? 'animate-spin' : ''}`} />
+                  <span className="font-medium">{restartContainerMutation.isPending ? 'Restarting...' : 'Restart'}</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Secondary Actions Group */}
+          <div className="flex items-center rounded-xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
+            <button
+              onClick={handleRebuild}
+              disabled={rebuildServerMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_20px_rgba(51,225,255,0.2)] disabled:opacity-50"
+            >
+              <Wrench className={`h-4 w-4 ${rebuildServerMutation.isPending ? 'animate-spin' : ''}`} />
+              <span className="font-medium">{rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}</span>
+            </button>
+            <div className="w-px h-6 bg-white/10" />
+            <button
+              onClick={handleDelete}
+              disabled={deleteServerMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-destructive hover:bg-destructive/20 hover:shadow-[inset_0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
+            >
+              <Trash2 className={`h-4 w-4 ${deleteServerMutation.isPending ? 'animate-pulse' : ''}`} />
+              <span className="font-medium">{deleteServerMutation.isPending ? 'Deleting...' : 'Delete'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

@@ -883,53 +883,56 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                           </div>
 
                           <div className="flex gap-2 items-center flex-shrink-0">
-                            {container && !isRunning && (
-                              <Button
-                                size="sm"
-                                variant="success"
-                                onClick={() => handleStart(container.id)}
-                                disabled={startMutation.isPending && startMutation.variables?.containerId === container.id}
-                              >
-                                <Play className="h-4 w-4 mr-1" />
-                                Start
-                              </Button>
-                            )}
-                            {container && isRunning && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleStop(container.id)}
-                                  disabled={stopMutation.isPending && stopMutation.variables?.containerId === container.id}
-                                >
-                                  <Square className="h-4 w-4 mr-1" />
-                                  Stop
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="info"
-                                  onClick={() => handleRestart(container.id)}
-                                  disabled={restartMutation.isPending && restartMutation.variables?.containerId === container.id}
-                                >
-                                  <RotateCw className="h-4 w-4 mr-1" />
-                                  Restart
-                                </Button>
-                              </>
-                            )}
                             {container && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="ghost">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onSelect={() => onViewLogs(container.id, item.name)}>
-                                    <Terminal className="h-4 w-4 mr-2" />
-                                    View Logs
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <>
+                                {/* Segmented action buttons for unmanaged containers */}
+                                <div className="flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
+                                  {!isRunning && (
+                                    <button
+                                      onClick={() => handleStart(container.id)}
+                                      disabled={startMutation.isPending && startMutation.variables?.containerId === container.id}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)] disabled:opacity-50"
+                                    >
+                                      <Play className={`h-3.5 w-3.5 ${startMutation.isPending && startMutation.variables?.containerId === container.id ? 'animate-spin' : ''}`} />
+                                      <span>{startMutation.isPending && startMutation.variables?.containerId === container.id ? 'Starting...' : 'Start'}</span>
+                                    </button>
+                                  )}
+                                  {isRunning && (
+                                    <>
+                                      <button
+                                        onClick={() => handleStop(container.id)}
+                                        disabled={stopMutation.isPending && stopMutation.variables?.containerId === container.id}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)] disabled:opacity-50"
+                                      >
+                                        <Square className={`h-3.5 w-3.5 ${stopMutation.isPending && stopMutation.variables?.containerId === container.id ? 'animate-pulse' : ''}`} />
+                                        <span>{stopMutation.isPending && stopMutation.variables?.containerId === container.id ? 'Stopping...' : 'Stop'}</span>
+                                      </button>
+                                      <div className="w-px h-5 bg-white/10" />
+                                      <button
+                                        onClick={() => handleRestart(container.id)}
+                                        disabled={restartMutation.isPending && restartMutation.variables?.containerId === container.id}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                                      >
+                                        <RotateCw className={`h-3.5 w-3.5 ${restartMutation.isPending && restartMutation.variables?.containerId === container.id ? 'animate-spin' : ''}`} />
+                                        <span>{restartMutation.isPending && restartMutation.variables?.containerId === container.id ? 'Restarting...' : 'Restart'}</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="ghost">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onSelect={() => onViewLogs(container.id, item.name)}>
+                                      <Terminal className="h-4 w-4 mr-2" />
+                                      View Logs
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1010,40 +1013,43 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                 </div>
 
                                 <div className="flex gap-2 items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  {server.status === 'missing' && server.data_exists && (
-                                    <Button
-                                      size="sm"
-                                      variant="success"
-                                      onClick={() => handleServerStart(server.id, server.name)}
-                                      disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
-                                      className="font-bold"
-                                    >
-                                      <Play className="h-4 w-4 mr-1" />
-                                      Start (Recovery)
-                                    </Button>
-                                  )}
+                                  {/* Recovery Actions Group */}
+                                  {(server.status === 'missing' && server.data_exists) || server.status === 'deleted' ? (
+                                    <div className="flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
+                                      {server.status === 'missing' && server.data_exists && (
+                                        <button
+                                          onClick={() => handleServerStart(server.id, server.name)}
+                                          disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)] disabled:opacity-50"
+                                        >
+                                          <Play className={`h-3.5 w-3.5 ${startServerMutation.isPending && startServerMutation.variables?.serverId === server.id ? 'animate-spin' : ''}`} />
+                                          <span>{startServerMutation.isPending && startServerMutation.variables?.serverId === server.id ? 'Recovering...' : 'Recover'}</span>
+                                        </button>
+                                      )}
+                                      {server.status === 'deleted' && (
+                                        <button
+                                          onClick={() => handleServerRestore(server.id, server.name)}
+                                          disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                                        >
+                                          <RotateCw className={`h-3.5 w-3.5 ${restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'animate-spin' : ''}`} />
+                                          <span>{restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'Restoring...' : 'Restore'}</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : null}
 
-                                  {server.status === 'deleted' && (
-                                    <Button
-                                      size="sm"
-                                      variant="info"
-                                      onClick={() => handleServerRestore(server.id, server.name)}
-                                      disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
+                                  {/* Destructive Actions Group */}
+                                  <div className="flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
+                                    <button
+                                      onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
+                                      disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-destructive hover:bg-destructive/20 hover:shadow-[inset_0_0_15px_rgba(220,38,38,0.2)] disabled:opacity-50"
                                     >
-                                      <RotateCw className="h-4 w-4 mr-1" />
-                                      Restore
-                                    </Button>
-                                  )}
-
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
-                                    disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-1" />
-                                    Purge
-                                  </Button>
+                                      <Trash2 className={`h-3.5 w-3.5 ${purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id ? 'animate-pulse' : ''}`} />
+                                      <span>{purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id ? 'Purging...' : 'Purge'}</span>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </CardContent>

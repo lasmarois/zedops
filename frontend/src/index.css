@@ -86,3 +86,24 @@ pre,
     background-position: -200% 0;
   }
 }
+
+/* Gradient border rotation animation (Design 5) */
+@keyframes gradient-rotate {
+  0% {
+    --gradient-angle: 0deg;
+  }
+  100% {
+    --gradient-angle: 360deg;
+  }
+}
+
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Slow spin animation for loading states */
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}

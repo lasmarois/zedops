@@ -165,81 +165,86 @@ export function ServerCard({
     setIsExpanded(!isExpanded);
   };
 
-  // Render quick action buttons
+  // Render segmented action buttons
   const renderActions = () => {
-    const actions = [];
+    // Segmented button style classes
+    const segmentedContainer = "flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm";
+    const segmentedDivider = "w-px h-5 bg-white/10";
+    const baseButton = "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 disabled:opacity-50";
+    const startButton = `${baseButton} text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)]`;
+    const stopButton = `${baseButton} text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)]`;
+    const restartButton = `${baseButton} text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)]`;
 
     if (container) {
       if (!isRunning && onStart) {
-        actions.push(
-          <Button
-            key="start"
-            size="sm"
-            variant="success"
-            onClick={(e) => { e.stopPropagation(); onStart(); }}
-            disabled={isStarting}
-          >
-            <Play className="h-4 w-4 mr-1" />
-            Start
-          </Button>
+        return (
+          <div className={segmentedContainer}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onStart(); }}
+              disabled={isStarting}
+              className={startButton}
+            >
+              <Play className={`h-3.5 w-3.5 ${isStarting ? 'animate-spin' : ''}`} />
+              <span>{isStarting ? 'Starting...' : 'Start'}</span>
+            </button>
+          </div>
         );
       }
-      if (isRunning && onStop) {
-        actions.push(
-          <Button
-            key="stop"
-            size="sm"
-            variant="destructive"
-            onClick={(e) => { e.stopPropagation(); onStop(); }}
-            disabled={isStopping}
-          >
-            <Square className="h-4 w-4 mr-1" />
-            Stop
-          </Button>
-        );
-      }
-      if (isRunning && onRestart) {
-        actions.push(
-          <Button
-            key="restart"
-            size="sm"
-            variant="info"
-            onClick={(e) => { e.stopPropagation(); onRestart(); }}
-            disabled={isRestarting}
-          >
-            <RotateCw className="h-4 w-4 mr-1" />
-            Restart
-          </Button>
+      if (isRunning) {
+        return (
+          <div className={segmentedContainer}>
+            {onStop && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStop(); }}
+                disabled={isStopping}
+                className={stopButton}
+              >
+                <Square className={`h-3.5 w-3.5 ${isStopping ? 'animate-pulse' : ''}`} />
+                <span>{isStopping ? 'Stopping...' : 'Stop'}</span>
+              </button>
+            )}
+            {onStop && onRestart && <div className={segmentedDivider} />}
+            {onRestart && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRestart(); }}
+                disabled={isRestarting}
+                className={restartButton}
+              >
+                <RotateCw className={`h-3.5 w-3.5 ${isRestarting ? 'animate-spin' : ''}`} />
+                <span>{isRestarting ? 'Restarting...' : 'Restart'}</span>
+              </button>
+            )}
+          </div>
         );
       }
     } else if (server.status === 'stopped' && onStart) {
-      actions.push(
-        <Button
-          key="start"
-          size="sm"
-          variant="success"
-          onClick={(e) => { e.stopPropagation(); onStart(); }}
-          disabled={isStarting}
-        >
-          <Play className="h-4 w-4 mr-1" />
-          Start
-        </Button>
+      return (
+        <div className={segmentedContainer}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onStart(); }}
+            disabled={isStarting}
+            className={startButton}
+          >
+            <Play className={`h-3.5 w-3.5 ${isStarting ? 'animate-spin' : ''}`} />
+            <span>{isStarting ? 'Starting...' : 'Start'}</span>
+          </button>
+        </div>
       );
     } else if (server.status === 'failed' && onEdit) {
-      actions.push(
-        <Button
-          key="edit"
-          size="sm"
-          variant="warning"
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-        >
-          <Wrench className="h-4 w-4 mr-1" />
-          Edit
-        </Button>
+      return (
+        <div className={segmentedContainer}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className={`${baseButton} text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)]`}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            <span>Edit</span>
+          </button>
+        </div>
       );
     }
 
-    return actions;
+    return null;
   };
 
   // Render dropdown menu
