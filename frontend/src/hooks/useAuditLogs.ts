@@ -17,5 +17,6 @@ export function useAuditLogs(query?: AuditLogsQuery) {
     queryFn: () => fetchAuditLogs(query),
     enabled: isAuthenticated,
     staleTime: 10000, // Consider data stale after 10 seconds
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
 }
