@@ -402,22 +402,22 @@ M9.8 is the final polish phase of the M9 milestone series. After successfully im
 
 ---
 
-### M9.8.21 - Server Metrics Empty/Not Displaying
-**Status:** 📋 Not Started
+### M9.8.21 - Server Metrics Empty/Not Displaying ✅ VERIFIED
+**Status:** ✅ Working (Verified 2026-01-18)
 **Priority:** MEDIUM (Bug Fix)
 
 **Issue Reported:**
 > "there is the servers metric that should be fixed, they are empty right now"
 
-**Investigation Needed:**
-- Identify where server metrics are displayed
-- Check if metrics are being collected by agent
-- Check if metrics are being sent to manager
-- Check frontend rendering of metrics
-- Determine root cause (collection, transmission, or display)
+**Resolution:**
+Issue was transient or resolved during M9.8.44 development. Full metrics pipeline verified:
+- **Frontend**: `useServerMetrics` hook polls `/api/agents/:id/servers/:serverId/metrics` every 5s
+- **Backend**: `agents.ts:2241` forwards request to Durable Object
+- **DO**: `AgentConnection.ts:1124` sends `container.metrics` message to agent
+- **Agent**: `main.go:309` handles message, calls `CollectContainerMetrics` in `docker.go:394`
+- **Display**: MetricsRow component in ServerOverview shows CPU, Memory, Disk I/O, Uptime
 
-**Files:**
-- `ISSUE-M9.8.21-server-metrics-empty.md` - Created
+Metrics display correctly for running servers in the Overview tab.
 
 ---
 
