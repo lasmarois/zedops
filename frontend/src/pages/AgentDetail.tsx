@@ -306,6 +306,17 @@ export function AgentDetail() {
                     </p>
                   </div>
 
+                  {/* Hostname */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Hostname</Label>
+                    <div className="p-3 bg-muted rounded-md font-mono text-sm">
+                      {agentConfig.hostname || <span className="text-muted-foreground italic">Not set (using auto-detected IP)</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Custom hostname for server connections (e.g., DuckDNS).
+                    </p>
+                  </div>
+
                   {/* Info Banner */}
                   <Alert>
                     <AlertDescription>

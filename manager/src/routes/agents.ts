@@ -99,11 +99,11 @@ agents.get('/', async (c) => {
 
     if (agentIds === null) {
       // Admin or global access: Fetch all agents
-      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents ORDER BY created_at DESC`;
+      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip, hostname FROM agents ORDER BY created_at DESC`;
     } else {
       // Specific agent access: Fetch only accessible agents
       const placeholders = Array.from(agentIds).map(() => '?').join(',');
-      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents WHERE id IN (${placeholders}) ORDER BY created_at DESC`;
+      query = `SELECT id, name, status, last_seen, created_at, metadata, public_ip, hostname FROM agents WHERE id IN (${placeholders}) ORDER BY created_at DESC`;
       params = Array.from(agentIds);
     }
 
@@ -118,6 +118,7 @@ agents.get('/', async (c) => {
       createdAt: row.created_at,
       metadata: row.metadata ? JSON.parse(row.metadata) : {},
       publicIp: row.public_ip || null,
+      hostname: row.hostname || null,
     }));
 
     return c.json({
@@ -149,7 +150,7 @@ agents.get('/:id', async (c) => {
   // Query agent from D1
   try {
     const result = await c.env.DB.prepare(
-      `SELECT id, name, status, last_seen, created_at, metadata, public_ip FROM agents WHERE id = ?`
+      `SELECT id, name, status, last_seen, created_at, metadata, public_ip, hostname FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -166,6 +167,7 @@ agents.get('/:id', async (c) => {
       createdAt: result.created_at,
       metadata: result.metadata ? JSON.parse(result.metadata as string) : {},
       publicIp: result.public_ip || null,
+      hostname: result.hostname || null,
     };
 
     return c.json(agent);
@@ -194,7 +196,7 @@ agents.get('/:id/config', async (c) => {
   try {
     // Query agent configuration from database
     const agent = await c.env.DB.prepare(
-      `SELECT id, name, server_data_path, steam_zomboid_registry FROM agents WHERE id = ?`
+      `SELECT id, name, server_data_path, steam_zomboid_registry, hostname FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -208,6 +210,7 @@ agents.get('/:id/config', async (c) => {
       config: {
         server_data_path: agent.server_data_path,
         steam_zomboid_registry: agent.steam_zomboid_registry,
+        hostname: agent.hostname || null,
       },
     });
   } catch (error) {
@@ -234,7 +237,7 @@ agents.put('/:id/config', async (c) => {
   }
 
   // Parse request body
-  let body: { server_data_path?: string; steam_zomboid_registry?: string };
+  let body: { server_data_path?: string; steam_zomboid_registry?: string; hostname?: string | null };
   try {
     body = await c.req.json();
   } catch (error) {
@@ -242,7 +245,7 @@ agents.put('/:id/config', async (c) => {
   }
 
   // Validate at least one field is provided
-  if (!body.server_data_path && !body.steam_zomboid_registry) {
+  if (!body.server_data_path && !body.steam_zomboid_registry && body.hostname === undefined) {
     return c.json({ error: 'Must provide at least one configuration field to update' }, 400);
   }
 
@@ -291,6 +294,12 @@ agents.put('/:id/config', async (c) => {
       values.push(body.steam_zomboid_registry);
     }
 
+    // Hostname can be set to null (to clear it) or a string
+    if (body.hostname !== undefined) {
+      updates.push('hostname = ?');
+      values.push(body.hostname); // Can be null or string
+    }
+
     // Add agentId for WHERE clause
     values.push(agentId);
 
@@ -303,7 +312,7 @@ agents.put('/:id/config', async (c) => {
 
     // Fetch updated configuration
     const updatedAgent = await c.env.DB.prepare(
-      `SELECT server_data_path, steam_zomboid_registry FROM agents WHERE id = ?`
+      `SELECT server_data_path, steam_zomboid_registry, hostname FROM agents WHERE id = ?`
     )
       .bind(agentId)
       .first();
@@ -316,6 +325,7 @@ agents.put('/:id/config', async (c) => {
       config: {
         server_data_path: updatedAgent!.server_data_path,
         steam_zomboid_registry: updatedAgent!.steam_zomboid_registry,
+        hostname: updatedAgent!.hostname || null,
       },
     });
   } catch (error) {

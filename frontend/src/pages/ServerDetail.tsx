@@ -377,6 +377,7 @@ function ServerDetailContent() {
             }}
             agentId={server.agent_id}
             agentPublicIp={server.agent_public_ip}
+            agentHostname={server.agent_hostname}
             diskUsagePercent={diskUsagePercent}
             storage={storageData?.sizes || null}
             metrics={metricsData?.metrics}

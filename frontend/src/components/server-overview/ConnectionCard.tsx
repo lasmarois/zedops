@@ -5,18 +5,21 @@ import { Globe, Copy, Check, ExternalLink } from "lucide-react"
 
 interface ConnectionCardProps {
   serverIp?: string | null
+  hostname?: string | null // P8: Agent's custom hostname
   gamePort: number
   udpPort: number
 }
 
 export function ConnectionCard({
   serverIp,
+  hostname,
   gamePort,
   udpPort,
 }: ConnectionCardProps) {
   const [copied, setCopied] = useState<string | null>(null)
 
-  const ip = serverIp || "your-server-ip"
+  // Use hostname if set, otherwise fall back to IP
+  const ip = hostname || serverIp || "your-server-ip"
   const connectionString = `${ip}:${gamePort}`
   const steamConnectUrl = `steam://connect/${ip}:${gamePort}`
 
@@ -42,8 +45,11 @@ export function ConnectionCard({
         {/* Server Address */}
         <div>
           <div className="text-xs text-muted-foreground mb-1.5">Server Address</div>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-sm font-mono bg-muted px-3 py-2 rounded-md">
+          <div className="flex items-center gap-2 min-w-0">
+            <code
+              className="flex-1 min-w-0 text-sm font-mono bg-muted px-3 py-2 rounded-md truncate"
+              title={connectionString}
+            >
               {connectionString}
             </code>
             <Button
@@ -83,7 +89,7 @@ export function ConnectionCard({
           Direct Connect (Steam)
         </Button>
 
-        {!serverIp && (
+        {!serverIp && !hostname && (
           <p className="text-xs text-muted-foreground text-center">
             Replace "your-server-ip" with your actual server IP
           </p>

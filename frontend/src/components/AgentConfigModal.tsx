@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 interface AgentConfig {
   server_data_path: string;
   steam_zomboid_registry: string;
+  hostname: string | null;
 }
 
 interface AgentConfigModalProps {
@@ -30,6 +31,7 @@ export function AgentConfigModal({
 }: AgentConfigModalProps) {
   const [serverDataPath, setServerDataPath] = useState('');
   const [steamZomboidRegistry, setSteamZomboidRegistry] = useState('');
+  const [hostname, setHostname] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -39,6 +41,7 @@ export function AgentConfigModal({
     if (open && currentConfig) {
       setServerDataPath(currentConfig.server_data_path || '');
       setSteamZomboidRegistry(currentConfig.steam_zomboid_registry || '');
+      setHostname(currentConfig.hostname || '');
       setError(null);
       setSuccess(false);
     }
@@ -74,6 +77,12 @@ export function AgentConfigModal({
 
     if (steamZomboidRegistry !== currentConfig?.steam_zomboid_registry) {
       updates.steam_zomboid_registry = steamZomboidRegistry;
+    }
+
+    // Hostname: send null if cleared, string if set
+    const currentHostname = currentConfig?.hostname || '';
+    if (hostname !== currentHostname) {
+      updates.hostname = hostname.trim() || null;
     }
 
     // Check if anything changed
@@ -146,6 +155,23 @@ export function AgentConfigModal({
               />
               <p className="text-sm text-muted-foreground">
                 Docker registry URL for the Steam Zomboid server image.
+              </p>
+            </div>
+
+            {/* Hostname */}
+            <div className="space-y-2">
+              <Label htmlFor="hostname">Hostname (Optional)</Label>
+              <Input
+                id="hostname"
+                type="text"
+                value={hostname}
+                onChange={(e) => setHostname(e.target.value)}
+                placeholder="myserver.duckdns.org"
+                disabled={isSaving}
+              />
+              <p className="text-sm text-muted-foreground">
+                Custom hostname for server connections. If set, this will be displayed instead of the auto-detected IP.
+                Useful for dynamic DNS services like DuckDNS.
               </p>
             </div>
 

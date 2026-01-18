@@ -26,6 +26,7 @@ interface ServerOverviewProps {
   agentId: string // P4: Needed for RCON commands
   agentDefaultDataPath?: string | null
   agentPublicIp?: string | null // P7: Agent's public IP for connection card
+  agentHostname?: string | null // P8: Agent's hostname for connection card
   diskUsagePercent?: number | null // P3: Disk usage percentage for health indicator
   storage?: {  // P3: Full storage data for health indicator details
     binBytes: number
@@ -56,6 +57,7 @@ export function ServerOverview({
   agentId,
   agentDefaultDataPath,
   agentPublicIp,
+  agentHostname,
   diskUsagePercent,
   storage,
   metrics,
@@ -118,6 +120,7 @@ export function ServerOverview({
   const connectionCard = (
     <ConnectionCard
       serverIp={agentPublicIp}
+      hostname={agentHostname}
       gamePort={server.game_port}
       udpPort={server.udp_port}
     />

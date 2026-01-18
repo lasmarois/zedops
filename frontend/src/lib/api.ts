@@ -114,6 +114,7 @@ export async function fetchAgent(id: string): Promise<Agent> {
 export interface AgentConfig {
   server_data_path: string;
   steam_zomboid_registry: string;
+  hostname: string | null;
 }
 
 export async function fetchAgentConfig(agentId: string): Promise<AgentConfig> {
@@ -364,6 +365,7 @@ export interface Server {
   agent_status: 'online' | 'offline';
   agent_server_data_path: string | null; // Agent's default data path
   agent_public_ip?: string | null; // P7: Agent's public IP for connection card
+  agent_hostname?: string | null; // P8: Agent's hostname for connection card
   steam_zomboid_registry: string | null; // M9.8.32: Agent's default registry
   name: string;
   container_id: string | null;

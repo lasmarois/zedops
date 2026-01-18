@@ -179,7 +179,8 @@ servers.get('/:id', async (c) => {
         a.status as agent_status,
         a.server_data_path as agent_server_data_path,
         a.steam_zomboid_registry as steam_zomboid_registry,
-        a.public_ip as agent_public_ip
+        a.public_ip as agent_public_ip,
+        a.hostname as agent_hostname
       FROM servers s
       LEFT JOIN agents a ON s.agent_id = a.id
       WHERE s.id = ?`
@@ -243,6 +244,7 @@ servers.get('/:id', async (c) => {
       agent_status: server.agent_status || 'offline', // Agent connectivity status
       agent_server_data_path: server.agent_server_data_path, // Agent's default data path
       agent_public_ip: server.agent_public_ip || null, // P7: Agent's public IP for connection card
+      agent_hostname: server.agent_hostname || null, // P8: Agent's hostname for connection card
       steam_zomboid_registry: server.steam_zomboid_registry, // M9.8.32: Agent's default registry
       name: server.name,
       container_id: server.container_id,
