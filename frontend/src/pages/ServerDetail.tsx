@@ -13,15 +13,14 @@ import { ConfigurationEdit } from "@/components/ConfigurationEdit"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics, useUpdateServerConfig, useApplyServerConfig } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
-import { useLogStream } from "@/hooks/useLogStream"
 import { useMoveProgress } from "@/hooks/useMoveProgress"
-import { RconHistoryProvider, useRconHistory } from "@/contexts/RconHistoryContext"
-import { Clock, Cpu, HardDrive, Users, PlayCircle, StopCircle, RefreshCw, Wrench, Trash2 } from "lucide-react"
+import { RconHistoryProvider } from "@/contexts/RconHistoryContext"
+import { PlayCircle, StopCircle, RefreshCw, Wrench, Trash2, Users } from "lucide-react"
 import { getDisplayStatus } from "@/lib/server-status"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { ErrorDialog } from "@/components/ui/error-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ServerOverview } from "@/components/server-overview"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -56,23 +55,12 @@ function ServerDetailContent() {
     serverData?.server?.status === 'running' // Only fetch when running
   )
 
-  // Fetch log stream for preview (must be called unconditionally - hooks rule)
-  const { logs, clearLogs } = useLogStream({
-    agentId: serverData?.server?.agent_id || '',
-    containerId: serverData?.server?.container_id || '',
-    enabled: serverData?.server?.status === 'running' && !!serverData?.server?.container_id
-  })
-
   // M9.8.31: Move progress streaming (enabled only during migration)
   const { progress: moveProgress, reset: resetMoveProgress } = useMoveProgress({
     agentId: serverData?.server?.agent_id || '',
     serverName: serverData?.server?.name || '',
     enabled: isMigrating && !!serverData?.server?.agent_id && !!serverData?.server?.name
   })
-
-  // Log preview controls state
-  const [logsPaused, setLogsPaused] = useState(false)
-  const [logsAutoScroll, setLogsAutoScroll] = useState(true)
 
   // Confirmation dialogs state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -82,9 +70,6 @@ function ServerDetailContent() {
 
   // Error dialog state
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  // RCON history from context
-  const { history: rconHistory } = useRconHistory()
 
   // Handler functions for button clicks
   const handleStart = () => {
@@ -248,20 +233,14 @@ function ServerDetailContent() {
   const config = server.config ? JSON.parse(server.config) : {}
   const rconPassword = config.RCON_PASSWORD || config.ADMIN_PASSWORD || ''
 
-  // Extract metrics or use placeholders (metrics fetched at top of component)
-  const metrics = metricsData?.metrics
-  const uptime = metrics?.uptime || "N/A"
+  // Extract metrics for header display
+  const uptime = metricsData?.metrics?.uptime || "N/A"
   // M9.8.41: Get player count from server data (RCON polling)
   const players = {
     current: serverData?.server?.player_count ?? 0,
     max: serverData?.server?.max_players ?? 32,
     names: serverData?.server?.players ?? [],
   }
-  const cpuPercent = metrics?.cpuPercent ? metrics.cpuPercent.toFixed(1) : 0
-  const memoryUsedGB = metrics ? (metrics.memoryUsedMB / 1024).toFixed(1) : 0
-  const memoryLimitGB = metrics ? (metrics.memoryLimitMB / 1024).toFixed(1) : 0
-  const diskReadGB = metrics ? (metrics.diskReadMB / 1024).toFixed(2) : 0
-  const diskWriteGB = metrics ? (metrics.diskWriteMB / 1024).toFixed(2) : 0
 
   return (
     <div className="p-8 space-y-6">
@@ -368,276 +347,28 @@ function ServerDetailContent() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
-          {/* Server Metrics */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Server Metrics</h2>
-            {status !== 'running' && (
-              <div className="mb-4 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-                Metrics are only available when the server is running
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              {/* Uptime Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Uptime
-                  </CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{uptime}</div>
-                </CardContent>
-              </Card>
-
-              {/* CPU Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    CPU
-                  </CardTitle>
-                  <Cpu className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{cpuPercent}%</div>
-                  <div className="text-xs text-success">▲ Normal</div>
-                </CardContent>
-              </Card>
-
-              {/* Memory Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Memory
-                  </CardTitle>
-                  <HardDrive className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{memoryUsedGB}GB</div>
-                  {memoryLimitGB && (
-                    <div className="text-xs text-muted-foreground">of {memoryLimitGB}GB</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Disk I/O Card */}
-              <Card className="hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Disk I/O
-                  </CardTitle>
-                  <HardDrive className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm font-bold">↓ {diskReadGB}GB</div>
-                  <div className="text-sm font-bold">↑ {diskWriteGB}GB</div>
-                </CardContent>
-              </Card>
-
-              {/* Players Card - Hover for tooltip, click for dialog (mobile) */}
-              <TooltipProvider>
-                <Tooltip delayDuration={300}>
-                  <TooltipTrigger asChild>
-                    <Card
-                      className="hover:shadow-md transition-shadow duration-200 cursor-pointer hover:border-primary/50"
-                      onClick={() => setShowPlayersDialog(true)}
-                    >
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                          Players
-                        </CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{players.current}/{players.max}</div>
-                        {players.current > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    {players.current === 0 ? (
-                      <p>No players connected</p>
-                    ) : (
-                      <div className="space-y-1">
-                        <p className="font-medium text-xs text-muted-foreground mb-2">Connected Players:</p>
-                        {players.names.map((name: string, i: number) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-green-500" />
-                            <span>{name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-
-          {/* Log Preview */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">LOG PREVIEW</h2>
-              <Button variant="outline" size="sm" onClick={() => {
-                // Navigate to logs tab
-                const tabsList = document.querySelector('[value="logs"]') as HTMLButtonElement
-                if (tabsList) tabsList.click()
-              }}>
-                ▼ Expand View
-              </Button>
-            </div>
-            <Card>
-              <CardContent className="p-4">
-                {status !== 'running' ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    Server must be running to view logs
-                  </div>
-                ) : logs.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    No logs yet. Waiting for container output...
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-sm text-muted-foreground space-y-1 font-mono mb-3">
-                      {(logsPaused ? logs.slice(-5) : logs.slice(-5)).map((log, index) => {
-                        const timestamp = new Date(log.timestamp).toLocaleTimeString('en-US', {
-                          hour12: false,
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        });
-                        const streamColor = log.stream === 'stderr' ? 'text-error' : '';
-                        return (
-                          <div key={`${log.timestamp}-${index}`} className={streamColor}>
-                            [{timestamp}] {log.message}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-2 items-center justify-center pt-2 border-t">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLogsAutoScroll(!logsAutoScroll)}
-                        className="text-xs"
-                      >
-                        Auto-scroll {logsAutoScroll ? '✓' : ''}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLogsPaused(!logsPaused)}
-                        className="text-xs"
-                      >
-                        {logsPaused ? 'Resume' : 'Pause'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => clearLogs()}
-                        className="text-xs"
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* RCON Preview */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">RCON PREVIEW</h2>
-              <Button variant="outline" size="sm" onClick={() => {
-                const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
-                if (tabsList) tabsList.click()
-              }}>
-                ▼ Expand View
-              </Button>
-            </div>
-            <Card>
-              <CardContent className="p-4">
-                {status !== 'running' ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    Server must be running to use RCON
-                  </div>
-                ) : rconHistory.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    No RCON commands yet. Open the RCON tab to interact with your server.
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-sm text-muted-foreground space-y-2 font-mono mb-3">
-                      {rconHistory.slice(-3).map((entry, index) => (
-                        <div key={`${entry.timestamp}-${index}`} className="space-y-1">
-                          <div className="text-primary">
-                            &gt; {entry.command}
-                          </div>
-                          <div className="pl-4">
-                            {entry.response}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2 items-center justify-center pt-2 border-t">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
-                          if (tabsList) tabsList.click()
-                        }}
-                        className="text-xs"
-                      >
-                        History ▲▼
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
-                          if (tabsList) tabsList.click()
-                        }}
-                        className="text-xs"
-                      >
-                        Quick Commands ▼
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={handleRestart}
-                disabled={status !== 'running' || restartContainerMutation.isPending}
-              >
-                {restartContainerMutation.isPending ? 'Restarting...' : 'Restart Server'}
-              </Button>
-              <Button variant="outline" disabled>Save World (TODO)</Button>
-              <Button variant="outline" disabled>Backup Now</Button>
-              <Button variant="outline" disabled>Broadcast Message</Button>
-              <Button variant="outline" disabled>View Players</Button>
-              <Button
-                variant="outline"
-                className="text-error hover:text-error"
-                onClick={handleStop}
-                disabled={stopServerMutation.isPending || status !== 'running'}
-              >
-                {stopServerMutation.isPending ? 'Stopping...' : 'Emergency Stop'}
-              </Button>
-            </div>
-          </div>
+          <ServerOverview
+            server={{
+              id: serverId,
+              name: serverName,
+              status: status,
+              health: server.health,
+              image_tag: server.image_tag,
+              config: server.config,
+              server_data_path: server.server_data_path,
+              game_port: server.game_port,
+              udp_port: server.udp_port,
+              player_count: server.player_count,
+              max_players: server.max_players,
+              players: server.players,
+            }}
+            metrics={metricsData?.metrics}
+            onPlayersClick={() => setShowPlayersDialog(true)}
+            onNavigateToRcon={() => {
+              const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
+              if (tabsList) tabsList.click()
+            }}
+          />
         </TabsContent>
 
         {/* Configuration Tab */}

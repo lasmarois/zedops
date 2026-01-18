@@ -2,6 +2,14 @@
 
 ## Starting a Milestone
 
+**IMPORTANT:** Before creating new planning files, check if files already exist in root
+(task_plan.md, findings.md, progress.md) for a **different milestone**. If so, archive them first:
+```bash
+mkdir -p planning-history/milestone-N-name/
+mv task_plan.md findings.md progress.md planning-history/milestone-N-name/
+```
+Never overwrite planning files from a previous milestone - always archive first.
+
 1. Use `/planning-with-files` skill to create planning files in root:
    - @task_plan.md - Phases and tasks
    - @findings.md - Research notes

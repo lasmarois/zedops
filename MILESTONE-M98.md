@@ -832,3 +832,139 @@ RCON_PORT=27027 ✅
 ```
 
 **Planning Files:** [planning-history/m9.8.42-port-config-fix/](planning-history/m9.8.42-port-config-fix/)
+
+---
+
+### M9.8.43 - Clickable Players Card ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** LOW (UX Enhancement)
+**Completed:** 2026-01-18
+
+**Feature Implemented:** Players card in ServerDetail is now interactive:
+- **Hover tooltip** (desktop): Shows compact player list with green status dots
+- **Click dialog** (mobile-friendly): Opens full dialog with player avatars and names
+- Card shows "Click to view" hint when players are connected
+
+**Files Modified:**
+- `frontend/src/pages/ServerDetail.tsx` - Added Dialog and Tooltip for players
+
+---
+
+### M9.8.44 - Server Overview Page Redesign ✅ COMPLETE
+**Status:** ✅ Deployed
+**Priority:** MEDIUM (UX Enhancement)
+**Completed:** 2026-01-18
+
+**Feature Implemented:** Complete redesign of server detail Overview tab with layout switcher.
+
+**Removed:**
+- Log Preview section (use Logs tab instead)
+- RCON Preview section (use RCON tab instead)
+
+**New Components Created:**
+- `MetricsRow` - 5 metric cards with sparkline placeholders
+- `ServerInfoCard` - Version, map, mods count, data path
+- `ConnectionCard` - Server IP:port with copy button, Steam direct connect
+- `HealthIndicators` - Container, RCON, Disk space status dots
+- `QuickActions` - Save World, Broadcast, Backup Now, RCON Console buttons
+- `RecentEvents` - Server-filtered audit logs (CompactAuditLog style)
+- `LayoutSwitcher` - Dropdown to switch between layouts
+- `ServerOverview` - Main component orchestrating all above
+
+**Layout Options:**
+1. **Grid** - Metrics row, 2-column grid below
+2. **Stacked** - Full-width vertical sections
+3. **Masonry** - CSS columns with auto-sizing
+4. **Sidebar** - Info/health pinned left, main content right (DEFAULT)
+
+**Files Created:**
+- `frontend/src/components/server-overview/*.tsx` (9 files)
+
+**Planning Files:** [planning-history/m98-41-43/](planning-history/m98-41-43/), root `task_plan.md`, `progress.md`, `findings.md`
+
+---
+
+## Placeholder Items - Future Implementation
+
+The following items from M9.8.44 are currently placeholders and need real data/functionality:
+
+### P1: Metrics Sparklines
+**Current State:** Visual placeholder bars (faded styling)
+**Required Implementation:**
+- Store metrics history in D1 database (CPU, Memory, Players per server)
+- 3-day retention period with automatic cleanup
+- 10-second polling intervals from agent
+- Sparkline component rendering last 30 mins in card, expandable to 24h/3d views
+- Affected metrics: CPU, Memory, Players (Uptime and Disk I/O don't need sparklines)
+
+**Decision Made:** D1 storage, 3-day retention
+
+---
+
+### P2: Health Indicators - RCON Status
+**Current State:** Shows "Unknown" / "Not checked"
+**Required Implementation:**
+- Periodic RCON ping to verify connectivity
+- Store RCON connection status in player stats collector (already has persistent connections)
+- Expose RCON health via API endpoint
+- Display: Healthy (green), Error (red), Unknown (gray)
+
+---
+
+### P3: Health Indicators - Disk Space
+**Current State:** Shows "Unknown"
+**Required Implementation:**
+- Leverage existing `server.volumesizes` endpoint (M9.8.38)
+- Calculate disk usage percentage from server volumes
+- Display thresholds: <75% healthy (green), 75-90% warning (orange), >90% error (red)
+- May need agent disk quota info for accurate percentage
+
+---
+
+### P4: Quick Actions - Save World
+**Current State:** Navigates to RCON tab
+**Required Implementation:**
+- Direct RCON command execution from button
+- Send `save` command via existing RCON infrastructure
+- Show loading state and success/error toast
+- No RCON tab navigation needed
+
+---
+
+### P5: Quick Actions - Broadcast Message
+**Current State:** Navigates to RCON tab
+**Required Implementation:**
+- Modal dialog to input message
+- Send `servermsg "message"` via RCON
+- Show loading state and success/error toast
+- Character limit validation
+
+---
+
+### P6: Quick Actions - Backup Now
+**Current State:** Disabled with "Coming soon" tooltip
+**Required Implementation:**
+- Backend: Backup API endpoint (agent-side tar/zip of data directory)
+- Frontend: Trigger backup, show progress, download link
+- Integration with future backup/restore milestone
+
+---
+
+### P7: Connection Card - Server IP
+**Current State:** Shows "your-server-ip" placeholder
+**Required Implementation:**
+- Expose agent's public IP via API (agent config or auto-detection)
+- Store in agent record or fetch dynamically
+- Display actual IP in connection card
+- Consider: Multiple IPs, NAT scenarios, manual override option
+
+---
+
+### Priority Order (Suggested)
+1. **P7** - Server IP (simple, high visibility)
+2. **P2** - RCON Status (leverages existing infrastructure)
+3. **P3** - Disk Space (leverages M9.8.38 endpoint)
+4. **P4** - Save World (simple RCON command)
+5. **P5** - Broadcast Message (RCON + modal)
+6. **P1** - Sparklines (requires D1 schema, agent changes)
+7. **P6** - Backup Now (requires full backup infrastructure)

@@ -768,6 +768,19 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Future Milestones (Ideas)
 
+### Metrics Sparklines (from M9.8.44)
+**Decision:** Store metrics history in D1 database with 3-day retention for sparkline graphs.
+
+**Scope:**
+- Store CPU, Memory, Players metrics in D1 (per-server, 10s intervals)
+- 3-day retention with automatic cleanup
+- Sparkline components for metrics cards (CPU, Memory, Players)
+- Visual trends showing last 30 mins in cards, expandable to 24h/3d views
+
+**Deferred from:** M9.8.44 (Server Overview Page Redesign) - placeholder UI only for now
+
+---
+
 ### Milestone 9: Mod Management UI
 - UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)
 - Mod browser (popular mods with descriptions)
@@ -814,7 +827,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 **Progress:** 12/14 core milestones complete (86%) 🎉
 
-**Active Milestone:** None - Ready for M10 or new features
+**Active Milestone:** M9.8.44 - Server Overview Page Redesign
 
 **Total to MVP:** ~12 weeks estimated → ~3 weeks actual (current pace: 75% under estimate!)
 
