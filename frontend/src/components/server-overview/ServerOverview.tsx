@@ -23,6 +23,7 @@ interface ServerOverviewProps {
     players?: string[] | null
     rcon_connected?: boolean | null // P2: RCON health status
   }
+  agentId: string // P4: Needed for RCON commands
   agentDefaultDataPath?: string | null
   agentPublicIp?: string | null // P7: Agent's public IP for connection card
   diskUsagePercent?: number | null // P3: Disk usage percentage for health indicator
@@ -52,6 +53,7 @@ const DEFAULT_LAYOUT: OverviewLayout = 'sidebar'
 
 export function ServerOverview({
   server,
+  agentId,
   agentDefaultDataPath,
   agentPublicIp,
   diskUsagePercent,
@@ -134,6 +136,8 @@ export function ServerOverview({
   const quickActions = (
     <QuickActions
       isRunning={isRunning}
+      agentId={agentId}
+      serverId={server.id}
       onNavigateToRcon={onNavigateToRcon}
     />
   )

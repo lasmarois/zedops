@@ -2927,4 +2927,106 @@ agents.get('/:id/images/defaults', async (c) => {
   }
 });
 
+/**
+ * POST /api/agents/:id/servers/:serverId/rcon/command
+ * Execute a one-shot RCON command (connect, execute, disconnect)
+ *
+ * Body: { command: string }
+ * Returns: { success: boolean, response?: string, error?: string }
+ */
+agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  // Parse request body
+  let body: { command?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { command } = body;
+  if (!command || typeof command !== 'string') {
+    return c.json({ error: 'Command is required' }, 400);
+  }
+
+  try {
+    // Get agent and server from database
+    const agent = await c.env.DB.prepare('SELECT name FROM agents WHERE id = ?')
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    const server = await c.env.DB.prepare(
+      'SELECT id, name, container_id, config FROM servers WHERE id = ? AND agent_id = ?'
+    )
+      .bind(serverId, agentId)
+      .first() as { id: string; name: string; container_id: string | null; config: string | null } | null;
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    if (!server.container_id) {
+      return c.json({ error: 'Server has no container' }, 400);
+    }
+
+    // Parse config to get RCON port and password
+    const config = server.config ? JSON.parse(server.config) : {};
+    const rconPort = parseInt(config.RCON_PORT || '27015', 10);
+    const rconPassword = config.RCON_PASSWORD;
+
+    if (!rconPassword) {
+      return c.json({ error: 'Server has no RCON password configured' }, 400);
+    }
+
+    // Get agent's Durable Object
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Forward request to Durable Object
+    const response = await agentStub.fetch(
+      `http://do/rcon/command`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverId,
+          containerId: server.container_id,
+          port: rconPort,
+          password: rconPassword,
+          command,
+        }),
+      }
+    );
+
+    const data = await response.json() as { success: boolean; response?: string; error?: string };
+
+    // Audit log the command
+    if (data.success) {
+      await logAuditEvent(c.env.DB, c, 'rcon.command', {
+        targetType: 'server',
+        targetId: serverId,
+        targetName: server.name,
+        details: { command },
+        actorId: user.id,
+      });
+    }
+
+    return c.json(data, response.ok ? 200 : (response.status as 400 | 500));
+  } catch (error) {
+    console.error('[Agents API] Error executing RCON command:', error);
+    return c.json({ error: 'Failed to execute RCON command' }, 500);
+  }
+});
+
 export { agents };

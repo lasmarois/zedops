@@ -947,13 +947,24 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### P4: Quick Actions - Save World
-**Current State:** Navigates to RCON tab
-**Required Implementation:**
-- Direct RCON command execution from button
-- Send `save` command via existing RCON infrastructure
-- Show loading state and success/error toast
-- No RCON tab navigation needed
+### P4: Quick Actions - Save World ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
+
+**Implementation:**
+- New REST endpoint `POST /api/agents/:id/servers/:serverId/rcon/command`
+- DO handler `handleOneShotRconCommand` - connects, executes, disconnects in one flow
+- Frontend `executeRconCommand()` API function
+- QuickActions "Save World" button with loading/success/error states
+- Button shows spinner while saving, checkmark on success, alert on error
+
+**Files Modified:**
+- `manager/src/routes/agents.ts` - Added RCON command REST endpoint
+- `manager/src/durable-objects/AgentConnection.ts` - Added one-shot RCON handler
+- `frontend/src/lib/api.ts` - Added executeRconCommand function
+- `frontend/src/components/server-overview/QuickActions.tsx` - Save button with state management
+- `frontend/src/components/server-overview/ServerOverview.tsx` - Pass agentId prop
+- `frontend/src/pages/ServerDetail.tsx` - Pass agentId to ServerOverview
 
 ---
 
@@ -1017,7 +1028,7 @@ The "Managed" badge on server cards was removed and replaced by the players coun
 1. ~~**P7** - Server IP~~ ✅ COMPLETE
 2. ~~**P2** - RCON Status~~ ✅ COMPLETE
 3. ~~**P3** - Disk Space~~ ✅ COMPLETE
-4. **P4** - Save World (simple RCON command)
+4. ~~**P4** - Save World~~ ✅ COMPLETE
 5. **P5** - Broadcast Message (RCON + modal)
 6. **P1** - Sparklines (requires D1 schema, agent changes)
 7. **P6** - Backup Now (requires full backup infrastructure)

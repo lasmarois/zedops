@@ -375,6 +375,7 @@ function ServerDetailContent() {
               players: server.players,
               rcon_connected: server.rcon_connected,
             }}
+            agentId={server.agent_id}
             agentPublicIp={server.agent_public_ip}
             diskUsagePercent={diskUsagePercent}
             storage={storageData?.sizes || null}

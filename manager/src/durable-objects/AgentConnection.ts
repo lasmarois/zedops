@@ -229,6 +229,11 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // P4: One-shot RCON command endpoint
+    if (url.pathname === "/rcon/command" && request.method === "POST") {
+      return this.handleOneShotRconCommand(request);
+    }
+
     return new Response("Not Found", { status: 404 });
   }
 
@@ -2903,6 +2908,118 @@ export class AgentConnection extends DurableObject {
         error: "Timeout waiting for agent response",
       }), {
         status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * P4: Handle one-shot RCON command
+   * Connects to RCON, executes command, disconnects, returns response
+   */
+  private async handleOneShotRconCommand(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Agent not registered",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    let body: { serverId: string; containerId: string; port: number; password: string; command: string };
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverId, containerId, port, password, command } = body;
+    if (!serverId || !containerId || !port || !password || !command) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Missing required fields: serverId, containerId, port, password, command",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[AgentConnection] One-shot RCON command for server ${serverId}: ${command}`);
+
+    try {
+      // Step 1: Connect to RCON
+      const connectReply = await this.sendMessageWithReply({
+        subject: "rcon.connect",
+        data: { serverId, containerId, port, password },
+      }, 30000);
+
+      if (!connectReply.data.success) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: connectReply.data.error || "RCON connect failed",
+        }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const sessionId = connectReply.data.sessionId;
+      console.log(`[AgentConnection] One-shot RCON session created: ${sessionId}`);
+
+      try {
+        // Step 2: Execute command
+        const commandReply = await this.sendMessageWithReply({
+          subject: "rcon.command",
+          data: { sessionId, command },
+        }, 30000);
+
+        // Step 3: Disconnect (fire and forget)
+        this.send({
+          subject: "rcon.disconnect",
+          data: { sessionId },
+        });
+
+        if (!commandReply.data.success) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: commandReply.data.error || "RCON command failed",
+          }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          response: commandReply.data.response || "",
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (commandError) {
+        // Disconnect on error
+        this.send({
+          subject: "rcon.disconnect",
+          data: { sessionId },
+        });
+        throw commandError;
+      }
+    } catch (error) {
+      console.error(`[AgentConnection] One-shot RCON command failed:`, error);
+      return new Response(JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "RCON command failed",
+      }), {
+        status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }

@@ -1328,3 +1328,41 @@ export async function getServerStorage(
 
   return response.json();
 }
+
+// ==================== RCON Commands ====================
+
+export interface RconCommandResponse {
+  success: boolean;
+  response?: string;
+  error?: string;
+}
+
+/**
+ * Execute a one-shot RCON command
+ * Connects, executes command, disconnects - all in one request
+ */
+export async function executeRconCommand(
+  agentId: string,
+  serverId: string,
+  command: string
+): Promise<RconCommandResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/rcon/command`,
+    {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ command }),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json() as RconCommandResponse;
+    throw new Error(data.error || 'RCON command failed');
+  }
+
+  return response.json();
+}
