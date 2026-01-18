@@ -361,6 +361,7 @@ function ServerDetailContent() {
               player_count: server.player_count,
               max_players: server.max_players,
               players: server.players,
+              rcon_connected: server.rcon_connected,
             }}
             agentPublicIp={server.agent_public_ip}
             metrics={metricsData?.metrics}

@@ -901,13 +901,23 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### P2: Health Indicators - RCON Status
-**Current State:** Shows "Unknown" / "Not checked"
-**Required Implementation:**
-- Periodic RCON ping to verify connectivity
-- Store RCON connection status in player stats collector (already has persistent connections)
-- Expose RCON health via API endpoint
-- Display: Healthy (green), Error (red), Unknown (gray)
+### P2: Health Indicators - RCON Status ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
+
+**Implementation:**
+- Agent PlayerStatsCollector now tracks `RCONConnected` boolean
+- Returns `rconConnected: true` when RCON commands succeed
+- Returns `rconConnected: false` when connection/command fails (shows "Error" status)
+- Propagated through: agent → manager DO → servers API → frontend → HealthIndicators
+
+**Files Modified:**
+- `agent/playerstats.go` - Added RCONConnected to PlayerStats struct
+- `manager/src/durable-objects/AgentConnection.ts` - Store rconConnected in player stats
+- `manager/src/routes/servers.ts` - Include rcon_connected in API responses
+- `frontend/src/lib/api.ts` - Added rcon_connected to Server interface
+- `frontend/src/components/server-overview/ServerOverview.tsx` - Pass to HealthIndicators
+- `frontend/src/pages/ServerDetail.tsx` - Include rcon_connected in server object
 
 ---
 
@@ -989,7 +999,7 @@ The "Managed" badge on server cards was removed and replaced by the players coun
 
 ### Priority Order (Suggested)
 1. ~~**P7** - Server IP~~ ✅ COMPLETE
-2. **P2** - RCON Status (leverages existing infrastructure)
+2. ~~**P2** - RCON Status~~ ✅ COMPLETE
 3. **P3** - Disk Space (leverages M9.8.38 endpoint)
 4. **P4** - Save World (simple RCON command)
 5. **P5** - Broadcast Message (RCON + modal)

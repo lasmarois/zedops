@@ -21,6 +21,7 @@ interface ServerOverviewProps {
     player_count?: number | null
     max_players?: number | null
     players?: string[] | null
+    rcon_connected?: boolean | null // P2: RCON health status
   }
   agentDefaultDataPath?: string | null
   agentPublicIp?: string | null // P7: Agent's public IP for connection card
@@ -112,6 +113,7 @@ export function ServerOverview({
     <HealthIndicators
       containerHealth={server.health || null}
       isRunning={isRunning}
+      rconConnected={server.rcon_connected ?? undefined}
     />
   )
 

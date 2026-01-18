@@ -17,12 +17,13 @@ import (
 
 // PlayerStats represents player information for a server
 type PlayerStats struct {
-	ServerID    string   `json:"serverId"`
-	ServerName  string   `json:"serverName"`
-	PlayerCount int      `json:"playerCount"`
-	MaxPlayers  int      `json:"maxPlayers"`
-	Players     []string `json:"players"`
-	LastUpdate  int64    `json:"lastUpdate"`
+	ServerID      string   `json:"serverId"`
+	ServerName    string   `json:"serverName"`
+	PlayerCount   int      `json:"playerCount"`
+	MaxPlayers    int      `json:"maxPlayers"`
+	Players       []string `json:"players"`
+	RCONConnected bool     `json:"rconConnected"` // P2: RCON health status
+	LastUpdate    int64    `json:"lastUpdate"`
 }
 
 // ServerRCONConfig holds RCON connection info for a server
@@ -138,9 +139,7 @@ func (psc *PlayerStatsCollector) collectAllStats() {
 	for _, config := range configs {
 		foundServers[config.ServerID] = true
 		stats := psc.collectServerStats(config)
-		if stats != nil {
-			allStats[config.ServerID] = stats
-		}
+		allStats[config.ServerID] = stats // P2: Always include stats (even with RCONConnected=false)
 	}
 
 	// Close connections for servers that are no longer running
@@ -254,7 +253,16 @@ func (psc *PlayerStatsCollector) discoverServers() ([]ServerRCONConfig, error) {
 func (psc *PlayerStatsCollector) collectServerStats(config ServerRCONConfig) *PlayerStats {
 	conn := psc.getOrCreateConnection(config)
 	if conn == nil {
-		return nil
+		// P2: Return stats with RCONConnected=false so frontend shows "Error"
+		return &PlayerStats{
+			ServerID:      config.ServerID,
+			ServerName:    config.ServerName,
+			PlayerCount:   0,
+			MaxPlayers:    config.MaxPlayers,
+			Players:       nil,
+			RCONConnected: false,
+			LastUpdate:    time.Now().Unix(),
+		}
 	}
 
 	// Execute "players" command
@@ -268,19 +276,29 @@ func (psc *PlayerStatsCollector) collectServerStats(config ServerRCONConfig) *Pl
 			delete(psc.connections, config.ServerID)
 		}
 		psc.mu.Unlock()
-		return nil
+		// P2: Return stats with RCONConnected=false so frontend shows "Error"
+		return &PlayerStats{
+			ServerID:      config.ServerID,
+			ServerName:    config.ServerName,
+			PlayerCount:   0,
+			MaxPlayers:    config.MaxPlayers,
+			Players:       nil,
+			RCONConnected: false,
+			LastUpdate:    time.Now().Unix(),
+		}
 	}
 
 	// Parse player list from response
 	count, players := parsePlayersResponse(response)
 
 	stats := &PlayerStats{
-		ServerID:    config.ServerID,
-		ServerName:  config.ServerName,
-		PlayerCount: count,
-		MaxPlayers:  config.MaxPlayers,
-		Players:     players,
-		LastUpdate:  time.Now().Unix(),
+		ServerID:      config.ServerID,
+		ServerName:    config.ServerName,
+		PlayerCount:   count,
+		MaxPlayers:    config.MaxPlayers,
+		Players:       players,
+		RCONConnected: true, // P2: RCON connection is healthy if we got here
+		LastUpdate:    time.Now().Unix(),
 	}
 
 	return stats

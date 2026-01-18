@@ -69,7 +69,7 @@ servers.get('/', async (c) => {
     }
 
     // Player stats map (serverId -> stats)
-    const playerStatsMap: Record<string, { playerCount: number; maxPlayers: number; players: string[] }> = {};
+    const playerStatsMap: Record<string, { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean }> = {};
 
     // Fetch containers and player stats from each online agent in parallel
     const fetchPromises = Array.from(onlineAgents.entries()).map(async ([agentName]) => {
@@ -95,13 +95,14 @@ servers.get('/', async (c) => {
         }
 
         if (playersResponse.ok) {
-          const playersData = await playersResponse.json() as { players?: Array<{ serverId: string; playerCount: number; maxPlayers: number; players: string[] }> };
+          const playersData = await playersResponse.json() as { players?: Array<{ serverId: string; playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean }> };
           if (playersData.players) {
             for (const stats of playersData.players) {
               playerStatsMap[stats.serverId] = {
                 playerCount: stats.playerCount,
                 maxPlayers: stats.maxPlayers,
                 players: stats.players,
+                rconConnected: stats.rconConnected ?? false, // P2: RCON health status
               };
             }
           }
@@ -136,6 +137,7 @@ servers.get('/', async (c) => {
       player_count: playerStatsMap[row.id]?.playerCount ?? null,
       max_players: playerStatsMap[row.id]?.maxPlayers ?? null,
       players: playerStatsMap[row.id]?.players ?? null,
+      rcon_connected: playerStatsMap[row.id]?.rconConnected ?? null, // P2: RCON health status
       data_exists: row.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: row.deleted_at,
       created_at: row.created_at,
@@ -199,7 +201,7 @@ servers.get('/:id', async (c) => {
 
     // Fetch container health and player stats if agent is online
     let health: string | undefined;
-    let playerStats: { playerCount: number; maxPlayers: number; players: string[] } | null = null;
+    let playerStats: { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean } | null = null;
     if (server.agent_status === 'online' && server.agent_name) {
       try {
         const id = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
@@ -223,7 +225,7 @@ servers.get('/:id', async (c) => {
 
         // M9.8.41: Fetch player stats for this server
         if (playersResponse.ok) {
-          const playersData = await playersResponse.json() as { success: boolean; stats?: { playerCount: number; maxPlayers: number; players: string[] } };
+          const playersData = await playersResponse.json() as { success: boolean; stats?: { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean } };
           if (playersData.stats) {
             playerStats = playersData.stats;
           }
@@ -257,6 +259,7 @@ servers.get('/:id', async (c) => {
       player_count: playerStats?.playerCount ?? null,
       max_players: playerStats?.maxPlayers ?? null,
       players: playerStats?.players ?? null,
+      rcon_connected: playerStats?.rconConnected ?? null, // P2: RCON health status
       data_exists: server.data_exists === 1, // Convert SQLite integer to boolean
       deleted_at: server.deleted_at,
       created_at: server.created_at,

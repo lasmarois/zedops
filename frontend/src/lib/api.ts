@@ -380,6 +380,7 @@ export interface Server {
   player_count: number | null;
   max_players: number | null;
   players: string[] | null;
+  rcon_connected?: boolean | null; // P2: RCON health status
   data_exists: boolean;
   deleted_at: number | null;
   created_at: number;

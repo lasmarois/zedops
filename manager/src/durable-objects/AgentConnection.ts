@@ -56,6 +56,7 @@ export class AgentConnection extends DurableObject {
     playerCount: number;
     maxPlayers: number;
     players: string[];
+    rconConnected: boolean; // P2: RCON health status
     lastUpdate: number;
   }> = new Map(); // serverId -> player stats
 
@@ -674,6 +675,7 @@ export class AgentConnection extends DurableObject {
         playerCount: stats.playerCount || 0,
         maxPlayers: stats.maxPlayers || 32,
         players: stats.players || [],
+        rconConnected: stats.rconConnected ?? false, // P2: RCON health status
         lastUpdate: stats.lastUpdate || Math.floor(Date.now() / 1000),
       });
     }
@@ -703,6 +705,7 @@ export class AgentConnection extends DurableObject {
     playerCount: number;
     maxPlayers: number;
     players: string[];
+    rconConnected: boolean;
     lastUpdate: number;
   }> {
     return Array.from(this.playerStats.values());
@@ -717,6 +720,7 @@ export class AgentConnection extends DurableObject {
     playerCount: number;
     maxPlayers: number;
     players: string[];
+    rconConnected: boolean;
     lastUpdate: number;
   } | null {
     return this.playerStats.get(serverId) || null;
