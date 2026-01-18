@@ -11,7 +11,7 @@ import { RconTerminal } from "@/components/RconTerminal"
 import { ConfigurationDisplay } from "@/components/ConfigurationDisplay"
 import { ConfigurationEdit } from "@/components/ConfigurationEdit"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics, useUpdateServerConfig, useApplyServerConfig } from "@/hooks/useServers"
+import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics, useUpdateServerConfig, useApplyServerConfig, useServerStorage } from "@/hooks/useServers"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { useMoveProgress } from "@/hooks/useMoveProgress"
 import { RconHistoryProvider } from "@/contexts/RconHistoryContext"
@@ -61,6 +61,18 @@ function ServerDetailContent() {
     serverName: serverData?.server?.name || '',
     enabled: isMigrating && !!serverData?.server?.agent_id && !!serverData?.server?.name
   })
+
+  // P3: Fetch server storage for disk usage health indicator
+  const { data: storageData } = useServerStorage(
+    serverData?.server?.agent_id || null,
+    id || null,
+    !!serverData?.server?.agent_id && !!id
+  )
+
+  // P3: Calculate disk usage percentage from storage data
+  const diskUsagePercent = storageData?.sizes?.diskTotalBytes && storageData.sizes.diskTotalBytes > 0
+    ? Math.round((storageData.sizes.diskUsedBytes || 0) / storageData.sizes.diskTotalBytes * 100)
+    : null
 
   // Confirmation dialogs state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -364,6 +376,8 @@ function ServerDetailContent() {
               rcon_connected: server.rcon_connected,
             }}
             agentPublicIp={server.agent_public_ip}
+            diskUsagePercent={diskUsagePercent}
+            storage={storageData?.sizes || null}
             metrics={metricsData?.metrics}
             onPlayersClick={() => setShowPlayersDialog(true)}
             onNavigateToRcon={() => {

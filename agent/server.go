@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -917,10 +918,13 @@ type ServerVolumeSizesRequest struct {
 
 // ServerVolumeSizes represents the storage usage for a server
 type ServerVolumeSizes struct {
-	BinBytes   int64  `json:"binBytes"`
-	DataBytes  int64  `json:"dataBytes"`
-	TotalBytes int64  `json:"totalBytes"`
-	MountPoint string `json:"mountPoint,omitempty"`
+	BinBytes       int64  `json:"binBytes"`
+	DataBytes      int64  `json:"dataBytes"`
+	TotalBytes     int64  `json:"totalBytes"`
+	MountPoint     string `json:"mountPoint,omitempty"`
+	DiskTotalBytes int64  `json:"diskTotalBytes,omitempty"` // Total capacity of the disk
+	DiskUsedBytes  int64  `json:"diskUsedBytes,omitempty"`  // Used bytes on the disk
+	DiskFreeBytes  int64  `json:"diskFreeBytes,omitempty"`  // Free bytes on the disk
 }
 
 // ServerVolumeSizesResponse represents the response to a server.volumesizes message
@@ -948,11 +952,26 @@ func GetServerVolumeSizes(serverName, dataPath string) (*ServerVolumeSizes, erro
 		return nil, fmt.Errorf("failed to calculate data size: %w", err)
 	}
 
+	// Get disk capacity using statfs
+	var diskTotal, diskUsed, diskFree int64
+	var statfs syscall.Statfs_t
+	if err := syscall.Statfs(dataPath, &statfs); err == nil {
+		// statfs.Blocks is total blocks, Bfree is free blocks, Bavail is available to non-root
+		diskTotal = int64(statfs.Blocks) * int64(statfs.Bsize)
+		diskFree = int64(statfs.Bavail) * int64(statfs.Bsize) // Use Bavail for available to users
+		diskUsed = diskTotal - int64(statfs.Bfree)*int64(statfs.Bsize)
+	} else {
+		log.Printf("Warning: failed to get disk stats for %s: %v", dataPath, err)
+	}
+
 	return &ServerVolumeSizes{
-		BinBytes:   binSize,
-		DataBytes:  dataSize,
-		TotalBytes: binSize + dataSize,
-		MountPoint: dataPath,
+		BinBytes:       binSize,
+		DataBytes:      dataSize,
+		TotalBytes:     binSize + dataSize,
+		MountPoint:     dataPath,
+		DiskTotalBytes: diskTotal,
+		DiskUsedBytes:  diskUsed,
+		DiskFreeBytes:  diskFree,
 	}, nil
 }
 

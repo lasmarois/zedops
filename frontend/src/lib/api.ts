@@ -1288,6 +1288,9 @@ export interface ServerStorageSizes {
   dataBytes: number;
   totalBytes: number;
   mountPoint?: string;
+  diskTotalBytes?: number;  // Total capacity of the disk
+  diskUsedBytes?: number;   // Used bytes on the disk
+  diskFreeBytes?: number;   // Free bytes on the disk
 }
 
 export interface ServerStorageResponse {

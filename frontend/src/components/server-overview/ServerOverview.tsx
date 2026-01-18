@@ -25,6 +25,16 @@ interface ServerOverviewProps {
   }
   agentDefaultDataPath?: string | null
   agentPublicIp?: string | null // P7: Agent's public IP for connection card
+  diskUsagePercent?: number | null // P3: Disk usage percentage for health indicator
+  storage?: {  // P3: Full storage data for health indicator details
+    binBytes: number
+    dataBytes: number
+    totalBytes: number
+    mountPoint?: string
+    diskTotalBytes?: number
+    diskUsedBytes?: number
+    diskFreeBytes?: number
+  } | null
   metrics?: {
     uptime?: string
     cpuPercent?: number
@@ -44,6 +54,8 @@ export function ServerOverview({
   server,
   agentDefaultDataPath,
   agentPublicIp,
+  diskUsagePercent,
+  storage,
   metrics,
   onPlayersClick,
   onNavigateToRcon,
@@ -114,6 +126,8 @@ export function ServerOverview({
       containerHealth={server.health || null}
       isRunning={isRunning}
       rconConnected={server.rcon_connected ?? undefined}
+      diskUsagePercent={diskUsagePercent ?? undefined}
+      storage={storage ?? undefined}
     />
   )
 

@@ -921,13 +921,29 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### P3: Health Indicators - Disk Space
-**Current State:** Shows "Unknown"
-**Required Implementation:**
-- Leverage existing `server.volumesizes` endpoint (M9.8.38)
-- Calculate disk usage percentage from server volumes
+### P3: Health Indicators - Disk Space ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
+
+**Implementation:**
+- Extended agent `ServerVolumeSizes` struct with disk capacity fields (`DiskTotalBytes`, `DiskUsedBytes`, `DiskFreeBytes`)
+- Agent now calls `syscall.Statfs` to get disk capacity for the server's data path
+- Frontend calculates disk usage percentage: `(diskUsedBytes / diskTotalBytes) * 100`
 - Display thresholds: <75% healthy (green), 75-90% warning (orange), >90% error (red)
-- May need agent disk quota info for accurate percentage
+- HealthIndicators card now shows expanded disk details:
+  - bin/ size
+  - data/ size
+  - Server Total
+  - Disk Capacity (used / total)
+  - Mount point
+
+**Files Modified:**
+- `agent/server.go` - Added syscall import, extended struct, added Statfs call
+- `frontend/src/lib/api.ts` - Added disk capacity fields to ServerStorageSizes
+- `frontend/src/hooks/useServers.ts` - No changes needed (useServerStorage already returns full data)
+- `frontend/src/pages/ServerDetail.tsx` - Added useServerStorage hook, calculates percentage, passes storage to ServerOverview
+- `frontend/src/components/server-overview/ServerOverview.tsx` - Added storage prop, passes to HealthIndicators
+- `frontend/src/components/server-overview/HealthIndicators.tsx` - Added StorageInfo interface, formatBytes helper, expanded disk space section
 
 ---
 
@@ -1000,7 +1016,7 @@ The "Managed" badge on server cards was removed and replaced by the players coun
 ### Priority Order (Suggested)
 1. ~~**P7** - Server IP~~ ✅ COMPLETE
 2. ~~**P2** - RCON Status~~ ✅ COMPLETE
-3. **P3** - Disk Space (leverages M9.8.38 endpoint)
+3. ~~**P3** - Disk Space~~ ✅ COMPLETE
 4. **P4** - Save World (simple RCON command)
 5. **P5** - Broadcast Message (RCON + modal)
 6. **P1** - Sparklines (requires D1 schema, agent changes)
