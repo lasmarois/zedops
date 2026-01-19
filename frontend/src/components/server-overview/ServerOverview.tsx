@@ -123,6 +123,7 @@ export function ServerOverview({
       hostname={agentHostname}
       gamePort={server.game_port}
       udpPort={server.udp_port}
+      serverPassword={config.SERVER_PASSWORD || null}
     />
   )
 
