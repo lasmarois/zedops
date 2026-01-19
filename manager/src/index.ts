@@ -61,11 +61,9 @@ app.get('/api/agent/version', async (c) => {
   return c.json({
     version: LATEST_AGENT_VERSION,
     downloadUrls: {
+      // Linux only - agent uses syscall.Statfs which is Linux-specific
       'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-linux-amd64`,
       'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-linux-arm64`,
-      'darwin-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-darwin-amd64`,
-      'darwin-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-darwin-arm64`,
-      'windows-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-windows-amd64.exe`,
     },
   });
 });

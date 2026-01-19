@@ -31,8 +31,8 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
 
-          # Build for each platform
-          platforms=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+          # Build for Linux only (uses syscall.Statfs which is Linux-specific)
+          platforms=("linux/amd64" "linux/arm64")
 
           mkdir -p bin
 
@@ -40,10 +40,6 @@ jobs:
             GOOS="${platform%/*}"
             GOARCH="${platform#*/}"
             output="bin/zedops-agent-${GOOS}-${GOARCH}"
-
-            if [ "$GOOS" = "windows" ]; then
-              output="${output}.exe"
-            fi
 
             echo "Building for ${GOOS}/${GOARCH}..."
             CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
