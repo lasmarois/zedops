@@ -21,6 +21,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { ErrorDialog } from "@/components/ui/error-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ServerOverview } from "@/components/server-overview"
+import { PerformanceTab } from "@/components/performance"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -47,6 +48,9 @@ function ServerDetailContent() {
 
   // M9.8.31: Track if data migration is in progress
   const [isMigrating, setIsMigrating] = useState(false)
+
+  // P2: Controlled tab state for programmatic navigation
+  const [activeTab, setActiveTab] = useState('overview')
 
   // Fetch server metrics (must be called unconditionally - hooks rule)
   const { data: metricsData } = useServerMetrics(
@@ -347,7 +351,7 @@ function ServerDetailContent() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="config">Configuration</TabsTrigger>
@@ -382,10 +386,8 @@ function ServerDetailContent() {
             storage={storageData?.sizes || null}
             metrics={metricsData?.metrics}
             onPlayersClick={() => setShowPlayersDialog(true)}
-            onNavigateToRcon={() => {
-              const tabsList = document.querySelector('[value="rcon"]') as HTMLButtonElement
-              if (tabsList) tabsList.click()
-            }}
+            onNavigateToRcon={() => setActiveTab('rcon')}
+            onNavigateToPerformance={() => setActiveTab('performance')}
           />
         </TabsContent>
 
@@ -527,19 +529,10 @@ function ServerDetailContent() {
 
         {/* Performance Tab */}
         <TabsContent value="performance" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Server Performance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Performance graphs and metrics will be available in a future update.
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Planned features: CPU usage (24h), Memory usage (24h), Player count (24h).
-              </p>
-            </CardContent>
-          </Card>
+          <PerformanceTab
+            serverId={serverId}
+            isRunning={status === 'running'}
+          />
         </TabsContent>
 
         {/* Backups Tab */}

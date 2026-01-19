@@ -47,6 +47,7 @@ interface ServerOverviewProps {
   } | null
   onPlayersClick: () => void
   onNavigateToRcon: () => void
+  onNavigateToPerformance: () => void
 }
 
 const LAYOUT_STORAGE_KEY = 'zedops-server-overview-layout'
@@ -63,6 +64,7 @@ export function ServerOverview({
   metrics,
   onPlayersClick,
   onNavigateToRcon,
+  onNavigateToPerformance,
 }: ServerOverviewProps) {
   // Layout state with localStorage persistence
   const [layout, setLayout] = useState<OverviewLayout>(() => {
@@ -106,6 +108,7 @@ export function ServerOverview({
       playerNames={playerNames}
       isRunning={isRunning}
       onPlayersClick={onPlayersClick}
+      onNavigateToPerformance={onNavigateToPerformance}
     />
   )
 

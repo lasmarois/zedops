@@ -928,12 +928,15 @@ export interface MetricsHistoryResponse {
   points: MetricsHistoryPoint[];
 }
 
+/** Valid time ranges for metrics history */
+export type MetricsTimeRange = '30m' | '3h' | '12h' | '24h' | '3d';
+
 /**
- * Fetch server metrics history for sparklines
+ * Fetch server metrics history for sparklines and Performance tab
  */
 export async function fetchServerMetricsHistory(
   serverId: string,
-  range: '30m' | '24h' | '3d' = '30m'
+  range: MetricsTimeRange = '30m'
 ): Promise<MetricsHistoryResponse> {
   const response = await fetch(
     `${API_BASE}/api/servers/${serverId}/metrics/history?range=${range}`,

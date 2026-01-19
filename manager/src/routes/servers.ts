@@ -280,12 +280,18 @@ servers.get('/:id', async (c) => {
 
 /**
  * GET /api/servers/:serverId/metrics/history
- * Get metrics history for sparkline display
+ * Get metrics history for Performance tab and sparklines
  *
  * Query params:
- *   - range: '30m' | '24h' | '3d' (default: '30m')
+ *   - range: '30m' | '3h' | '12h' | '24h' | '3d' (default: '30m')
  *
- * Returns: Array of metrics points ordered by timestamp DESC
+ * Downsampling strategy:
+ *   - 30m, 3h: raw data (10s intervals)
+ *   - 12h: 1-minute averages (~720 points)
+ *   - 24h: 5-minute averages (~288 points)
+ *   - 3d: 15-minute averages (~288 points)
+ *
+ * Returns: Array of metrics points in chronological order
  * Permission: User must have view access to server
  */
 servers.get('/:serverId/metrics/history', async (c) => {
@@ -296,13 +302,23 @@ servers.get('/:serverId/metrics/history', async (c) => {
   // Calculate time range
   const now = Math.floor(Date.now() / 1000);
   let fromTimestamp: number;
+  let downsampleInterval: number = 0; // 0 = no downsampling
 
   switch (range) {
+    case '3h':
+      fromTimestamp = now - (3 * 60 * 60);
+      break;
+    case '12h':
+      fromTimestamp = now - (12 * 60 * 60);
+      downsampleInterval = 60; // 1-minute averages
+      break;
     case '24h':
       fromTimestamp = now - (24 * 60 * 60);
+      downsampleInterval = 300; // 5-minute averages
       break;
     case '3d':
       fromTimestamp = now - (3 * 24 * 60 * 60);
+      downsampleInterval = 900; // 15-minute averages
       break;
     case '30m':
     default:
@@ -332,59 +348,63 @@ servers.get('/:serverId/metrics/history', async (c) => {
     }
 
     // Fetch metrics history
-    // For longer ranges, downsample by aggregating (average over intervals)
-    let query: string;
-    let limit: number;
+    let points: { timestamp: number; cpu: number | null; memory: number | null; players: number | null }[];
 
-    if (range === '30m') {
-      // Return all points for 30 minutes (max ~180 points at 10s intervals)
-      query = `
-        SELECT timestamp, cpu_percent, memory_percent, player_count
+    if (downsampleInterval > 0) {
+      // Use SQLite GROUP BY for downsampling (bucket by interval)
+      const query = `
+        SELECT
+          (timestamp / ?) * ? as bucket_timestamp,
+          AVG(cpu_percent) as cpu_percent,
+          AVG(memory_percent) as memory_percent,
+          ROUND(AVG(player_count)) as player_count
         FROM server_metrics_history
         WHERE server_id = ? AND timestamp >= ?
-        ORDER BY timestamp DESC
-        LIMIT 200
+        GROUP BY bucket_timestamp
+        ORDER BY bucket_timestamp ASC
       `;
-      limit = 200;
-    } else if (range === '24h') {
-      // Downsample to ~5 minute averages (288 points max)
-      // SQLite doesn't have great aggregation, so we'll return all and let frontend handle
-      query = `
-        SELECT timestamp, cpu_percent, memory_percent, player_count
-        FROM server_metrics_history
-        WHERE server_id = ? AND timestamp >= ?
-        ORDER BY timestamp DESC
-        LIMIT 1000
-      `;
-      limit = 1000;
+
+      const result = await c.env.DB.prepare(query)
+        .bind(downsampleInterval, downsampleInterval, serverId, fromTimestamp)
+        .all<{
+          bucket_timestamp: number;
+          cpu_percent: number | null;
+          memory_percent: number | null;
+          player_count: number | null;
+        }>();
+
+      points = (result.results || []).map(row => ({
+        timestamp: row.bucket_timestamp,
+        cpu: row.cpu_percent,
+        memory: row.memory_percent,
+        players: row.player_count,
+      }));
     } else {
-      // 3d - return sampled data
-      query = `
+      // Raw data for short ranges (30m, 3h)
+      const query = `
         SELECT timestamp, cpu_percent, memory_percent, player_count
         FROM server_metrics_history
         WHERE server_id = ? AND timestamp >= ?
-        ORDER BY timestamp DESC
+        ORDER BY timestamp ASC
         LIMIT 2000
       `;
-      limit = 2000;
+
+      const result = await c.env.DB.prepare(query)
+        .bind(serverId, fromTimestamp)
+        .all<{
+          timestamp: number;
+          cpu_percent: number | null;
+          memory_percent: number | null;
+          player_count: number | null;
+        }>();
+
+      points = (result.results || []).map(row => ({
+        timestamp: row.timestamp,
+        cpu: row.cpu_percent,
+        memory: row.memory_percent,
+        players: row.player_count,
+      }));
     }
-
-    const result = await c.env.DB.prepare(query)
-      .bind(serverId, fromTimestamp)
-      .all<{
-        timestamp: number;
-        cpu_percent: number | null;
-        memory_percent: number | null;
-        player_count: number | null;
-      }>();
-
-    // Transform for frontend
-    const points = (result.results || []).map(row => ({
-      timestamp: row.timestamp,
-      cpu: row.cpu_percent,
-      memory: row.memory_percent,
-      players: row.player_count,
-    })).reverse(); // Reverse to chronological order
 
     return c.json({
       success: true,

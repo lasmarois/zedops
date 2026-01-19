@@ -21,6 +21,7 @@ import {
   fetchImageDefaults,
   getServerStorage,
   type CreateServerRequest,
+  type MetricsTimeRange,
 } from '../lib/api';
 import { getToken } from '../lib/auth';
 import { useUser } from '../contexts/UserContext';
@@ -489,14 +490,14 @@ export function useServerStorage(
 }
 
 /**
- * Hook to fetch metrics history for sparkline display
+ * Hook to fetch metrics history for sparkline display and Performance tab
  * @param serverId - Server ID to fetch history for
- * @param range - Time range: '30m' | '24h' | '3d'
+ * @param range - Time range: '30m' | '3h' | '12h' | '24h' | '3d'
  * @param enabled - Whether to enable the query (e.g., only for running servers)
  */
 export function useServerMetricsHistory(
   serverId: string | null,
-  range: '30m' | '24h' | '3d' = '30m',
+  range: MetricsTimeRange = '30m',
   enabled: boolean = true
 ) {
   const { isAuthenticated } = useUser();
