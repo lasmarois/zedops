@@ -766,38 +766,69 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ---
 
-## Future Milestones (Ideas)
+## Milestone 12: Backup & Restore ⏳ Planned
 
-### Metrics Sparklines (from M9.8.44)
-**Decision:** Store metrics history in D1 database with 3-day retention for sparkline graphs.
+**Goal:** Server data backup and restore functionality
 
-**Scope:**
-- Store CPU, Memory, Players metrics in D1 (per-server, 10s intervals)
-- 3-day retention with automatic cleanup
-- Sparkline components for metrics cards (CPU, Memory, Players)
-- Visual trends showing last 30 mins in cards, expandable to 24h/3d views
+**Duration:** 1-2 weeks
 
-**Deferred from:** M9.8.44 (Server Overview Page Redesign) - placeholder UI only for now
+**Deliverables:**
+
+### Phase 1: Manual Backup (P6)
+- "Backup Now" button in Quick Actions
+- Agent creates tar.gz of server data directory
+- Progress indicator during backup
+- Download link for completed backup
+- Backup stored locally on agent host
+
+### Phase 2: Backup Management
+- List of available backups per server
+- Backup metadata (size, timestamp, game version)
+- Delete old backups
+- Backup naming/notes
+
+### Phase 3: Restore
+- Restore from backup (stops server, replaces data, restarts)
+- Confirmation dialog with warnings
+- Progress indicator during restore
+- Rollback on failure
+
+### Phase 4: Scheduled Backups (Optional)
+- Configurable backup schedule (daily, before restart, etc.)
+- Retention policy (keep last N backups)
+- Auto-cleanup of old backups
+
+**Success Criteria:**
+- User can trigger manual backup from UI
+- Backup completes and is downloadable
+- User can restore server from backup
+- Backups don't impact running server (copy while running)
+
+**Out of Scope (Future):**
+- Cloud storage (S3, R2, etc.)
+- Cross-agent backup transfer
+- Incremental backups
+
+**Dependencies:** Milestone 9.8 (Polish & Production Readiness)
+
+**Planning:** *(not started)*
 
 ---
 
-### Milestone 9: Mod Management UI
+## Future Milestones (Ideas)
+
+### Mod Management UI
 - UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)
 - Mod browser (popular mods with descriptions)
 - One-click mod installation
 
-### Milestone 10: Server Metrics & Monitoring
-- Server-level CPU, memory, disk usage (per-container)
-- UI dashboards with charts
+### Server Metrics & Monitoring (Enhanced)
+- ~~Metrics sparklines~~ ✅ Complete (P1)
+- ~~Performance tab with charts~~ ✅ Complete (P2)
 - Alerts for resource thresholds
-- Historical metrics storage
+- Email/Discord notifications
 
-### Milestone 11: Backup & Restore
-- Automated server backups
-- Backup schedule configuration
-- One-click restore from backup
-
-### Milestone 12: Agent Auto-Update
+### Agent Auto-Update
 - Manager notifies agents of new version
 - Agent downloads and replaces binary
 - Graceful restart without losing connections
@@ -822,12 +853,15 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | M9.5: Bridge Design to Functionality | 4-6 hours | ~2 hours | ✅ Complete |
 | M9.6-9.7: UI/UX Consistency Fixes | 2-4 hours | ~3 hours | ✅ Complete |
 | M9.8: Polish & Production Readiness | 1-2 weeks | ~4 days | ✅ Complete |
+| P1: Metrics Sparklines | 1-2 days | ~4 hours | ✅ Complete |
+| P2: Performance Tab | 1-2 days | ~2 hours | ✅ Complete |
 | M10: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
 | M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
+| M12: Backup & Restore | 1-2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 12/14 core milestones complete (86%) 🎉
+**Progress:** 14/17 milestones complete (82%) 🎉
 
-**Active Milestone:** M9.8.44 - Server Overview Page Redesign
+**Active Milestone:** None - ready for M10, M11, or M12
 
 **Total to MVP:** ~12 weeks estimated → ~3 weeks actual (current pace: 75% under estimate!)
 
@@ -837,7 +871,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** None - All M9.x milestones complete! Ready for M10 or new features.
+**Active Milestone:** None - Ready for M10, M11, or M12
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -869,13 +903,21 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
   - ✅ 37 sub-milestones complete (~4 days)
   - Server status, container health, disk metrics, agent logs, UI polish
   - See [MILESTONE-M98.md](MILESTONE-M98.md) for details
+- ✅ **P1 - Metrics Sparklines** (2026-01-18)
+  - D1 storage with 3-day retention, 10s intervals
+  - Sparklines on Overview cards (CPU, Memory, Players)
+- ✅ **P2 - Performance Tab** (2026-01-18)
+  - Recharts interactive charts (CPU, Memory, Players)
+  - Time range selector (30m, 3h, 12h, 24h, 3d)
+  - API downsampling for larger ranges
 
-**Deferred:**
+**Planned:**
 - **Milestone 10** - Agent Deployment & Polish
 - **Milestone 11** - Testing & Verification
+- **Milestone 12** - Backup & Restore
 - **Documentation** - Comprehensive API and user documentation
 
-**Next Steps:** M9.8.38 (Server Volume Sizes) or M10 (Agent Deployment)
+**Next Steps:** Choose from M10 (Agent Deployment), M11 (Testing), or M12 (Backup & Restore)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
@@ -886,5 +928,5 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ### Reminders
 - ✅ ~~ability to remove server data~~ (Implemented via purge in M9.8.7)
-- edit existing server settings
+- ✅ ~~edit existing server settings~~ (Implemented in M9.8.27-30)
 - ✅ ~~remove the sync status button?~~ (Addressed in M9.8.13 - moved to small icon)
