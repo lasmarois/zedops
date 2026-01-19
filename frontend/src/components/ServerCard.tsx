@@ -446,6 +446,15 @@ export function ServerCard({
                     {displayStatus.label}
                   </StatusBadge>
                   <span className="font-semibold truncate">{server.name}</span>
+                  {isManaged ? (
+                    <Badge className="text-xs bg-primary/10 text-primary border-primary/20 shrink-0">
+                      Managed
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs border-2 text-muted-foreground shrink-0">
+                      Unmanaged
+                    </Badge>
+                  )}
                   <span className="text-sm text-muted-foreground truncate hidden sm:inline">
                     {showAgent && <span>{server.agent_name} • </span>}
                     {imageTag} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}

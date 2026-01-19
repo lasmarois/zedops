@@ -1014,19 +1014,24 @@ The following items from M9.8.44 are currently placeholders and need real data/f
 
 ---
 
-### M9.8.45 - Restore Managed Badge on Server Cards
-**Status:** 📋 Not Started
+### M9.8.46 - Restore Managed Badge on Server Cards ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** LOW (UI Polish)
+**Completed:** 2026-01-18
 
-**Issue:**
-The "Managed" badge on server cards was removed and replaced by the players count display. Need to restore the badge while keeping the players count.
+**Issue Fixed:**
+The "Managed" badge was missing from the compact layout in ServerCard. Now shows in both layouts.
 
-**Proposed Fix:**
-- Show both "Managed" badge AND players count on server cards
-- Badge indicates ZedOps-managed vs unmanaged containers
-- Players count shows alongside status info
+**Solution:**
+- Added Managed/Unmanaged badge to compact layout (ServerCard.tsx lines 449-457)
+- Badge shows between server name and info text
+- Added `shrink-0` to prevent badge truncation on small screens
+- Expandable layout already had the badge (unchanged)
 
-**Location:** `frontend/src/components/ServerCard.tsx` or `AgentServerList.tsx`
+**Files Modified:**
+- `frontend/src/components/ServerCard.tsx` - Added badge to compact layout
+
+**Note:** Originally numbered M9.8.45 in this file, but M9.8.45 was used for "Inline Agent Configuration". Renumbered to M9.8.46.
 
 ---
 
