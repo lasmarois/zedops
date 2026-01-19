@@ -27,8 +27,6 @@ The agent runs **directly on the host**, NOT in a Docker container:
 ## Commands
 
 ```bash
-# Local development
-go run main.go --manager-url ws://localhost:8787/ws --name maestroserver
 
 # Build production binary
 ./scripts/build.sh  # Uses Docker for cross-compilation

@@ -59,7 +59,7 @@ export interface HostMetrics {
 export interface Agent {
   id: string;
   name: string;
-  status: 'online' | 'offline';
+  status: 'online' | 'offline' | 'pending';
   lastSeen: number;
   createdAt: number;
   publicIp?: string | null; // P7: Agent's public IP for server connection

@@ -465,8 +465,8 @@ export class AgentConnection extends DurableObject {
         return;
       }
 
-      // Generate agent ID
-      const agentId = crypto.randomUUID();
+      // Get agent ID from token (for pending agents) or generate new one (legacy support)
+      const agentId = (payload.agentId as string) || crypto.randomUUID();
 
       // Generate permanent token
       const permanentToken = await generatePermanentToken(
@@ -478,14 +478,30 @@ export class AgentConnection extends DurableObject {
       // Hash permanent token for storage
       const tokenHash = await hashToken(permanentToken);
 
-      // Store agent in D1
+      // Check if this is a pending agent (pre-registered via UI)
       const now = Math.floor(Date.now() / 1000);
-      await this.env.DB.prepare(
-        `INSERT INTO agents (id, name, token_hash, status, last_seen, created_at, metadata, public_ip)
-         VALUES (?, ?, ?, 'online', ?, ?, ?, ?)`
-      )
-        .bind(agentId, agentName, tokenHash, now, now, JSON.stringify({}), this.clientIp)
-        .run();
+      const existingAgent = await this.env.DB.prepare(
+        'SELECT id, status FROM agents WHERE id = ?'
+      ).bind(agentId).first();
+
+      if (existingAgent && existingAgent.status === 'pending') {
+        // Update pending agent to online
+        await this.env.DB.prepare(
+          `UPDATE agents SET token_hash = ?, status = 'online', last_seen = ?, public_ip = ? WHERE id = ?`
+        ).bind(tokenHash, now, this.clientIp, agentId).run();
+        console.log(`[AgentConnection] Pending agent activated: ${agentName} (${agentId})`);
+      } else if (!existingAgent) {
+        // Create new agent (legacy flow without UI pre-registration)
+        await this.env.DB.prepare(
+          `INSERT INTO agents (id, name, token_hash, status, last_seen, created_at, metadata, public_ip)
+           VALUES (?, ?, ?, 'online', ?, ?, ?, ?)`
+        ).bind(agentId, agentName, tokenHash, now, now, JSON.stringify({}), this.clientIp).run();
+        console.log(`[AgentConnection] New agent registered: ${agentName} (${agentId})`);
+      } else {
+        // Agent already exists and is not pending - reject
+        this.sendError("Agent already registered. Use permanent token to reconnect.");
+        return;
+      }
 
       // Mark as registered
       this.agentId = agentId;

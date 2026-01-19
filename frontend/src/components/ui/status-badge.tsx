@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 
 interface StatusBadgeProps {
-  variant: "success" | "warning" | "error" | "info" | "muted" | "starting"
+  variant: "success" | "warning" | "error" | "info" | "muted" | "starting" | "pending"
   children?: React.ReactNode
   className?: string
   size?: "sm" | "md" | "lg"
@@ -74,6 +74,7 @@ export function StatusBadge({
             "text-info": variant === "info",
             "text-muted-foreground": variant === "muted",
             "text-purple-400/70": variant === "starting",
+            "text-amber-400/70": variant === "pending",
           })}
         />
       </span>
@@ -102,6 +103,7 @@ export function StatusBadge({
           "bg-info/10 text-info ring-info/20": variant === "info",
           "bg-muted/10 text-muted-foreground ring-muted/20": variant === "muted",
           "bg-purple-400/5 text-purple-400/70 ring-purple-400/10": variant === "starting",
+          "bg-amber-400/5 text-amber-400/70 ring-amber-400/10": variant === "pending",
         },
         className
       )}

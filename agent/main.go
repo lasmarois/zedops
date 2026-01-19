@@ -16,10 +16,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Version is set at build time via ldflags
+var Version = "dev"
+
 var (
-	managerURL = flag.String("manager-url", "", "Manager WebSocket URL (e.g., ws://localhost:8787/ws)")
-	token      = flag.String("token", "", "Ephemeral token for registration (required on first run)")
-	agentName  = flag.String("name", "", "Agent name (default: hostname)")
+	managerURL  = flag.String("manager-url", "", "Manager WebSocket URL (e.g., ws://localhost:8787/ws)")
+	token       = flag.String("token", "", "Ephemeral token for registration (required on first run)")
+	agentName   = flag.String("name", "", "Agent name (default: hostname)")
+	showVersion = flag.Bool("version", false, "Print version and exit")
 )
 
 // volumeSizeCache holds cached volume sizes with expiry
@@ -50,6 +54,12 @@ type Agent struct {
 
 func main() {
 	flag.Parse()
+
+	// Handle --version flag
+	if *showVersion {
+		fmt.Printf("zedops-agent version %s\n", Version)
+		os.Exit(0)
+	}
 
 	// Initialize log capture early (before any logging)
 	// This captures all log output for streaming to manager
@@ -137,6 +147,11 @@ func main() {
 	// Run with automatic reconnection
 	log.Printf("Starting agent: %s", agent.agentName)
 	log.Printf("Manager URL: %s", agent.managerURL)
+	log.Printf("Agent version: %s", Version)
+
+	// Start auto-updater (checks every 6 hours)
+	updater := NewAutoUpdater(*managerURL)
+	updater.Start()
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
 		log.Fatal("Agent error:", err)

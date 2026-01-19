@@ -2,6 +2,7 @@
  * Agent list component - M9.8.15 redesigned with card grid layout
  */
 
+import { useState } from 'react';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../lib/api';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
@@ -11,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { InstallAgentDialog } from './InstallAgentDialog';
 
 interface AgentListProps {
   onSelectAgent: (agent: Agent) => void;
@@ -72,6 +74,7 @@ function ResourceMeter({
 
 export function AgentList({ onSelectAgent }: AgentListProps) {
   const { data, isLoading, error } = useAgents();
+  const [showInstallDialog, setShowInstallDialog] = useState(false);
 
   if (isLoading) {
     return (
@@ -120,6 +123,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
 
   const totalAgents = data?.count ?? 0;
   const onlineAgents = data?.agents.filter(a => a.status === 'online').length ?? 0;
+  const pendingAgents = data?.agents.filter(a => a.status === 'pending').length ?? 0;
 
   return (
     <div className="p-8 space-y-6">
@@ -134,7 +138,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
             Manage your connected infrastructure agents
           </p>
         </div>
-        <Button disabled title="Coming soon - Install agent via command line">
+        <Button onClick={() => setShowInstallDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Agent
         </Button>
@@ -150,8 +154,15 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
             {onlineAgents} online
           </span>
         </div>
+        {pendingAgents > 0 && (
+          <div>
+            <span className="text-amber-400/70">
+              {pendingAgents} pending
+            </span>
+          </div>
+        )}
         <div className="text-muted-foreground">
-          {totalAgents - onlineAgents} offline
+          {totalAgents - onlineAgents - pendingAgents} offline
         </div>
       </div>
 
@@ -180,18 +191,34 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {data?.agents.map((agent) => {
             const isOnline = agent.status === 'online';
+            const isPending = agent.status === 'pending';
             const metrics = agent.metadata?.metrics;
-            const lastSeen = formatDistanceToNow(new Date(agent.lastSeen * 1000), { addSuffix: true });
+            const lastSeen = agent.lastSeen
+              ? formatDistanceToNow(new Date(agent.lastSeen * 1000), { addSuffix: true })
+              : 'Never';
+
+            // Determine badge variant and icon based on status
+            const getBadgeProps = () => {
+              if (isPending) return { variant: 'pending' as const, icon: 'loader' as const, label: 'Awaiting Connection' };
+              if (isOnline) return { variant: 'success' as const, icon: 'pulse' as const, label: 'Online' };
+              return { variant: 'muted' as const, icon: 'cross' as const, label: 'Offline' };
+            };
+            const badgeProps = getBadgeProps();
+
+            // Determine border color
+            const borderClass = isPending
+              ? 'border-l-4 border-l-amber-400/50'
+              : isOnline
+                ? 'border-l-4 border-l-success'
+                : 'opacity-75 border-l-4 border-l-destructive';
 
             return (
               <Card
                 key={agent.id}
-                className={`transition-all duration-200 cursor-pointer hover:shadow-lg hover:scale-[1.02] ${
-                  isOnline
-                    ? 'border-l-4 border-l-success'
-                    : 'opacity-75 border-l-4 border-l-destructive'
-                }`}
-                onClick={() => onSelectAgent(agent)}
+                className={`transition-all duration-200 ${
+                  isPending ? '' : 'cursor-pointer hover:shadow-lg hover:scale-[1.02]'
+                } ${borderClass}`}
+                onClick={() => !isPending && onSelectAgent(agent)}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -199,17 +226,22 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                       <h3 className="text-lg font-semibold">{agent.name}</h3>
                     </div>
                     <StatusBadge
-                      variant={isOnline ? 'success' : 'muted'}
-                      icon={isOnline ? 'pulse' : 'cross'}
+                      variant={badgeProps.variant}
+                      icon={badgeProps.icon}
                     >
-                      {isOnline ? 'Online' : 'Offline'}
+                      {badgeProps.label}
                     </StatusBadge>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  {/* Metrics for online agents */}
-                  {isOnline && metrics ? (
+                  {/* Pending agent message */}
+                  {isPending ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">
+                      <p>Run the installation command on your server.</p>
+                      <p className="text-xs mt-2">The agent will appear here once connected.</p>
+                    </div>
+                  ) : isOnline && metrics ? (
                     <div className="space-y-2">
                       {/* CPU & Memory */}
                       <ResourceMeter
@@ -272,16 +304,22 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                     </div>
                   )}
 
-                  {/* Last Seen */}
-                  <div className="pt-3 border-t">
-                    <div className="text-xs text-muted-foreground">
-                      Last seen: {lastSeen}
+                  {/* Last Seen - hide for pending */}
+                  {!isPending && (
+                    <div className="pt-3 border-t">
+                      <div className="text-xs text-muted-foreground">
+                        Last seen: {lastSeen}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Click hint */}
+                  {/* Click hint - different for pending */}
                   <div className="text-xs text-muted-foreground text-center pt-2">
-                    {isOnline ? 'Click to view details →' : 'Click to view cached logs →'}
+                    {isPending
+                      ? 'Waiting for agent to connect...'
+                      : isOnline
+                        ? 'Click to view details →'
+                        : 'Click to view cached logs →'}
                   </div>
                 </CardContent>
               </Card>
@@ -289,6 +327,12 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
           })}
         </div>
       )}
+
+      {/* Install Agent Dialog */}
+      <InstallAgentDialog
+        open={showInstallDialog}
+        onOpenChange={setShowInstallDialog}
+      />
     </div>
   );
 }

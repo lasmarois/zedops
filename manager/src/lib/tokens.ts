@@ -11,8 +11,10 @@ import * as jose from 'jose';
 /**
  * Generate ephemeral token for agent registration
  * Valid for 1 hour
+ * Includes agentId for pre-registered pending agents
  */
 export async function generateEphemeralToken(
+  agentId: string,
   agentName: string,
   secret: string
 ): Promise<string> {
@@ -21,6 +23,7 @@ export async function generateEphemeralToken(
 
   const jwt = await new jose.SignJWT({
     type: 'ephemeral',
+    agentId,
     agentName,
   })
     .setProtectedHeader({ alg: 'HS256' })

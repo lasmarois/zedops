@@ -1,0 +1,84 @@
+name: Release Agent
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/agent-v}" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        working-directory: ./agent
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Build for each platform
+          platforms=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+
+          mkdir -p bin
+
+          for platform in "${platforms[@]}"; do
+            GOOS="${platform%/*}"
+            GOARCH="${platform#*/}"
+            output="bin/zedops-agent-${GOOS}-${GOARCH}"
+
+            if [ "$GOOS" = "windows" ]; then
+              output="${output}.exe"
+            fi
+
+            echo "Building for ${GOOS}/${GOARCH}..."
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+              -ldflags="-w -s -X main.Version=${VERSION}" \
+              -o "$output" \
+              .
+          done
+
+          ls -lh bin/
+
+      - name: Create checksums
+        working-directory: ./agent/bin
+        run: |
+          sha256sum zedops-agent-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Agent v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## ZedOps Agent v${{ steps.version.outputs.VERSION }}
+
+            ### Installation (Linux)
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/lasmarois/zedops/main/agent/scripts/install.sh | sudo bash
+            ```
+
+            ### Manual Download
+            Download the appropriate binary for your platform below.
+
+            ### Checksums
+            See `checksums.txt` for SHA256 checksums of all binaries.
+          files: |
+            agent/bin/zedops-agent-*
+            agent/bin/checksums.txt
+          draft: false
+          prerelease: false
