@@ -1,18 +1,18 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Breadcrumb } from "@/components/layout/Breadcrumb"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAgents } from "@/hooks/useAgents"
-import { HardDrive, Cpu, MemoryStick } from "lucide-react"
+import { HardDrive, Cpu, MemoryStick, Loader2 } from "lucide-react"
 import { AgentServerList } from "@/components/AgentServerList"
-import { AgentConfigModal } from "@/components/AgentConfigModal"
 import { AgentLogViewer } from "@/components/AgentLogViewer"
 import { fetchAgentConfig, updateAgentConfig, type AgentConfig } from "@/lib/api"
 
@@ -28,14 +28,22 @@ export function AgentDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: agentsData, isLoading } = useAgents()
-  const [configModalOpen, setConfigModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+
+  // Inline config editing state
+  const [isEditing, setIsEditing] = useState(false)
+  const [serverDataPath, setServerDataPath] = useState('')
+  const [steamZomboidRegistry, setSteamZomboidRegistry] = useState('')
+  const [hostname, setHostname] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [configSuccess, setConfigSuccess] = useState(false)
 
   // Fetch agent configuration - MUST be before any early returns (React hooks rule)
   const { data: agentConfig, isLoading: isLoadingConfig } = useQuery({
     queryKey: ['agentConfig', id],
     queryFn: () => fetchAgentConfig(id!),
-    enabled: !!id && (configModalOpen || activeTab === 'config'), // Fetch when modal open OR config tab active
+    enabled: !!id && activeTab === 'config', // Fetch when config tab active
   })
 
   // Update agent configuration mutation - MUST be before any early returns
@@ -49,6 +57,90 @@ export function AgentDetail() {
   })
 
   const agent = agentsData?.agents.find(a => a.id === id)
+
+  // Reset edit mode when leaving config tab
+  useEffect(() => {
+    if (activeTab !== 'config') {
+      setIsEditing(false)
+      setConfigError(null)
+      setConfigSuccess(false)
+    }
+  }, [activeTab])
+
+  // Handlers for inline config editing
+  const handleStartEdit = () => {
+    if (agentConfig) {
+      setServerDataPath(agentConfig.server_data_path || '')
+      setSteamZomboidRegistry(agentConfig.steam_zomboid_registry || '')
+      setHostname(agentConfig.hostname || '')
+      setConfigError(null)
+      setConfigSuccess(false)
+    }
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setConfigError(null)
+    setConfigSuccess(false)
+  }
+
+  const handleSaveConfig = async () => {
+    setConfigError(null)
+    setConfigSuccess(false)
+
+    // Validation
+    if (!serverDataPath) {
+      setConfigError('Server data path is required')
+      return
+    }
+
+    if (!serverDataPath.startsWith('/')) {
+      setConfigError('Server data path must be an absolute path (start with /)')
+      return
+    }
+
+    if (serverDataPath === '/') {
+      setConfigError('Cannot use root directory as server data path')
+      return
+    }
+
+    // Build update payload - only include changed fields
+    const updates: Partial<AgentConfig> = {}
+
+    if (serverDataPath !== agentConfig?.server_data_path) {
+      updates.server_data_path = serverDataPath
+    }
+
+    if (steamZomboidRegistry !== agentConfig?.steam_zomboid_registry) {
+      updates.steam_zomboid_registry = steamZomboidRegistry
+    }
+
+    const currentHostname = agentConfig?.hostname || ''
+    if (hostname !== currentHostname) {
+      updates.hostname = hostname.trim() || null
+    }
+
+    if (Object.keys(updates).length === 0) {
+      setConfigError('No changes to save')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await updateConfigMutation.mutateAsync(updates)
+      setConfigSuccess(true)
+      // Exit edit mode after brief delay
+      setTimeout(() => {
+        setIsEditing(false)
+        setConfigSuccess(false)
+      }, 1500)
+    } catch (err) {
+      setConfigError(err instanceof Error ? err.message : 'Failed to save configuration')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -76,10 +168,6 @@ export function AgentDetail() {
         </div>
       </div>
     )
-  }
-
-  const handleSaveConfig = async (config: Partial<AgentConfig>) => {
-    await updateConfigMutation.mutateAsync(config)
   }
 
   const metrics = agent.metadata?.metrics
@@ -114,23 +202,14 @@ export function AgentDetail() {
           )}
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            disabled={agent.status !== 'online'}
-            onClick={() => setConfigModalOpen(true)}
-          >
-            Configure
-          </Button>
-          <Button
-            variant="outline"
-            className="text-error hover:text-error"
-            disabled
-            title="Not yet implemented - Planned for future release"
-          >
-            Disconnect
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          className="text-error hover:text-error"
+          disabled
+          title="Not yet implemented - Planned for future release"
+        >
+          Disconnect
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -267,13 +346,38 @@ export function AgentDetail() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Server Settings</CardTitle>
-                <Button
-                  variant="outline"
-                  onClick={() => setConfigModalOpen(true)}
-                  disabled={agent.status !== 'online'}
-                >
-                  Edit Configuration
-                </Button>
+                {!isEditing ? (
+                  <Button
+                    variant="outline"
+                    onClick={handleStartEdit}
+                    disabled={agent.status !== 'online' || isLoadingConfig}
+                  >
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSaveConfig}
+                      disabled={isSaving || configSuccess}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -286,21 +390,48 @@ export function AgentDetail() {
                 <>
                   {/* Server Data Path */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Server Data Path</Label>
-                    <div className="p-3 bg-muted rounded-md font-mono text-sm">
-                      {agentConfig.server_data_path}
-                    </div>
+                    <Label htmlFor="serverDataPath" className="text-sm font-medium">Server Data Path</Label>
+                    {isEditing ? (
+                      <Input
+                        id="serverDataPath"
+                        type="text"
+                        value={serverDataPath}
+                        onChange={(e) => setServerDataPath(e.target.value)}
+                        placeholder="/var/lib/zedops/servers"
+                        disabled={isSaving}
+                      />
+                    ) : (
+                      <div className="p-3 bg-muted rounded-md font-mono text-sm">
+                        {agentConfig.server_data_path}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Host directory where server data (bin, saves) will be stored.
                     </p>
+                    {isEditing && (
+                      <p className="text-xs text-warning">
+                        Changing this path does not move existing server data. You must manually migrate data if needed.
+                      </p>
+                    )}
                   </div>
 
                   {/* Docker Registry */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Docker Registry</Label>
-                    <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
-                      {agentConfig.steam_zomboid_registry}
-                    </div>
+                    <Label htmlFor="steamZomboidRegistry" className="text-sm font-medium">Docker Registry</Label>
+                    {isEditing ? (
+                      <Input
+                        id="steamZomboidRegistry"
+                        type="text"
+                        value={steamZomboidRegistry}
+                        onChange={(e) => setSteamZomboidRegistry(e.target.value)}
+                        placeholder="registry.gitlab.nicomarois.com/nicolas/steam-zomboid"
+                        disabled={isSaving}
+                      />
+                    ) : (
+                      <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
+                        {agentConfig.steam_zomboid_registry}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Docker registry URL for the Steam Zomboid server image.
                     </p>
@@ -308,21 +439,49 @@ export function AgentDetail() {
 
                   {/* Hostname */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Hostname</Label>
-                    <div className="p-3 bg-muted rounded-md font-mono text-sm">
-                      {agentConfig.hostname || <span className="text-muted-foreground italic">Not set (using auto-detected IP)</span>}
-                    </div>
+                    <Label htmlFor="hostname" className="text-sm font-medium">Hostname (Optional)</Label>
+                    {isEditing ? (
+                      <Input
+                        id="hostname"
+                        type="text"
+                        value={hostname}
+                        onChange={(e) => setHostname(e.target.value)}
+                        placeholder="myserver.duckdns.org"
+                        disabled={isSaving}
+                      />
+                    ) : (
+                      <div className="p-3 bg-muted rounded-md font-mono text-sm">
+                        {agentConfig.hostname || <span className="text-muted-foreground italic">Not set (using auto-detected IP)</span>}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      Custom hostname for server connections (e.g., DuckDNS).
+                      Custom hostname for server connections. If set, this will be displayed instead of the auto-detected IP.
+                      Useful for dynamic DNS services like DuckDNS.
                     </p>
                   </div>
 
+                  {/* Error Alert */}
+                  {configError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{configError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Success Alert */}
+                  {configSuccess && (
+                    <Alert className="border-green-500 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100">
+                      <AlertDescription>Configuration saved successfully!</AlertDescription>
+                    </Alert>
+                  )}
+
                   {/* Info Banner */}
-                  <Alert>
-                    <AlertDescription>
-                      These settings are inherited by new servers created on this agent.
-                    </AlertDescription>
-                  </Alert>
+                  {!isEditing && (
+                    <Alert>
+                      <AlertDescription>
+                        These settings are inherited by new servers created on this agent.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </>
               ) : (
                 <Alert variant="destructive">
@@ -344,16 +503,6 @@ export function AgentDetail() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Agent Configuration Modal */}
-      <AgentConfigModal
-        open={configModalOpen}
-        onOpenChange={setConfigModalOpen}
-        agentName={agent.name}
-        currentConfig={agentConfig || null}
-        isLoadingConfig={isLoadingConfig}
-        onSave={handleSaveConfig}
-      />
     </div>
   )
 }
