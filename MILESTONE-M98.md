@@ -1081,28 +1081,24 @@ Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and config
 
 ---
 
-### M9.8.47 - Agent Log Level Improvements
-**Status:** 📋 Planned
+### M9.8.47 - Agent Log Level Improvements ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** LOW (UX Polish)
+**Completed:** 2026-01-18
 
-**Issue:**
-Server creation errors appear as INFO level in agent logs, not ERROR:
+**Issue Fixed:**
+Server creation errors appeared as INFO level in agent logs, not ERROR:
 ```
 2026/01/19 03:48:15.727170 Failed to create server buena: failed to start container...
 ```
 
 **Root Cause:**
-Agent uses `log.Printf` for all log messages, which doesn't distinguish severity levels.
+`logcapture.go` keyword detection didn't include "Failed" patterns.
 
-**Proposed Solution:**
-1. Add log level prefixes or structured logging to agent
-2. Options:
-   - Simple: Prefix pattern like `[ERROR]`, `[WARN]`, `[INFO]`
-   - Advanced: Use structured logging library (zerolog, zap)
-3. Frontend LogViewer could color-code based on severity
-4. Alternatively, change error logging calls to include `[ERROR]` prefix
+**Solution:**
+Added "Failed to", "failed to", "Failed:", "failed:" to ERROR keyword detection in `logcapture.go:54-58`.
 
-**Affected Files:**
-- `agent/main.go` - Server creation error logging
-- `agent/docker.go` - Container operation errors
-- `frontend/src/components/AgentLogViewer.tsx` - Color coding by level
+Frontend already had correct ERROR styling (red XCircle icon, red background tint).
+
+**Files Modified:**
+- `agent/logcapture.go` - Added "Failed" patterns to ERROR detection

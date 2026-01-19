@@ -51,7 +51,12 @@ func (lc *LogCapture) Write(p []byte) (n int, err error) {
 	level := "INFO"
 	if len(message) > 0 {
 		// Standard log package uses date/time prefix, look for keywords
-		if containsAny(message, []string{"ERROR", "error:", "Error:", "FATAL", "fatal:"}) {
+		if containsAny(message, []string{
+			"ERROR", "error:", "Error:",
+			"FATAL", "fatal:",
+			"Failed to", "failed to",
+			"Failed:", "failed:",
+		}) {
 			level = "ERROR"
 		} else if containsAny(message, []string{"WARN", "Warning:", "warning:"}) {
 			level = "WARN"

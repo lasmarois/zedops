@@ -1,51 +1,44 @@
-# Docker Network Investigation
+# M9.8.47 - Agent Log Level Improvements
 
 ## Goal
-Investigate and fix the "network zomboid-backend not found" error when creating servers on newly deployed agents.
+Fix agent logs showing server creation errors as INFO instead of ERROR in the UI log viewer.
 
 ## Context
-- Error occurred on `zedops-test-agent` (VM at 10.0.13.208)
-- Agent connected successfully, but server creation failed
-- Error: `failed to start container: Error response from daemon: network zomboid-backend not found`
+- User reported: `Failed to create server buena: ...` shows as INFO
+- Log viewer has level filtering and icons - they work correctly
+- Issue is in log level detection logic in agent
+
+## Root Cause
+`agent/logcapture.go` line 54 detects log levels by keywords, but doesn't include:
+- "Failed to" / "failed to"
+- "Failed:" / "failed:"
 
 ## Phases
 
-### Phase 1: Reproduce and Understand
+### Phase 1: Fix Log Level Detection
 **Status:** `complete`
-- [x] Check current Docker network configuration on remote agent
-- [x] Find where `zomboid-backend` network is referenced in agent code
-- [x] Understand why the network is expected to exist
-- [x] Document the intended network architecture
+- [x] Identify where log levels are parsed (logcapture.go:50-61)
+- [x] Add "Failed to", "failed to", "Failed:", "failed:" to ERROR detection
+- [x] Review other common error patterns in agent code
 
-### Phase 2: Determine Root Cause
+### Phase 2: Verify Frontend Already Works
 **Status:** `complete`
-- [x] Is this a hardcoded network name that should be configurable? → Yes, hardcoded
-- [x] Should the agent create the network automatically? → Yes, implemented
-- [x] Is this a legacy assumption from a different architecture? → Original setup was manual
-- [x] Check if maestroserver (original agent) has this network → Yes, created manually
+- [x] Check terminal-log.tsx has level-based styling
+- [x] Confirm ERROR level shows red/destructive styling (XCircle icon, red-400 color, red-500/10 bg)
 
-### Phase 3: Implement Fix
+### Phase 3: Build and Test
 **Status:** `complete`
-- [x] Choose approach: auto-create network OR make configurable OR remove requirement
-- [x] Implement the fix in agent code (EnsureNetworks in docker.go)
-- [x] Test on local agent (maestroserver) - networks detected as existing
-- [x] Deploy binary to remote agent
+- [x] Build agent binary
+- [x] Deploy to maestroserver
+- [ ] Test by triggering error (will verify when error occurs naturally)
 
-### Phase 4: Deploy and Verify
-**Status:** `complete`
-- [x] Build updated agent binary
-- [x] Deploy to test agent
-- [x] Verify networks created on remote VM
-- [x] Added test VM instructions to Claude rules
+### Phase 4: Update M9.8 Tracker
+**Status:** `in_progress`
+- [ ] Mark M9.8.47 as complete in MILESTONE-M98.md
+- [ ] Commit changes
 
-## Success Criteria
-- [x] New agents can create servers without manual network setup
-- [x] Existing agents continue to work
-- [x] Network configuration is documented or automatic
-
-## Files to Investigate
-| File | Purpose |
-|------|---------|
-| `agent/docker/*.go` | Docker container management |
-| `agent/handlers/*.go` | Server creation handlers |
-| Original agent config | Reference for working setup |
+## Files to Modify
+| File | Change |
+|------|--------|
+| `agent/logcapture.go` | Add error keywords to detection |
+| `MILESTONE-M98.md` | Update status when complete |

@@ -1,58 +1,67 @@
-# Docker Network Investigation - Findings
+# M9.8.47 - Agent Log Level Improvements - Findings
 
-## Initial Error
+## Log Flow Architecture
 ```
-Failed to create server buena: failed to start container: Error response from daemon: network zomboid-backend not found
-```
+Agent (Go)
+  └─ log.Printf("Failed to create server...")
+  └─ LogCapture.Write() intercepts log output
+  └─ containsAny() detects level from keywords
+  └─ AgentLogLine{level: "INFO/WARN/ERROR"} sent via WebSocket
 
-## Environment
-- Agent: `zedops-test-agent`
-- Host: VM at 10.0.13.208
-- Agent binary: Deployed via manual copy (not GitHub releases yet)
+Manager (DO)
+  └─ Receives agent.logs.line
+  └─ Forwards to UI subscribers unchanged
+
+Frontend
+  └─ useAgentLogStream receives AgentLogLine
+  └─ AgentLogViewer filters by level
+  └─ TerminalLog renders with level-based styling
+```
 
 ## Root Cause Analysis
 
-### Network References in Code
-Found in 3 files:
-1. `server.go:144` - Attaches containers to both networks on creation
-2. `rcon.go:60-68` - Gets container IP from `zomboid-backend` for RCON communication
-3. `playerstats.go:327-329` - Gets container IP for player stats collection
+**Location:** `agent/logcapture.go:50-61`
 
-### Network Architecture
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Docker Networks on Agent Host                                   │
-├─────────────────────────────────────────────────────────────────┤
-│  zomboid-backend (bridge)                                        │
-│  ├── Used for agent→container communication (RCON, stats)       │
-│  └── Containers get internal IPs on this network                │
-│                                                                  │
-│  zomboid-servers (bridge)                                        │
-│  └── Reserved for future server-to-server communication         │
-└─────────────────────────────────────────────────────────────────┘
+**Original Detection:**
+```go
+if containsAny(message, []string{"ERROR", "error:", "Error:", "FATAL", "fatal:"}) {
+    level = "ERROR"
+}
 ```
 
-### Why Networks Don't Exist on New Agents
-- Original agent (maestroserver) had networks created manually
-- Install script doesn't create networks
-- New agents deployed without network setup fail on first server creation
+**Problem:** "Failed to create server" doesn't match any keyword
 
-## Solution Implemented
-Auto-create networks on agent startup in `docker.go`:
-- Added `EnsureNetworks()` method called after Docker client init
-- Creates `zomboid-backend` and `zomboid-servers` if missing
-- Labels networks with `zedops.managed=true`
+**Fix:** Add "Failed to", "failed to", "Failed:", "failed:" to ERROR list
 
-## Verification
-Local agent (maestroserver) logs confirm:
-```
-Docker network 'zomboid-backend' already exists
-Docker network 'zomboid-servers' already exists
+## Error Patterns Found in Agent Code
+
+From grep of `log.Printf.*[Ff]ailed`:
+- `Failed to create server %s: %v`
+- `Failed to delete server`
+- `Failed to rebuild server`
+- `Failed to start container`
+- `Failed to stop container`
+- `Failed to restart container`
+- `Failed to list containers`
+- `Failed to collect metrics`
+- `Failed to send heartbeat`
+- `Connection failed`
+- `Registration/authentication failed`
+- `RCON command failed`
+- `RCON connection failed`
+- `Copy failed`
+
+All use "Failed" or "failed" - the fix covers all of these.
+
+## Frontend Verification ✅
+
+TerminalLog component (`terminal-log.tsx:46-50`) has proper ERROR styling:
+```javascript
+ERROR: {
+  icon: XCircle,           // Red X icon
+  color: 'text-red-400/90', // Red text
+  bg: 'bg-red-500/10',      // Red tint background
+},
 ```
 
-## Related Issue Found
-Agent logs show server creation errors as INFO level instead of ERROR:
-```
-2026/01/19 03:48:15.727170 Failed to create server buena: failed to start container...
-```
-→ Added as M9.8 sub-milestone for later fix
+Frontend is correctly configured - only the agent detection was broken.
