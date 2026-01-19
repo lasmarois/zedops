@@ -391,13 +391,44 @@ wrangler deploy  # Uploads Worker code + frontend dist/
 
 ---
 
+## TD-011: D1 Metrics Collection Scaling Limits (2026-01-18)
+
+**Decision:** Metrics collection at 10-second intervals with 3-day retention is viable for small deployments but hits D1 write limits around 11-12 servers on free tier.
+
+**Analysis:**
+
+| Resource | Free Limit | Usage per Server | Max Servers |
+|----------|------------|------------------|-------------|
+| **Writes** | 100,000 rows/day | 8,640/day (10s intervals) | **~11 servers** |
+| **Reads** | 5 million rows/day | Varies by dashboard usage | Not the bottleneck |
+| **Storage** | 5 GB | ~5 MB (3 days × 26K rows) | ~1,000 servers |
+
+**The Bottleneck:** D1 daily write limit (100K rows/day) constrains server count more than storage or reads.
+
+**Scaling Options:**
+1. **Reduce collection frequency** - 30s intervals = 3x more servers (~33)
+2. **Reduce retention** - 1 day instead of 3 = same write volume, less storage
+3. **Paid plan ($5/mo)** - 25 million writes/day = ~2,800 servers
+
+**Current Design Rationale:**
+- 10-second intervals provide good granularity for debugging
+- 3-day retention covers most troubleshooting scenarios
+- For hobby use (you + 5-10 servers), free tier is sufficient
+- If scaling beyond ~10 servers, either reduce frequency or upgrade to paid
+
+**Status:** ✅ Accepted (documented constraint)
+
+**References:** P2 Performance Tab implementation
+
+---
+
 ## Future Decisions (To Be Documented)
 
-- **TD-011:** Agent installation mechanism (curl script vs downloadable installer)
-- **TD-012:** RCON protocol handling (direct TCP vs proxy through agent WebSocket)
-- **TD-013:** Backup storage strategy (local vs cloud storage)
-- **TD-014:** Agent auto-update mechanism
-- **TD-015:** Multi-tenancy architecture (if needed)
+- **TD-012:** Agent installation mechanism (curl script vs downloadable installer)
+- **TD-013:** RCON protocol handling (direct TCP vs proxy through agent WebSocket)
+- **TD-014:** Backup storage strategy (local vs cloud storage)
+- **TD-015:** Agent auto-update mechanism
+- **TD-016:** Multi-tenancy architecture (if needed)
 
 ---
 
