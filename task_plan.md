@@ -1,89 +1,51 @@
-# M10: Agent Deployment & Polish
+# Docker Network Investigation
 
 ## Goal
-Production-ready agent deployment with installation automation for Linux, Windows, and macOS.
+Investigate and fix the "network zomboid-backend not found" error when creating servers on newly deployed agents.
 
-## Current State
-- Agent binary builds via Docker (`scripts/build.sh`) - Linux amd64 only
-- Manual installation (copy binary, run with flags)
-- No systemd service file
-- No install script
-- Token stored in `~/.zedops-agent/token`
+## Context
+- Error occurred on `zedops-test-agent` (VM at 10.0.13.208)
+- Agent connected successfully, but server creation failed
+- Error: `failed to start container: Error response from daemon: network zomboid-backend not found`
 
 ## Phases
 
-### Phase 1: Cross-Platform Build Script
+### Phase 1: Reproduce and Understand
 **Status:** `complete`
-- [x] Create `scripts/build-all.sh` for cross-compilation
-- [x] Build targets: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64
-- [x] Output to `bin/` with platform suffixes
-- [x] Add Version variable to main.go (set via ldflags)
-- [x] Add --version flag
-- [x] Create `.github/workflows/release-agent.yml` for GitHub Actions
+- [x] Check current Docker network configuration on remote agent
+- [x] Find where `zomboid-backend` network is referenced in agent code
+- [x] Understand why the network is expected to exist
+- [x] Document the intended network architecture
 
-### Phase 2: Systemd Service File (Linux)
+### Phase 2: Determine Root Cause
 **Status:** `complete`
-- [x] Create `scripts/zedops-agent.service` template
-- [x] Service runs as root (needs Docker socket access)
-- [x] Auto-restart on failure (RestartSec=10)
-- [x] Environment file for configuration (/etc/zedops-agent/config)
+- [x] Is this a hardcoded network name that should be configurable? → Yes, hardcoded
+- [x] Should the agent create the network automatically? → Yes, implemented
+- [x] Is this a legacy assumption from a different architecture? → Original setup was manual
+- [x] Check if maestroserver (original agent) has this network → Yes, created manually
 
-### Phase 3: Installation Script (Linux)
+### Phase 3: Implement Fix
 **Status:** `complete`
-- [x] Create `scripts/install.sh` for local installation
-- [x] Creates systemd service, enables and starts it
-- [x] Prompts for manager URL if not provided
-- [x] Detects OS/arch and downloads correct binary from GitHub
-- [x] `curl -sSL https://raw.githubusercontent.com/.../install.sh | sudo bash -s -- --manager-url URL --name NAME`
+- [x] Choose approach: auto-create network OR make configurable OR remove requirement
+- [x] Implement the fix in agent code (EnsureNetworks in docker.go)
+- [x] Test on local agent (maestroserver) - networks detected as existing
+- [x] Deploy binary to remote agent
 
-### Phase 4: UI Install Agent Flow
+### Phase 4: Deploy and Verify
 **Status:** `complete`
-- [x] Add "Install Agent" button in UI (Agents page)
-- [x] Dialog prompts for agent name, generates token
-- [x] Shows installation command with token embedded
-- [x] Copy-to-clipboard functionality
-- [x] Created `InstallAgentDialog.tsx` component
-
-### Phase 5: Pending Agent Cards (UX Improvement)
-**Status:** `in_progress`
-- [ ] Create agent record in DB when generating ephemeral token
-- [ ] Add "pending" status for agents awaiting first connection
-- [ ] Show pending agent cards in UI with "Awaiting Connection" badge
-- [ ] Update agent status from "pending" to "online" on first connect
-- [ ] Handle token expiry (remove pending agent if token expires unused)
-
-### Phase 6: Windows Service (Optional)
-**Status:** `pending`
-- [ ] Research: NSSM vs native Windows service
-- [ ] Create install script for Windows
-- [ ] PowerShell one-liner installation
-
-### Phase 7: Agent Auto-Update
-**Status:** `complete`
-- [x] Version endpoint on manager (`GET /api/agent/version`)
-- [x] Agent checks version on startup and every 6 hours
-- [x] Download new binary to temp location
-- [x] Replace current binary and exec into new version
-- [x] Uses `syscall.Exec` to replace process in-place (systemd-friendly)
-- [x] Created `autoupdate.go` module
-
-## Out of Scope (for now)
-- macOS launchd service (manual run is fine)
-- Signed binaries / code signing
-- Package managers (apt, brew, chocolatey)
+- [x] Build updated agent binary
+- [x] Deploy to test agent
+- [x] Verify networks created on remote VM
+- [x] Added test VM instructions to Claude rules
 
 ## Success Criteria
-- [ ] User can install agent on Linux with single curl command
-- [ ] Agent starts on boot (systemd)
-- [ ] Agent auto-reconnects after reboot
-- [ ] UI shows installation command with token
-- [ ] Windows users can install with PowerShell script
+- [x] New agents can create servers without manual network setup
+- [x] Existing agents continue to work
+- [x] Network configuration is documented or automatic
 
-## Files to Create/Modify
+## Files to Investigate
 | File | Purpose |
 |------|---------|
-| `agent/scripts/build-all.sh` | Cross-platform build script |
-| `agent/scripts/zedops-agent.service` | Systemd unit file |
-| `agent/scripts/install.sh` | Local Linux installer |
-| `manager/src/routes/install.ts` | Remote install script endpoint |
-| `frontend/src/components/InstallAgent.tsx` | UI component |
+| `agent/docker/*.go` | Docker container management |
+| `agent/handlers/*.go` | Server creation handlers |
+| Original agent config | Reference for working setup |

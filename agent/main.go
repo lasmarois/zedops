@@ -101,6 +101,13 @@ func main() {
 	} else {
 		defer dockerClient.Close()
 		log.Println("Docker client initialized successfully")
+
+		// Ensure required Docker networks exist (for server containers)
+		ctx := context.Background()
+		if err := dockerClient.EnsureNetworks(ctx); err != nil {
+			log.Printf("Warning: Failed to ensure Docker networks: %v", err)
+			log.Println("Server creation may fail if networks are missing")
+		}
 	}
 
 	// Initialize RCON manager (requires Docker client for network access)

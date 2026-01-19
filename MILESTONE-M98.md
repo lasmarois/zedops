@@ -1078,3 +1078,31 @@ Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and config
 6. ~~**P1** - Sparklines~~ ✅ COMPLETE (metrics history + Performance tab)
 7. ~~**P8** - Agent Hostname Configuration~~ ✅ COMPLETE
 8. **P6** - Backup Now (requires full backup infrastructure) → See MILESTONES.md Backup & Restore
+
+---
+
+### M9.8.47 - Agent Log Level Improvements
+**Status:** 📋 Planned
+**Priority:** LOW (UX Polish)
+
+**Issue:**
+Server creation errors appear as INFO level in agent logs, not ERROR:
+```
+2026/01/19 03:48:15.727170 Failed to create server buena: failed to start container...
+```
+
+**Root Cause:**
+Agent uses `log.Printf` for all log messages, which doesn't distinguish severity levels.
+
+**Proposed Solution:**
+1. Add log level prefixes or structured logging to agent
+2. Options:
+   - Simple: Prefix pattern like `[ERROR]`, `[WARN]`, `[INFO]`
+   - Advanced: Use structured logging library (zerolog, zap)
+3. Frontend LogViewer could color-code based on severity
+4. Alternatively, change error logging calls to include `[ERROR]` prefix
+
+**Affected Files:**
+- `agent/main.go` - Server creation error logging
+- `agent/docker.go` - Container operation errors
+- `frontend/src/components/AgentLogViewer.tsx` - Color coding by level

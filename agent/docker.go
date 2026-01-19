@@ -14,8 +14,12 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
+
+// RequiredNetworks lists Docker networks the agent needs for server communication
+var RequiredNetworks = []string{"zomboid-backend", "zomboid-servers"}
 
 // DockerClient wraps the Docker client and provides container operations
 type DockerClient struct {
@@ -37,6 +41,44 @@ func (dc *DockerClient) Close() error {
 	if dc.cli != nil {
 		return dc.cli.Close()
 	}
+	return nil
+}
+
+// EnsureNetworks creates required Docker networks if they don't exist
+// This is called on agent startup to ensure server containers can be created
+func (dc *DockerClient) EnsureNetworks(ctx context.Context) error {
+	// List existing networks
+	networks, err := dc.cli.NetworkList(ctx, network.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list networks: %w", err)
+	}
+
+	// Build set of existing network names
+	existing := make(map[string]bool)
+	for _, n := range networks {
+		existing[n.Name] = true
+	}
+
+	// Create missing networks
+	for _, netName := range RequiredNetworks {
+		if existing[netName] {
+			log.Printf("Docker network '%s' already exists", netName)
+			continue
+		}
+
+		log.Printf("Creating Docker network: %s", netName)
+		_, err := dc.cli.NetworkCreate(ctx, netName, network.CreateOptions{
+			Driver: "bridge",
+			Labels: map[string]string{
+				"zedops.managed": "true",
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create network %s: %w", netName, err)
+		}
+		log.Printf("Created Docker network: %s", netName)
+	}
+
 	return nil
 }
 

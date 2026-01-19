@@ -151,6 +151,53 @@ Then update `manager/src/index.ts` to match:
 | GLIBC error on wrangler dev | Use deploy instead - local dev not supported on this server |
 | Blank page on refresh | Update asset paths in `manager/src/index.ts` to match build output |
 
+## Test VM (zedops-test-agent)
+
+A secondary VM for testing agent deployment and features.
+
+### Connection Details
+
+| Property | Value |
+|----------|-------|
+| Host | 10.0.13.208 |
+| User | zedops |
+| Agent Name | zedops-test-agent |
+
+### SSH Access
+
+```bash
+ssh zedops@10.0.13.208
+```
+
+### Deploying Agent to Test VM
+
+```bash
+# 1. Build the agent
+cd /Volumes/Data/docker_composes/zedops/agent && ./scripts/build.sh
+
+# 2. Copy binary to test VM
+scp /Volumes/Data/docker_composes/zedops/agent/bin/zedops-agent zedops@10.0.13.208:/tmp/
+
+# 3. Start agent (user is in docker group, no sudo needed for Docker)
+ssh zedops@10.0.13.208 'nohup /tmp/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name zedops-test-agent > /tmp/agent.log 2>&1 &'
+
+# 4. Check logs
+ssh zedops@10.0.13.208 'tail -f /tmp/agent.log'
+```
+
+### Important Notes
+
+- **No sudo access via SSH** - The zedops user requires password for sudo, but is in the `docker` group
+- **Token location**: `~/.zedops-agent/token` (user home, not /root)
+- **Docker networks**: Agent auto-creates `zomboid-backend` and `zomboid-servers` on first start
+- **Agent binary**: Stored at `/tmp/zedops-agent` (not persistent across reboots)
+
+### Check Docker Networks
+
+```bash
+ssh zedops@10.0.13.208 'docker network ls | grep zomboid'
+```
+
 ## Quick Reference
 
 | Task | Command |
@@ -162,4 +209,5 @@ Then update `manager/src/index.ts` to match:
 | Stop agent | `sudo pkill -f zedops-agent` |
 | Start agent | `cd agent && nohup sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver > /tmp/zedops-agent.log 2>&1 &` |
 | View agent logs | `tail -f /tmp/zedops-agent.log` |
+| Deploy to test VM | `scp agent/bin/zedops-agent zedops@10.0.13.208:/tmp/` |
 | Check production | `https://zedops.mail-bcf.workers.dev` |
