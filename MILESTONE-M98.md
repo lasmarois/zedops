@@ -888,16 +888,26 @@ RCON_PORT=27027 ✅
 
 The following items from M9.8.44 are currently placeholders and need real data/functionality:
 
-### P1: Metrics Sparklines
-**Current State:** Visual placeholder bars (faded styling)
-**Required Implementation:**
-- Store metrics history in D1 database (CPU, Memory, Players per server)
-- 3-day retention period with automatic cleanup
-- 10-second polling intervals from agent
-- Sparkline component rendering last 30 mins in card, expandable to 24h/3d views
-- Affected metrics: CPU, Memory, Players (Uptime and Disk I/O don't need sparklines)
+### P1: Metrics Sparklines ✅ COMPLETE
+**Status:** ✅ Deployed
+**Completed:** 2026-01-18
 
-**Decision Made:** D1 storage, 3-day retention
+**Implementation:**
+- Store metrics history in D1 database (CPU, Memory, Players per server)
+- 3-day retention period with automatic cleanup (probabilistic on each write)
+- 10-second polling intervals from agent
+- Sparkline component rendering last 30 mins in Overview cards
+- Affected metrics: CPU, Memory, Players (Uptime and Disk I/O don't have sparklines)
+
+**Files Modified:**
+- `manager/migrations/0014_add_server_metrics_history.sql` - D1 table
+- `manager/src/durable-objects/AgentConnection.ts` - Store metrics on heartbeat
+- `manager/src/routes/servers.ts` - GET /api/servers/:id/metrics/history endpoint
+- `frontend/src/components/ui/sparkline.tsx` - SVG sparkline component
+- `frontend/src/components/server-overview/MetricsRow.tsx` - Integrate sparklines
+- `frontend/src/hooks/useServers.ts` - useServerMetricsHistory hook
+
+**Planning:** [planning-history/p1-metrics-sparklines/](planning-history/p1-metrics-sparklines/)
 
 ---
 
@@ -1035,31 +1045,27 @@ The "Managed" badge was missing from the compact layout in ServerCard. Now shows
 
 ---
 
-### P8: Agent Hostname Configuration
-**Status:** 📋 Not Started
+### P8: Agent Hostname Configuration ✅ COMPLETE
+**Status:** ✅ Deployed
 **Priority:** MEDIUM (Feature Enhancement)
+**Completed:** 2026-01-18
 
-**Request:**
-Allow agents to have a configurable hostname for users who set up DNS to point to their public IP.
-
-**Current Behavior:**
-- Connection Card shows agent's public IP (captured from CF-Connecting-IP header)
-- IP is auto-detected on each connection
-
-**Proposed Implementation:**
-- Add `hostname` column to agents table (nullable)
-- Add hostname field to Agent settings/configuration UI
+**Implementation:**
+- Added `hostname` column to agents table (migration 0013)
+- Added hostname field to Agent Configuration tab in AgentDetail
 - Connection Card displays hostname if set, otherwise falls back to public IP
 - Default behavior remains unchanged (IP-based)
 
 **Use Case:**
 Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and configure it in ZedOps, so players always have a stable address to connect to.
 
-**Files to Modify:**
-- `manager/migrations/` - Add hostname column
+**Files Modified:**
+- `manager/migrations/0013_add_agent_hostname.sql` - Add hostname column
 - `manager/src/routes/agents.ts` - API to update hostname
 - `frontend/src/pages/AgentDetail.tsx` - Settings UI for hostname
 - `frontend/src/components/server-overview/ConnectionCard.tsx` - Use hostname if available
+
+**Planning:** [planning-history/p8-agent-hostname/](planning-history/p8-agent-hostname/)
 
 ---
 
@@ -1069,6 +1075,6 @@ Users with dynamic IPs can set up DDNS (e.g., `myserver.duckdns.org`) and config
 3. ~~**P3** - Disk Space~~ ✅ COMPLETE
 4. ~~**P4** - Save World~~ ✅ COMPLETE
 5. ~~**P5** - Broadcast Message~~ ✅ COMPLETE
-6. **P1** - Sparklines (requires D1 schema, agent changes)
-7. **P6** - Backup Now (requires full backup infrastructure)
-8. **P8** - Agent Hostname Configuration
+6. ~~**P1** - Sparklines~~ ✅ COMPLETE (metrics history + Performance tab)
+7. ~~**P8** - Agent Hostname Configuration~~ ✅ COMPLETE
+8. **P6** - Backup Now (requires full backup infrastructure) → See MILESTONES.md Backup & Restore
