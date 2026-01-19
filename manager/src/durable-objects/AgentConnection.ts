@@ -401,6 +401,11 @@ export class AgentConnection extends DurableObject {
         this.handlePlayersUpdate(message);
         break;
 
+      case "server.metrics.batch":
+        // P1: Handle metrics batch from agent for sparklines
+        await this.handleMetricsBatch(message);
+        break;
+
       default:
         console.warn(`[AgentConnection] Unknown subject: ${subject}`);
         this.sendError(`Unknown subject: ${subject}`);
@@ -698,6 +703,66 @@ export class AgentConnection extends DurableObject {
     // Log summary
     const totalPlayers = servers.reduce((sum: number, s: any) => sum + (s.playerCount || 0), 0);
     console.log(`[AgentConnection] Player stats update: ${servers.length} servers, ${totalPlayers} total players`);
+  }
+
+  /**
+   * Handle server.metrics.batch message from agent
+   * Store metrics in D1 for sparkline display (3-day retention)
+   */
+  private async handleMetricsBatch(message: Message): Promise<void> {
+    const points = message.data?.points || [];
+    if (points.length === 0) return;
+
+    const DB = (this.env as any).DB;
+    if (!DB) {
+      console.error("[AgentConnection] D1 database not available for metrics storage");
+      return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const threesDaysAgo = now - (3 * 24 * 60 * 60); // 3 days in seconds
+
+    try {
+      // Insert new metrics (batch insert)
+      const insertStmt = DB.prepare(`
+        INSERT INTO server_metrics_history (id, server_id, timestamp, cpu_percent, memory_percent, memory_used_mb, memory_limit_mb, player_count, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const insertBatch: D1PreparedStatement[] = [];
+      for (const point of points) {
+        const id = crypto.randomUUID();
+        insertBatch.push(
+          insertStmt.bind(
+            id,
+            point.serverId,
+            point.timestamp,
+            point.cpuPercent,
+            point.memoryPercent,
+            point.memoryUsedMB,
+            point.memoryLimitMB,
+            point.playerCount ?? null,
+            now
+          )
+        );
+      }
+
+      // Execute batch insert
+      await DB.batch(insertBatch);
+
+      // Cleanup old records (older than 3 days)
+      // Run cleanup periodically (roughly every 100 batches to avoid overhead)
+      if (Math.random() < 0.01) {
+        await DB.prepare(`DELETE FROM server_metrics_history WHERE timestamp < ?`)
+          .bind(threesDaysAgo)
+          .run();
+        console.log("[AgentConnection] Cleaned up old metrics records");
+      }
+
+      console.log(`[AgentConnection] Stored ${points.length} metrics points`);
+    } catch (err) {
+      console.error("[AgentConnection] Failed to store metrics batch:", err);
+    }
   }
 
   /**

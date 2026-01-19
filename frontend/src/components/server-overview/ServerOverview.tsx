@@ -94,6 +94,7 @@ export function ServerOverview({
   // Shared components
   const metricsRow = (
     <MetricsRow
+      serverId={server.id}
       uptime={uptime}
       cpuPercent={cpuPercent}
       memoryUsedGB={memoryUsedGB}

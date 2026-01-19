@@ -15,6 +15,7 @@ import {
   restoreServer,
   syncServers,
   fetchServerMetrics,
+  fetchServerMetricsHistory,
   updateServerConfig,
   applyServerConfig,
   fetchImageDefaults,
@@ -484,5 +485,33 @@ export function useServerStorage(
     enabled: enabled && !!agentId && !!serverId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes (matches agent cache)
     retry: 1, // Only retry once (agent might be offline)
+  });
+}
+
+/**
+ * Hook to fetch metrics history for sparkline display
+ * @param serverId - Server ID to fetch history for
+ * @param range - Time range: '30m' | '24h' | '3d'
+ * @param enabled - Whether to enable the query (e.g., only for running servers)
+ */
+export function useServerMetricsHistory(
+  serverId: string | null,
+  range: '30m' | '24h' | '3d' = '30m',
+  enabled: boolean = true
+) {
+  const { isAuthenticated } = useUser();
+
+  return useQuery({
+    queryKey: ['server-metrics-history', serverId, range],
+    queryFn: () => {
+      if (!serverId) {
+        throw new Error('Server ID is required');
+      }
+      return fetchServerMetricsHistory(serverId, range);
+    },
+    enabled: isAuthenticated && enabled && !!serverId,
+    refetchInterval: 10000, // Refresh every 10 seconds (matches agent collection)
+    staleTime: 9000, // Consider stale after 9 seconds
+    retry: 1,
   });
 }

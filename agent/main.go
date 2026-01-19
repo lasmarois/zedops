@@ -29,22 +29,23 @@ type volumeSizeCache struct {
 }
 
 type Agent struct {
-	managerURL     string
-	agentName      string
-	ephemeralToken string
-	permanentToken string
-	agentID        string
-	conn           *websocket.Conn
-	connMutex      sync.Mutex                    // Protects WebSocket writes
-	docker         *DockerClient
-	logStreams     map[string]context.CancelFunc // containerID -> cancel function
-	rconManager    *RCONManager                  // RCON session manager
-	playerStats    *PlayerStatsCollector         // Player stats collector
-	logCapture     *LogCapture                   // Agent log capture for streaming
-	agentLogChan   chan AgentLogLine             // Channel for agent log subscription
-	agentLogMutex  sync.Mutex                    // Protects agent log subscription
-	volumeCache    map[string]*volumeSizeCache   // serverName -> cached sizes
-	volumeCacheMu  sync.RWMutex                  // Protects volumeCache
+	managerURL       string
+	agentName        string
+	ephemeralToken   string
+	permanentToken   string
+	agentID          string
+	conn             *websocket.Conn
+	connMutex        sync.Mutex                    // Protects WebSocket writes
+	docker           *DockerClient
+	logStreams       map[string]context.CancelFunc // containerID -> cancel function
+	rconManager      *RCONManager                  // RCON session manager
+	playerStats      *PlayerStatsCollector         // Player stats collector
+	metricsCollector *MetricsCollector             // Metrics collector for sparklines
+	logCapture       *LogCapture                   // Agent log capture for streaming
+	agentLogChan     chan AgentLogLine             // Channel for agent log subscription
+	agentLogMutex    sync.Mutex                    // Protects agent log subscription
+	volumeCache      map[string]*volumeSizeCache   // serverName -> cached sizes
+	volumeCacheMu    sync.RWMutex                  // Protects volumeCache
 }
 
 func main() {
@@ -113,6 +114,11 @@ func main() {
 		agent.playerStats = NewPlayerStatsCollector(dockerClient, agent)
 		agent.playerStats.Start()
 		defer agent.playerStats.Stop()
+
+		// Initialize metrics collector for sparklines (10s interval)
+		agent.metricsCollector = NewMetricsCollector(dockerClient, agent)
+		agent.metricsCollector.Start()
+		defer agent.metricsCollector.Stop()
 	}
 
 	// Set up graceful shutdown

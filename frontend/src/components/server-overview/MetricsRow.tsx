@@ -1,8 +1,12 @@
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Clock, Cpu, HardDrive, Users } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Sparkline } from "@/components/ui/sparkline"
+import { useServerMetricsHistory } from "@/hooks/useServers"
 
 interface MetricsRowProps {
+  serverId: string
   uptime: string
   cpuPercent: number
   memoryUsedGB: number
@@ -16,22 +20,8 @@ interface MetricsRowProps {
   onPlayersClick: () => void
 }
 
-// Placeholder sparkline component - shows "coming soon" styling
-function SparklinePlaceholder() {
-  return (
-    <div className="h-8 mt-2 flex items-end gap-0.5 opacity-30">
-      {[3, 5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 7].map((h, i) => (
-        <div
-          key={i}
-          className="w-1.5 bg-primary/40 rounded-sm"
-          style={{ height: `${h * 3}px` }}
-        />
-      ))}
-    </div>
-  )
-}
-
 export function MetricsRow({
+  serverId,
   uptime,
   cpuPercent,
   memoryUsedGB,
@@ -44,6 +34,25 @@ export function MetricsRow({
   isRunning,
   onPlayersClick,
 }: MetricsRowProps) {
+  // Fetch metrics history for sparklines (only when server is running)
+  const { data: metricsHistory } = useServerMetricsHistory(
+    serverId,
+    '30m',
+    isRunning
+  )
+
+  // Extract data arrays for sparklines
+  const { cpuData, memoryData, playerData } = useMemo(() => {
+    if (!metricsHistory?.points || metricsHistory.points.length === 0) {
+      return { cpuData: [], memoryData: [], playerData: [] }
+    }
+    return {
+      cpuData: metricsHistory.points.map(p => p.cpu),
+      memoryData: metricsHistory.points.map(p => p.memory),
+      playerData: metricsHistory.points.map(p => p.players),
+    }
+  }, [metricsHistory])
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {/* Uptime Card */}
@@ -62,7 +71,7 @@ export function MetricsRow({
         </CardContent>
       </Card>
 
-      {/* CPU Card - with sparkline placeholder */}
+      {/* CPU Card */}
       <Card className="hover:shadow-md transition-shadow duration-200">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -74,11 +83,21 @@ export function MetricsRow({
           <div className="text-2xl font-bold">
             {isRunning ? `${cpuPercent.toFixed(1)}%` : "—"}
           </div>
-          <SparklinePlaceholder />
+          {isRunning && (
+            <div className="h-8 mt-2">
+              <Sparkline
+                data={cpuData}
+                width={100}
+                height={32}
+                color="hsl(var(--primary))"
+                style="line"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Memory Card - with sparkline placeholder */}
+      {/* Memory Card */}
       <Card className="hover:shadow-md transition-shadow duration-200">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -95,7 +114,17 @@ export function MetricsRow({
               of {memoryLimitGB.toFixed(1)}GB
             </div>
           )}
-          <SparklinePlaceholder />
+          {isRunning && (
+            <div className="h-8 mt-2">
+              <Sparkline
+                data={memoryData}
+                width={100}
+                height={32}
+                color="hsl(var(--primary))"
+                style="line"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -143,7 +172,17 @@ export function MetricsRow({
                 {isRunning && playerCount > 0 && (
                   <div className="text-xs text-muted-foreground mt-1">Click to view</div>
                 )}
-                <SparklinePlaceholder />
+                {isRunning && (
+                  <div className="h-8 mt-2">
+                    <Sparkline
+                      data={playerData}
+                      width={100}
+                      height={32}
+                      color="hsl(var(--primary))"
+                      style="bar"
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TooltipTrigger>

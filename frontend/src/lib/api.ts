@@ -906,6 +906,58 @@ export async function fetchServerMetrics(
   return response.json();
 }
 
+/**
+ * Metrics history point for sparklines
+ */
+export interface MetricsHistoryPoint {
+  timestamp: number;
+  cpu: number | null;
+  memory: number | null;
+  players: number | null;
+}
+
+/**
+ * Metrics history response
+ */
+export interface MetricsHistoryResponse {
+  success: boolean;
+  range: string;
+  fromTimestamp: number;
+  toTimestamp: number;
+  count: number;
+  points: MetricsHistoryPoint[];
+}
+
+/**
+ * Fetch server metrics history for sparklines
+ */
+export async function fetchServerMetricsHistory(
+  serverId: string,
+  range: '30m' | '24h' | '3d' = '30m'
+): Promise<MetricsHistoryResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/servers/${serverId}/metrics/history?range=${range}`,
+    {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 404) {
+      throw new Error('Server not found');
+    }
+    if (response.status === 403) {
+      throw new Error('Access denied');
+    }
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to fetch metrics history');
+  }
+
+  return response.json();
+}
+
 // ============================================================================
 // User Management
 // ============================================================================
