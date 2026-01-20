@@ -165,3 +165,5 @@ dist
 .env*
 !.env.example
 .wrangler/
+# Note: wrangler.toml is kept in git (database IDs are not secrets)
+# wrangler.toml.example is provided for forks to customize

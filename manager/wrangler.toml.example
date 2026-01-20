@@ -1,0 +1,82 @@
+# ZedOps Manager - Cloudflare Worker Configuration
+#
+# SETUP INSTRUCTIONS:
+# 1. Copy this file to wrangler.toml: cp wrangler.toml.example wrangler.toml
+# 2. Create a D1 database: wrangler d1 create zedops-db
+# 3. Update the database_id below with the ID from step 2
+# 4. Set secrets: wrangler secret put TOKEN_SECRET && wrangler secret put ADMIN_PASSWORD
+# 5. Deploy: wrangler deploy
+#
+# For dev environment, also create: wrangler d1 create zedops-db-dev
+
+name = "zedops"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Static Assets (Frontend build output)
+[assets]
+directory = "../frontend/dist"
+not_found_handling = "single-page-application"
+
+# Durable Objects (WebSocket hub for agent connections)
+[[durable_objects.bindings]]
+name = "AGENT_CONNECTION"
+class_name = "AgentConnection"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AgentConnection"]
+
+# =============================================================================
+# PRODUCTION ENVIRONMENT (default)
+# =============================================================================
+# Deploy with: wrangler deploy
+# Or explicitly: wrangler deploy --env production
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zedops-db"
+database_id = "YOUR_PRODUCTION_DATABASE_ID"  # Get this from: wrangler d1 create zedops-db
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT
+# =============================================================================
+# Deploy with: wrangler deploy --env dev
+# Access at: https://zedops-dev.<your-subdomain>.workers.dev
+
+[env.dev]
+name = "zedops-dev"
+
+[[env.dev.durable_objects.bindings]]
+name = "AGENT_CONNECTION"
+class_name = "AgentConnection"
+
+[[env.dev.migrations]]
+tag = "v1"
+new_sqlite_classes = ["AgentConnection"]
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "zedops-db-dev"
+database_id = "YOUR_DEV_DATABASE_ID"  # Get this from: wrangler d1 create zedops-db-dev
+
+# =============================================================================
+# SECRETS (do not put values here!)
+# =============================================================================
+# Set these using wrangler CLI:
+#
+# Production:
+#   wrangler secret put TOKEN_SECRET
+#   wrangler secret put ADMIN_PASSWORD
+#
+# Development:
+#   wrangler secret put TOKEN_SECRET --env dev
+#   wrangler secret put ADMIN_PASSWORD --env dev
+#
+# Local development:
+#   Copy .dev.vars.example to .dev.vars and set values there
+#
+# Required secrets:
+# - TOKEN_SECRET: JWT signing secret (use a strong random string, e.g., openssl rand -hex 32)
+# - ADMIN_PASSWORD: Initial admin password for first login
