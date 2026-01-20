@@ -50,22 +50,98 @@ app.route('/api/servers', servers); // Global server endpoints
 /**
  * GET /api/agent/version
  * Returns the latest agent version for auto-update checks
+ * Fetches from GitHub releases API with 1-hour cache
  * No auth required - agents need to check before authenticating
  */
 app.get('/api/agent/version', async (c) => {
-  // In production, this could fetch from GitHub releases API
-  // For now, we'll use an environment variable or hardcoded version
-  const LATEST_AGENT_VERSION = '1.0.0';
   const GITHUB_REPO = 'lasmarois/zedops';
+  const CACHE_KEY = 'agent-version-info';
+  const CACHE_TTL = 3600; // 1 hour in seconds
 
-  return c.json({
-    version: LATEST_AGENT_VERSION,
-    downloadUrls: {
-      // Linux only - agent uses syscall.Statfs which is Linux-specific
-      'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-linux-amd64`,
-      'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v${LATEST_AGENT_VERSION}/zedops-agent-linux-arm64`,
-    },
-  });
+  // Try to get from Cloudflare Cache
+  const cache = caches.default;
+  const cacheUrl = new URL(c.req.url);
+  cacheUrl.pathname = `/__cache/${CACHE_KEY}`;
+  const cacheRequest = new Request(cacheUrl.toString());
+
+  let cachedResponse = await cache.match(cacheRequest);
+  if (cachedResponse) {
+    // Return cached response
+    const data = await cachedResponse.json();
+    return c.json(data);
+  }
+
+  // Fetch from GitHub releases API
+  try {
+    const githubResponse = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/releases`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'ZedOps-Manager',
+        },
+      }
+    );
+
+    if (!githubResponse.ok) {
+      console.error(`GitHub API error: ${githubResponse.status}`);
+      // Fallback to hardcoded version if GitHub API fails
+      return c.json({
+        version: '1.0.1',
+        downloadUrls: {
+          'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-amd64`,
+          'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-arm64`,
+        },
+      });
+    }
+
+    const releases = await githubResponse.json() as Array<{
+      tag_name: string;
+      draft: boolean;
+      prerelease: boolean;
+    }>;
+
+    // Find latest agent release (tag starts with 'agent-v')
+    const agentRelease = releases.find(
+      (r) => r.tag_name.startsWith('agent-v') && !r.draft && !r.prerelease
+    );
+
+    if (!agentRelease) {
+      return c.json({ error: 'No agent release found' }, 404);
+    }
+
+    // Extract version from tag (agent-v1.0.1 -> 1.0.1)
+    const version = agentRelease.tag_name.replace('agent-v', '');
+
+    const responseData = {
+      version,
+      downloadUrls: {
+        'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/${agentRelease.tag_name}/zedops-agent-linux-amd64`,
+        'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/${agentRelease.tag_name}/zedops-agent-linux-arm64`,
+      },
+    };
+
+    // Cache the response
+    const responseToCache = new Response(JSON.stringify(responseData), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': `public, max-age=${CACHE_TTL}`,
+      },
+    });
+    c.executionCtx.waitUntil(cache.put(cacheRequest, responseToCache));
+
+    return c.json(responseData);
+  } catch (error) {
+    console.error('Failed to fetch from GitHub:', error);
+    // Fallback to hardcoded version
+    return c.json({
+      version: '1.0.1',
+      downloadUrls: {
+        'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-amd64`,
+        'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-arm64`,
+      },
+    });
+  }
 });
 
 /**

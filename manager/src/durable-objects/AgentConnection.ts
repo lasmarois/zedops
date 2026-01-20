@@ -156,6 +156,11 @@ export class AgentConnection extends DurableObject {
       return this.handlePortCheckRequest(request);
     }
 
+    // Notify agent of available update (called by admin broadcast endpoint)
+    if (url.pathname === "/notify-update" && request.method === "POST") {
+      return this.handleNotifyUpdate(request);
+    }
+
     // Server create endpoint
     if (url.pathname === "/servers" && request.method === "POST") {
       return this.handleServerCreateRequest(request);
@@ -1055,6 +1060,72 @@ export class AgentConnection extends DurableObject {
         error: error instanceof Error ? error.message : "Request failed",
       }), {
         status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for notifying agent of available update
+   * Used by admin broadcast endpoint to push update notifications
+   */
+  private async handleNotifyUpdate(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.ws) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Agent not connected",
+      }), {
+        status: 200, // Return 200 even if not connected - broadcast should continue to other agents
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body for version info
+    let body: { version: string };
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Invalid JSON body",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!body.version) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Missing version",
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Send update notification to agent
+    try {
+      const message = createMessage("agent.update.available", {
+        version: body.version,
+      });
+      this.ws.send(JSON.stringify(message));
+
+      console.log(`[AgentConnection] Sent update notification (version ${body.version}) to agent ${this.agentName}`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        agentName: this.agentName,
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error(`[AgentConnection] Failed to send update notification:`, error);
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Failed to send notification",
+      }), {
+        status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }

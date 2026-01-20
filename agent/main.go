@@ -58,6 +58,7 @@ type Agent struct {
 	volumeCacheMu    sync.RWMutex                  // Protects volumeCache
 	isAuthenticated  bool                          // True when successfully authenticated
 	authMutex        sync.RWMutex                  // Protects isAuthenticated
+	updater          *AutoUpdater                  // Auto-updater for push notifications
 }
 
 func main() {
@@ -164,9 +165,12 @@ func main() {
 	log.Printf("Manager URL: %s", agent.managerURL)
 	log.Printf("Agent version: %s", Version)
 
-	// Start auto-updater (checks every 6 hours)
+	// Create auto-updater and assign to agent for push notification handling
 	updater := NewAutoUpdater(*managerURL)
-	updater.Start()
+	agent.updater = updater
+
+	// Check for updates on startup only (no polling - updates pushed via WebSocket)
+	updater.CheckOnce()
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
 		// Check if this is an authentication failure - exit with special code
@@ -348,6 +352,8 @@ func (a *Agent) receiveMessages() {
 
 		// Handle different message types
 		switch msg.Subject {
+		case "agent.update.available":
+			a.handleUpdateAvailable(msg)
 		case "agent.register.success":
 			// Already handled in register()
 			continue
@@ -404,6 +410,29 @@ func (a *Agent) receiveMessages() {
 		default:
 			log.Printf("Unknown message subject: %s", msg.Subject)
 		}
+	}
+}
+
+// handleUpdateAvailable handles agent.update.available messages from manager
+func (a *Agent) handleUpdateAvailable(msg Message) {
+	// Extract version from message data
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		log.Println("Invalid update notification format")
+		return
+	}
+
+	version, ok := data["version"].(string)
+	if !ok {
+		log.Println("Update notification missing version")
+		return
+	}
+
+	// Trigger the update check
+	if a.updater != nil {
+		a.updater.TriggerUpdate(version)
+	} else {
+		log.Println("Auto-updater not initialized, cannot process update notification")
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 )
 
 // VersionInfo represents the response from the version endpoint
@@ -23,7 +22,6 @@ type VersionInfo struct {
 // AutoUpdater handles automatic agent updates
 type AutoUpdater struct {
 	managerURL    string
-	checkInterval time.Duration
 	currentBinary string
 }
 
@@ -43,23 +41,19 @@ func NewAutoUpdater(managerURL string) *AutoUpdater {
 
 	return &AutoUpdater{
 		managerURL:    managerURL,
-		checkInterval: 6 * time.Hour,
 		currentBinary: executable,
 	}
 }
 
-// Start begins periodic update checks
-func (u *AutoUpdater) Start() {
-	// Check immediately on startup
+// CheckOnce checks for updates once (called on startup)
+func (u *AutoUpdater) CheckOnce() {
 	go u.checkAndUpdate()
+}
 
-	// Then check periodically
-	ticker := time.NewTicker(u.checkInterval)
-	go func() {
-		for range ticker.C {
-			u.checkAndUpdate()
-		}
-	}()
+// TriggerUpdate is called when manager pushes an update notification
+func (u *AutoUpdater) TriggerUpdate(version string) {
+	log.Printf("Received update notification from manager: version %s available", version)
+	go u.checkAndUpdate()
 }
 
 // checkAndUpdate checks for updates and applies them if available

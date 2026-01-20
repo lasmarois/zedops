@@ -12,6 +12,7 @@ type Bindings = {
   DB: D1Database;
   TOKEN_SECRET: string;
   ADMIN_PASSWORD: string;
+  AGENT_CONNECTION: DurableObjectNamespace;
 };
 
 type Variables = {
@@ -98,6 +99,106 @@ admin.delete('/pending-agents/:id', requireAuth(), requireRole('admin'), async (
   await c.env.DB.prepare('DELETE FROM agents WHERE id = ?').bind(agentId).run();
 
   return c.json({ success: true });
+});
+
+/**
+ * POST /api/admin/broadcast-update
+ * Broadcast update notification to all connected agents
+ *
+ * Requires: admin role
+ * Body: { version?: string } - if not provided, fetches latest from /api/agent/version
+ * Returns: { success: boolean, notified: string[], failed: string[] }
+ */
+admin.post('/broadcast-update', requireAuth(), requireRole('admin'), async (c) => {
+  // Get version from body or fetch latest
+  let version: string;
+  try {
+    const body = await c.req.json();
+    version = body.version;
+  } catch {
+    // No body provided, will fetch latest
+    version = '';
+  }
+
+  // If no version provided, fetch from GitHub (via our version endpoint logic)
+  if (!version) {
+    const GITHUB_REPO = 'lasmarois/zedops';
+    try {
+      const githubResponse = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases`,
+        {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'ZedOps-Manager',
+          },
+        }
+      );
+
+      if (githubResponse.ok) {
+        const releases = await githubResponse.json() as Array<{
+          tag_name: string;
+          draft: boolean;
+          prerelease: boolean;
+        }>;
+
+        const agentRelease = releases.find(
+          (r) => r.tag_name.startsWith('agent-v') && !r.draft && !r.prerelease
+        );
+
+        if (agentRelease) {
+          version = agentRelease.tag_name.replace('agent-v', '');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch version from GitHub:', error);
+    }
+
+    if (!version) {
+      return c.json({ error: 'Could not determine latest version' }, 500);
+    }
+  }
+
+  // Get all connected agents from database
+  const agents = await c.env.DB.prepare(
+    "SELECT id, name FROM agents WHERE status = 'online'"
+  ).all();
+
+  const notified: string[] = [];
+  const failed: string[] = [];
+
+  // Send notification to each agent's Durable Object
+  for (const agent of agents.results || []) {
+    try {
+      const agentName = agent.name as string;
+      const doId = c.env.AGENT_CONNECTION.idFromName(agentName);
+      const stub = c.env.AGENT_CONNECTION.get(doId);
+
+      const response = await stub.fetch(new Request('http://internal/notify-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      }));
+
+      const result = await response.json() as { success: boolean; error?: string };
+
+      if (result.success) {
+        notified.push(agentName);
+      } else {
+        failed.push(agentName);
+      }
+    } catch (error) {
+      console.error(`Failed to notify agent ${agent.name}:`, error);
+      failed.push(agent.name as string);
+    }
+  }
+
+  return c.json({
+    success: true,
+    version,
+    notified,
+    failed,
+    total: (agents.results || []).length,
+  });
 });
 
 export { admin };
