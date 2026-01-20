@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -32,6 +33,11 @@ type volumeSizeCache struct {
 	expiresAt time.Time
 }
 
+// Exit codes for systemd
+const (
+	ExitCodeAuthFailure = 78 // EX_CONFIG - configuration/auth error, don't restart
+)
+
 type Agent struct {
 	managerURL       string
 	agentName        string
@@ -50,6 +56,8 @@ type Agent struct {
 	agentLogMutex    sync.Mutex                    // Protects agent log subscription
 	volumeCache      map[string]*volumeSizeCache   // serverName -> cached sizes
 	volumeCacheMu    sync.RWMutex                  // Protects volumeCache
+	isAuthenticated  bool                          // True when successfully authenticated
+	authMutex        sync.RWMutex                  // Protects isAuthenticated
 }
 
 func main() {
@@ -161,6 +169,12 @@ func main() {
 	updater.Start()
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
+		// Check if this is an authentication failure - exit with special code
+		// so systemd knows not to restart
+		if errors.Is(err, ErrAuthFailure) {
+			log.Printf("Exiting with code %d (auth failure - systemd will not restart)", ExitCodeAuthFailure)
+			os.Exit(ExitCodeAuthFailure)
+		}
 		log.Fatal("Agent error:", err)
 	}
 
@@ -303,6 +317,20 @@ func (a *Agent) sendMessage(msg Message) error {
 	a.connMutex.Lock()
 	defer a.connMutex.Unlock()
 	return a.conn.WriteJSON(msg)
+}
+
+// IsAuthenticated returns true if the agent is currently authenticated
+func (a *Agent) IsAuthenticated() bool {
+	a.authMutex.RLock()
+	defer a.authMutex.RUnlock()
+	return a.isAuthenticated
+}
+
+// setAuthenticated sets the authentication status
+func (a *Agent) setAuthenticated(status bool) {
+	a.authMutex.Lock()
+	defer a.authMutex.Unlock()
+	a.isAuthenticated = status
 }
 
 func (a *Agent) receiveMessages() {

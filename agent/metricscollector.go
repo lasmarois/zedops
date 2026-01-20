@@ -81,6 +81,11 @@ func (mc *MetricsCollector) collectLoop() {
 
 // collectAndSend collects metrics from all running containers and sends to manager
 func (mc *MetricsCollector) collectAndSend() {
+	// Don't send metrics if not authenticated
+	if !mc.agent.IsAuthenticated() {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 

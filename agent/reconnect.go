@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -15,6 +16,10 @@ const (
 	maxBackoff     = 60 * time.Second
 	backoffFactor  = 2.0
 )
+
+// ErrAuthFailure indicates a fatal authentication failure (invalid token, agent not found, etc.)
+// This error should cause the agent to exit without retry.
+var ErrAuthFailure = errors.New("authentication failure")
 
 // ConnectWithRetry attempts to connect to the manager with exponential backoff
 func (a *Agent) ConnectWithRetry(ctx context.Context) error {
@@ -89,13 +94,33 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			continue
 		}
 
-		// Register or authenticate
+		// Register or authenticate - this is FATAL if it fails
+		// Invalid token or missing agent means configuration is wrong, retrying won't help
 		if err := a.register(); err != nil {
-			log.Printf("Registration/authentication failed: %v", err)
 			a.conn.Close()
-			time.Sleep(initialBackoff)
-			continue
+			log.Println("")
+			log.Println("========================================")
+			log.Println("AUTHENTICATION FAILED - AGENT STOPPING")
+			log.Println("========================================")
+			log.Printf("Error: %v", err)
+			log.Println("")
+			log.Println("Possible causes:")
+			log.Println("  - Agent was deleted from the manager")
+			log.Println("  - Token is invalid or expired")
+			log.Println("  - Agent name mismatch")
+			log.Println("")
+			log.Println("To fix:")
+			log.Println("  1. Generate a new token in the manager UI")
+			log.Println("  2. Re-run the install script with --token flag")
+			log.Println("     Or manually update /root/.zedops-agent/token")
+			log.Println("  3. Restart the agent: sudo systemctl start zedops-agent")
+			log.Println("========================================")
+			return fmt.Errorf("%w: %v", ErrAuthFailure, err)
 		}
+
+		// Mark as authenticated
+		a.setAuthenticated(true)
+		log.Println("Agent authenticated successfully")
 
 		// Start heartbeat
 		heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
@@ -114,7 +139,8 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			// Connection closed, clean up and reconnect
 			heartbeatCancel()
 			a.conn.Close()
-			a.cleanupOnDisconnect() // Reset log streaming state
+			a.setAuthenticated(false) // Mark as not authenticated
+			a.cleanupOnDisconnect()   // Reset log streaming state
 			log.Println("Connection lost, reconnecting...")
 			time.Sleep(initialBackoff)
 			continue

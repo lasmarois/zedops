@@ -8,9 +8,13 @@ Requires=docker.service
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/zedops-agent --manager-url ${MANAGER_URL} --name ${AGENT_NAME}
-Restart=always
+Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30
+
+# Exit code 78 = auth failure (invalid token, agent deleted, etc.)
+# Don't restart on auth failures - manual intervention required
+RestartPreventExitStatus=78
 
 # Run as root (required for Docker socket access)
 User=root

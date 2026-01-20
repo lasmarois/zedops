@@ -93,11 +93,8 @@ detect_platform() {
         linux)
             OS="linux"
             ;;
-        darwin)
-            OS="darwin"
-            ;;
         *)
-            log_error "Unsupported operating system: $OS"
+            log_error "Unsupported operating system: $OS (only Linux is supported)"
             exit 1
             ;;
     esac
@@ -158,6 +155,11 @@ install_binary() {
     mv /tmp/zedops-agent "${INSTALL_DIR}/zedops-agent"
     chmod +x "${INSTALL_DIR}/zedops-agent"
 
+    # Fix SELinux context if SELinux is enabled (binary comes from /tmp with wrong context)
+    if command -v restorecon &> /dev/null; then
+        restorecon -v "${INSTALL_DIR}/zedops-agent" 2>/dev/null || true
+    fi
+
     log_info "Binary installed: ${INSTALL_DIR}/zedops-agent"
 }
 
@@ -203,8 +205,8 @@ EOF
 install_service() {
     log_info "Installing systemd service..."
 
-    # Create service file
-    cat > "$SERVICE_FILE" << 'EOF'
+    # Create service file (variables expand during install)
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=ZedOps Agent - Server Management Agent
 Documentation=https://github.com/lasmarois/zedops
@@ -215,16 +217,22 @@ Requires=docker.service
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/zedops-agent --manager-url ${MANAGER_URL} --name ${AGENT_NAME}
-Restart=always
+Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30
 
+# Exit code 78 = auth failure (invalid token, agent deleted, etc.)
+# Don't restart on auth failures - manual intervention required
+RestartPreventExitStatus=78
+
+# Run as root for Docker socket access
 User=root
 Group=root
 
+# Token is stored in /root/.zedops-agent/token
 Environment=HOME=/root
-EnvironmentFile=-/etc/zedops-agent/config
 
+# Logging via journald
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=zedops-agent

@@ -112,6 +112,11 @@ func (psc *PlayerStatsCollector) pollLoop() {
 
 // collectAllStats discovers running servers and collects their player stats
 func (psc *PlayerStatsCollector) collectAllStats() {
+	// Don't collect if not authenticated
+	if !psc.agent.IsAuthenticated() {
+		return
+	}
+
 	// Get running ZedOps containers
 	configs, err := psc.discoverServers()
 	if err != nil {
