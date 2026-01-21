@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // VersionInfo represents the response from the version endpoint
@@ -47,20 +48,21 @@ func NewAutoUpdater(managerURL string) *AutoUpdater {
 
 // CheckOnce checks for updates once (called on startup)
 func (u *AutoUpdater) CheckOnce() {
-	go u.checkAndUpdate()
+	go u.checkAndUpdate(false)
 }
 
 // TriggerUpdate is called when manager pushes an update notification
 func (u *AutoUpdater) TriggerUpdate(version string) {
 	log.Printf("Received update notification from manager: version %s available", version)
-	go u.checkAndUpdate()
+	go u.checkAndUpdate(true) // Bust cache when triggered by push notification
 }
 
 // checkAndUpdate checks for updates and applies them if available
-func (u *AutoUpdater) checkAndUpdate() {
+// bustCache: if true, adds timestamp to bypass Cloudflare cache
+func (u *AutoUpdater) checkAndUpdate(bustCache bool) {
 	log.Println("Checking for updates...")
 
-	latestVersion, downloadURL, err := u.getLatestVersion()
+	latestVersion, downloadURL, err := u.getLatestVersion(bustCache)
 	if err != nil {
 		log.Printf("Failed to check for updates: %v", err)
 		return
@@ -81,12 +83,18 @@ func (u *AutoUpdater) checkAndUpdate() {
 }
 
 // getLatestVersion fetches the latest version info from the manager
-func (u *AutoUpdater) getLatestVersion() (string, string, error) {
+// bustCache: if true, adds timestamp query param to bypass Cloudflare cache
+func (u *AutoUpdater) getLatestVersion(bustCache bool) (string, string, error) {
 	// Convert WebSocket URL to HTTP
 	httpURL := strings.Replace(u.managerURL, "wss://", "https://", 1)
 	httpURL = strings.Replace(httpURL, "ws://", "http://", 1)
 	httpURL = strings.TrimSuffix(httpURL, "/ws")
 	versionURL := httpURL + "/api/agent/version"
+
+	// Add cache-busting timestamp when triggered by push notification
+	if bustCache {
+		versionURL = fmt.Sprintf("%s?t=%d", versionURL, time.Now().UnixNano())
+	}
 
 	resp, err := http.Get(versionURL)
 	if err != nil {
