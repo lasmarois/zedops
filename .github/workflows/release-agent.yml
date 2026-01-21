@@ -78,3 +78,32 @@ jobs:
             agent/bin/checksums.txt
           draft: false
           prerelease: false
+
+      - name: Broadcast update to agents
+        if: success()
+        env:
+          BROADCAST_WEBHOOK_SECRET: ${{ secrets.BROADCAST_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$BROADCAST_WEBHOOK_SECRET" ]; then
+            echo "BROADCAST_WEBHOOK_SECRET not set, skipping broadcast"
+            exit 0
+          fi
+
+          echo "Broadcasting update v${{ steps.version.outputs.VERSION }} to agents..."
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://zedops.mail-bcf.workers.dev/api/webhook/broadcast-update" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: $BROADCAST_WEBHOOK_SECRET" \
+            -d '{"version": "${{ steps.version.outputs.VERSION }}"}')
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Broadcast successful"
+          else
+            echo "⚠️ Broadcast failed (non-critical)"
+          fi

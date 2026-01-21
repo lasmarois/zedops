@@ -30,6 +30,7 @@ type Bindings = {
   DB: D1Database;
   TOKEN_SECRET: string;
   ADMIN_PASSWORD: string;
+  BROADCAST_WEBHOOK_SECRET?: string;
 };
 
 // Create Hono app with bindings
@@ -142,6 +143,83 @@ app.get('/api/agent/version', async (c) => {
       },
     });
   }
+});
+
+/**
+ * POST /api/webhook/broadcast-update
+ * Webhook endpoint for CI/CD to broadcast update notification to all agents
+ *
+ * Auth: X-Webhook-Secret header must match BROADCAST_WEBHOOK_SECRET
+ * Body: { version: string }
+ * Returns: { success: boolean, version: string, notified: string[], failed: string[] }
+ */
+app.post('/api/webhook/broadcast-update', async (c) => {
+  // Check webhook secret
+  const secret = c.req.header('X-Webhook-Secret');
+  const expectedSecret = c.env.BROADCAST_WEBHOOK_SECRET;
+
+  if (!expectedSecret) {
+    return c.json({ error: 'Webhook not configured' }, 503);
+  }
+
+  if (!secret || secret !== expectedSecret) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  // Get version from body
+  let version: string;
+  try {
+    const body = await c.req.json();
+    version = body.version;
+  } catch {
+    return c.json({ error: 'Invalid body - expected { version: string }' }, 400);
+  }
+
+  if (!version) {
+    return c.json({ error: 'version is required' }, 400);
+  }
+
+  // Get all connected agents from database
+  const agents = await c.env.DB.prepare(
+    "SELECT id, name FROM agents WHERE status = 'online'"
+  ).all();
+
+  const notified: string[] = [];
+  const failed: string[] = [];
+
+  // Send notification to each agent's Durable Object
+  for (const agent of agents.results || []) {
+    try {
+      const agentName = agent.name as string;
+      const doId = c.env.AGENT_CONNECTION.idFromName(agentName);
+      const stub = c.env.AGENT_CONNECTION.get(doId);
+
+      const response = await stub.fetch(new Request('http://internal/notify-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      }));
+
+      const result = await response.json() as { success: boolean; error?: string };
+
+      if (result.success) {
+        notified.push(agentName);
+      } else {
+        failed.push(agentName);
+      }
+    } catch (error) {
+      console.error(`Failed to notify agent ${agent.name}:`, error);
+      failed.push(agent.name as string);
+    }
+  }
+
+  return c.json({
+    success: true,
+    version,
+    notified,
+    failed,
+    total: (agents.results || []).length,
+  });
 });
 
 /**
