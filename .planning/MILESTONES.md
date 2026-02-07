@@ -780,52 +780,98 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ---
 
-## Milestone 12: Backup & Restore ⏳ Planned
+## Milestone 12: Backup & Restore ✅ Complete
 
 **Goal:** Server data backup and restore functionality
 
-**Duration:** 1-2 weeks
+**Duration:** 1-2 weeks estimated → ~6 hours actual
+
+**Started:** 2026-02-07
+**Completed:** 2026-02-07
 
 **Deliverables:**
 
-### Phase 1: Manual Backup (P6)
-- "Backup Now" button in Quick Actions
-- Agent creates tar.gz of server data directory
-- Progress indicator during backup
-- Download link for completed backup
-- Backup stored locally on agent host
+### Phase 1: Manual Backup ✅
+- ✅ "Backup Now" in Backups tab with optional notes
+- ✅ Agent creates tar.gz of server `data/` directory
+- ✅ RCON pre-save (best-effort) before backup if server running
+- ✅ Progress broadcasting via WebSocket
+- ✅ Backup stored on agent host at `{dataPath}/{serverName}/backups/`
+- ✅ Metadata tracked in D1 + `.meta.json` sidecar on disk
 
-### Phase 2: Backup Management
-- List of available backups per server
-- Backup metadata (size, timestamp, game version)
-- Delete old backups
-- Backup naming/notes
+### Phase 2: Backup Management ✅
+- ✅ List of available backups per server (D1 query, fast)
+- ✅ Backup metadata (size, timestamp, notes, status)
+- ✅ Delete backups (removes file + D1 record)
+- ✅ Backup naming with notes (label in filename)
+- ✅ Retention policy (max 10 per server, oldest auto-deleted)
+- ✅ Sync endpoint to reconcile D1 with disk state
 
-### Phase 3: Restore
-- Restore from backup (stops server, replaces data, restarts)
-- Confirmation dialog with warnings
-- Progress indicator during restore
-- Rollback on failure
+### Phase 3: Restore ✅
+- ✅ Restore from backup (stops server, renames data, extracts, restarts)
+- ✅ Confirmation dialog with warnings
+- ✅ Pre-restore data preserved at `data.pre-restore.{timestamp}/`
+- ✅ Rollback on extraction failure
 
-### Phase 4: Scheduled Backups (Optional)
-- Configurable backup schedule (daily, before restart, etc.)
-- Retention policy (keep last N backups)
-- Auto-cleanup of old backups
+**Implementation:**
+- **Agent** (`backup.go`): CreateBackup, ListBackups, DeleteBackup, RestoreFromBackup + 4 message handlers
+- **Manager**: DO routes + 5 API endpoints (create, list, sync, delete, restore)
+- **Frontend**: BackupsTab component, useBackups hooks, useBackupProgress WebSocket hook
 
 **Success Criteria:**
-- User can trigger manual backup from UI
-- Backup completes and is downloadable
-- User can restore server from backup
-- Backups don't impact running server (copy while running)
+- ✅ User can trigger manual backup from UI
+- ✅ User can restore server from backup
+- ✅ Pre-restore data preserved for safety
+- ✅ Failed backups shown with correct status
+
+**Also delivered:**
+- `--no-update` agent flag for dev testing (prevents auto-update from overwriting dev binaries)
+
+**Dependencies:** Milestone 10 (Agent Deployment & Polish)
+
+**Planning:** [.planning/history/goal-3-m12-backup-restore/](.planning/history/goal-3-m12-backup-restore/)
+
+---
+
+## Milestone 13: Backup Transfer & Migration ⏳ Planned
+
+**Goal:** Download, upload, and cross-server backup transfer
+
+**Duration:** 1-2 weeks (estimated)
+
+**Deliverables:**
+
+### Phase 1: Download Backup
+- Download backup archive (`.tar.gz`) from agent to browser
+- Stream through Cloudflare Worker (or signed agent URL for large files)
+- Download button in Backups tab Actions column
+
+### Phase 2: Import Backup
+- Upload a `.tar.gz` backup into a server's backup list
+- Validate archive format on agent
+- File upload UI in Backups tab
+
+### Phase 3: Cross-Server Restore
+- Restore a backup from one server onto a different server (same or different agent)
+- Enables server migration between agents
+- "Import from another server" picker in Backups tab
+
+### Phase 4: Create Server from Backup (Optional)
+- "Create from backup" option in Create Server flow
+- Upload or select existing backup as initial data
+
+**Success Criteria:**
+- User can download a backup to their local machine
+- User can upload a backup to any server
+- User can migrate server data between agents via download/upload
+- Large backups (>100MB) handled gracefully
 
 **Out of Scope (Future):**
 - Cloud storage (S3, R2, etc.)
-- Cross-agent backup transfer
 - Incremental backups
+- Scheduled backups
 
-**Dependencies:** Milestone 9.8 (Polish & Production Readiness)
-
-**Planning:** *(not started)*
+**Dependencies:** Milestone 12 (Backup & Restore)
 
 ---
 
@@ -871,9 +917,10 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | P2: Performance Tab | 1-2 days | ~2 hours | ✅ Complete |
 | M10: Agent Deployment & Polish | 3-5 days | ~4 days | ✅ Complete |
 | M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
-| M12: Backup & Restore | 1-2 weeks | TBD | ⏳ Planned |
+| M12: Backup & Restore | 1-2 weeks | ~6 hours | ✅ Complete |
+| M13: Backup Transfer & Migration | 1-2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 15/17 milestones complete (88%)
+**Progress:** 16/18 milestones complete (89%)
 
 **Active Milestone:** None - ready for M11 or M12
 
@@ -885,7 +932,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** None - Ready for M11 or M12
+**Active Milestone:** None - Ready for M11, M13, or new work
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -929,12 +976,17 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
   - CI/CD pipelines (dev + prod), UI install flow
   - Bug fixes: stale status, last_seen timestamp, pending agent cleanup
 
+- ✅ **Milestone 12 - Backup & Restore** (2026-02-07)
+  - Manual backup (tar.gz), restore with rollback, delete, retention
+  - RCON pre-save, D1 metadata, WebSocket progress
+  - `--no-update` agent flag for dev testing
+
 **Planned:**
 - **Milestone 11** - Testing & Verification
-- **Milestone 12** - Backup & Restore
+- **Milestone 13** - Backup Transfer & Migration (download, upload, cross-server restore)
 - **Documentation** - Comprehensive API and user documentation
 
-**Next Steps:** Choose from M11 (Testing) or M12 (Backup & Restore)
+**Next Steps:** Choose from M11 (Testing), M13 (Backup Transfer), or new work
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
