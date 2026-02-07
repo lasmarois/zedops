@@ -197,7 +197,7 @@ export function AgentDetail() {
           </StatusBadge>
           {agent.status === 'online' && agent.lastSeen && (
             <span className="text-sm text-muted-foreground">
-              Last seen: {new Date(agent.lastSeen).toLocaleString()}
+              Last seen: {new Date(agent.lastSeen * 1000).toLocaleString()}
             </span>
           )}
         </div>

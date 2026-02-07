@@ -14,7 +14,7 @@
 
 | # | Goal | Milestone | Status | Created | Completed |
 |---|------|-----------|--------|---------|-----------|
-| - | - | - | - | - | - |
+| 1 | Complete M10: Agent Deployment & Fix Status Bugs | M10 | Complete | 2026-02-07 | 2026-02-07 |
 
 ---
 

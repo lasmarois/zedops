@@ -673,36 +673,50 @@ M9 created beautiful new UI pages (Dashboard, ServerList, AgentDetail, ServerDet
 
 ---
 
-## Milestone 10: Agent Deployment & Polish ⏳ Deferred
+## Milestone 10: Agent Deployment & Polish ✅ Complete
 
 **Goal:** Production-ready agent deployment with installation automation
 
-**Duration:** 3-5 days
-
-**Rationale:**
-Deferred until after visual redesign is complete (M9). Agent already runs natively on host as a single binary. This milestone focuses on deployment convenience and multi-platform support.
+**Duration:** 3-5 days estimated → ~4 days actual (2026-01-18 to 2026-02-07)
 
 **Deliverables:**
-- Cross-platform build script (Linux, Windows, macOS)
-- Installation script (`curl | bash` style for Linux)
-- Systemd service file (Linux)
-- Windows service configuration
-- Agent auto-update mechanism
-- UI "Install Agent" button with copy-to-clipboard command
-- Multi-arch support (amd64, arm64)
+- ✅ Cross-platform build script (Linux amd64/arm64)
+- ✅ Installation script (`curl | bash` style for Linux)
+- ✅ Systemd service file (Linux) with auth-failure protection
+- ✅ Agent auto-update mechanism (startup check + WebSocket push)
+- ✅ UI "Install Agent" button with copy-to-clipboard command
+- ✅ Pending agent cards (shows "Awaiting Connection" in UI)
+- ✅ GitHub Actions CI/CD (agent releases + dev/prod deployment)
+- ✅ Stale agent detection (auto-marks offline after 2min heartbeat gap)
+- ✅ Pending agent cleanup (expired tokens auto-removed)
 
 **Success Criteria:**
-- User runs: `curl -sSL https://zedops.example.com/install.sh | sudo bash`
-- Script downloads agent binary for correct OS/arch
-- Prompts for registration token (from UI)
-- Installs as systemd service (auto-start on boot)
-- Agent connects to manager successfully
-- Service survives reboot (auto-restart)
-- Agent can auto-update when new version released
+- ✅ User runs install script → agent installs as systemd service
+- ✅ Agent starts on boot (systemd enabled)
+- ✅ Agent auto-reconnects after reboot
+- ✅ UI shows installation command with token
+- ✅ Agent auto-updates when new version released (v1.0.0 → v1.0.5)
+- ✅ Stale agents correctly marked offline
 
 **Dependencies:** Milestone 9 (Visual Redesign - Implementation)
 
-**Planning:** *(not started)*
+**Planning:** [.planning/legacy/milestone-10-agent-deployment/](.planning/legacy/milestone-10-agent-deployment/)
+
+**Sub-milestones:**
+- M10.1: Auto-update pipeline (GitHub releases) ✅
+- M10.2: Systemd service installation + auth fixes ✅
+- M10.3: Push notifications for updates ✅
+- M10.4: CI/CD environments (dev + prod) ✅
+
+**Bug Fixes (Goal #1, 2026-02-07):**
+- Fixed "Last seen" epoch timestamp bug (seconds vs milliseconds)
+- Fixed stale agent status (agents showing "Online" when offline)
+- Added pending agent token expiry cleanup
+
+**Deferred:**
+- Windows service (not needed for current users)
+
+**Completed:** 2026-02-07
 
 ---
 
@@ -855,13 +869,13 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | M9.8: Polish & Production Readiness | 1-2 weeks | ~4 days | ✅ Complete |
 | P1: Metrics Sparklines | 1-2 days | ~4 hours | ✅ Complete |
 | P2: Performance Tab | 1-2 days | ~2 hours | ✅ Complete |
-| M10: Agent Deployment & Polish | 3-5 days | TBD | ⏳ Deferred |
+| M10: Agent Deployment & Polish | 3-5 days | ~4 days | ✅ Complete |
 | M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
 | M12: Backup & Restore | 1-2 weeks | TBD | ⏳ Planned |
 
-**Progress:** 14/17 milestones complete (82%) 🎉
+**Progress:** 15/17 milestones complete (88%)
 
-**Active Milestone:** None - ready for M10, M11, or M12
+**Active Milestone:** None - ready for M11 or M12
 
 **Total to MVP:** ~12 weeks estimated → ~3 weeks actual (current pace: 75% under estimate!)
 
@@ -871,7 +885,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** None - Ready for M10, M11, or M12
+**Active Milestone:** None - Ready for M11 or M12
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -910,14 +924,17 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
   - Recharts interactive charts (CPU, Memory, Players)
   - Time range selector (30m, 3h, 12h, 24h, 3d)
   - API downsampling for larger ranges
+- ✅ **Milestone 10 - Agent Deployment & Polish** (2026-01-18 to 2026-02-07)
+  - Cross-platform builds, systemd service, install script, auto-update
+  - CI/CD pipelines (dev + prod), UI install flow
+  - Bug fixes: stale status, last_seen timestamp, pending agent cleanup
 
 **Planned:**
-- **Milestone 10** - Agent Deployment & Polish
 - **Milestone 11** - Testing & Verification
 - **Milestone 12** - Backup & Restore
 - **Documentation** - Comprehensive API and user documentation
 
-**Next Steps:** Choose from M10 (Agent Deployment), M11 (Testing), or M12 (Backup & Restore)
+**Next Steps:** Choose from M11 (Testing) or M12 (Backup & Restore)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements

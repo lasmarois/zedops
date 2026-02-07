@@ -109,17 +109,56 @@ agents.get('/', async (c) => {
 
     const result = await c.env.DB.prepare(query).bind(...params).all();
 
-    // Transform results
-    const agents = result.results.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      status: row.status,
-      lastSeen: row.last_seen,
-      createdAt: row.created_at,
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-      publicIp: row.public_ip || null,
-      hostname: row.hostname || null,
-    }));
+    const now = Math.floor(Date.now() / 1000);
+    const STALE_THRESHOLD = 120; // 2 minutes - if no heartbeat, mark offline
+
+    // Detect and fix stale "online" agents
+    const staleAgentIds: string[] = [];
+    for (const row of result.results as any[]) {
+      if (row.status === 'online' && row.last_seen && (now - row.last_seen) > STALE_THRESHOLD) {
+        staleAgentIds.push(row.id);
+      }
+    }
+
+    // Batch update stale agents to offline
+    if (staleAgentIds.length > 0) {
+      const placeholders = staleAgentIds.map(() => '?').join(',');
+      await c.env.DB.prepare(
+        `UPDATE agents SET status = 'offline' WHERE id IN (${placeholders})`
+      ).bind(...staleAgentIds).run();
+    }
+
+    // Cleanup expired pending agents (token expires after 1 hour)
+    const PENDING_EXPIRY = 3600; // 1 hour
+    const expiredPendingIds: string[] = [];
+    for (const row of result.results as any[]) {
+      if (row.status === 'pending' && row.created_at && (now - row.created_at) > PENDING_EXPIRY) {
+        expiredPendingIds.push(row.id);
+      }
+    }
+
+    if (expiredPendingIds.length > 0) {
+      const placeholders = expiredPendingIds.map(() => '?').join(',');
+      await c.env.DB.prepare(
+        `DELETE FROM agents WHERE id IN (${placeholders}) AND status = 'pending'`
+      ).bind(...expiredPendingIds).run();
+    }
+
+    // Transform results (with corrected status, excluding expired pending)
+    const staleSet = new Set(staleAgentIds);
+    const expiredSet = new Set(expiredPendingIds);
+    const agents = (result.results as any[])
+      .filter((row: any) => !expiredSet.has(row.id))
+      .map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        status: staleSet.has(row.id) ? 'offline' : row.status,
+        lastSeen: row.last_seen,
+        createdAt: row.created_at,
+        metadata: row.metadata ? JSON.parse(row.metadata) : {},
+        publicIp: row.public_ip || null,
+        hostname: row.hostname || null,
+      }));
 
     return c.json({
       agents,
