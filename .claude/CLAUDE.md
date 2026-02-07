@@ -12,9 +12,18 @@ ZedOps is a Cloudflare-based distributed Project Zomboid server management platf
 
 | Document | Purpose |
 |----------|---------|
-| @ARCHITECTURE.md | System architecture, components, protocol |
-| @MILESTONES.md | Project roadmap and status |
-| @TECH_DECISIONS.md | Technical decision log |
+| @.planning/GOALS.md | Current work tracking (READ FIRST) |
+| @.planning/MILESTONES.md | Project roadmap and status |
+| @.planning/ARCHITECTURE.md | System architecture, components, protocol |
+| @.planning/SECURITY.md | Security guidelines and auth system |
+| @.planning/TECH_DECISIONS.md | Technical decision log |
+
+## Active Planning Files
+
+When a goal is active, these files exist in project root:
+- @task_plan.md - Current phases and tasks
+- @progress.md - Session log
+- @findings.md - Research discoveries
 
 ## Quick Commands
 
@@ -34,6 +43,6 @@ cd frontend && npm run build && cd ../manager && wrangler deploy
 
 ## Core Principles
 
-- **Milestone-based development**: Each milestone is a complete, testable feature
+- **Goal-based development**: Track work in GOALS.md, roadmap in MILESTONES.md
 - **Agent-initiated connections**: Agents behind NAT initiate WebSocket to manager
 - **Plan before implementing**: Use `/planning-with-files` for non-trivial work

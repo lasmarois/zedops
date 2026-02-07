@@ -27,7 +27,7 @@
 - ✅ Connection survives network interruptions (reconnect logic)
 - ✅ Messages can be sent bidirectionally
 
-**Planning:** [planning-history/milestone-1-agent-connection/](planning-history/milestone-1-agent-connection/)
+**Planning:** [.planning/legacy/milestone-1-agent-connection/](.planning/legacy/milestone-1-agent-connection/)
 
 **Completed:** 2026-01-10 (commit: 0fc9cac)
 
@@ -141,7 +141,7 @@
 
 **Dependencies:** Milestone 3 (Log Streaming)
 
-**Planning:** [task_plan.md](task_plan.md) | [planning-history/server-lifecycle-management/](planning-history/server-lifecycle-management/)
+**Planning:** [task_plan.md](task_plan.md) | [.planning/legacy/server-lifecycle-management/](.planning/legacy/server-lifecycle-management/)
 
 **Completed:** 2026-01-11
 
@@ -212,7 +212,7 @@
 
 **Dependencies:** None
 
-**Planning:** [planning-history/milestone-5-host-metrics/](planning-history/milestone-5-host-metrics/)
+**Planning:** [.planning/legacy/milestone-5-host-metrics/](.planning/legacy/milestone-5-host-metrics/)
 
 **Completed:** 2026-01-11
 
@@ -258,7 +258,7 @@
 
 **Dependencies:** Milestone 4 (Server Management)
 
-**Planning:** [planning-history/milestone-6-rcon-integration/](planning-history/milestone-6-rcon-integration/)
+**Planning:** [.planning/legacy/milestone-6-rcon-integration/](.planning/legacy/milestone-6-rcon-integration/)
 
 **Completed:** 2026-01-12 (commits: 82af871, 3158e7e, 9c4efb4, 7074cfd, 82533a9)
 
@@ -312,7 +312,7 @@
 - 0008: Update role constraint (admin/user)
 
 **Planning (Archived):**
-- [planning-history/milestone-7-rbac-initial-implementation/](planning-history/milestone-7-rbac-initial-implementation/)
+- [.planning/legacy/milestone-7-rbac-initial-implementation/](.planning/legacy/milestone-7-rbac-initial-implementation/)
 
 ---
 
@@ -425,7 +425,7 @@ After building all core features (M1-M7), apply consistent design system across 
 
 **Dependencies:** Milestone 7 (RBAC & Audit Logs)
 
-**Planning (Archived):** [planning-history/milestone-7.5-ui-styling/](planning-history/milestone-7.5-ui-styling/)
+**Planning (Archived):** [.planning/legacy/milestone-7.5-ui-styling/](.planning/legacy/milestone-7.5-ui-styling/)
 
 **Deferred:** Phase 6 (Testing & Verification) → Moved to Milestone 11
 
@@ -480,7 +480,7 @@ After completing the foundational UI styling (M7.5), create a cohesive visual de
 
 **Dependencies:** Milestone 7.5 (UI Styling & Design System)
 
-**Planning:** [planning-history/milestone-8-visual-redesign-design/](planning-history/milestone-8-visual-redesign-design/)
+**Planning:** [.planning/legacy/milestone-8-visual-redesign-design/](.planning/legacy/milestone-8-visual-redesign-design/)
 
 **Status:** ✅ Complete - All design specifications ready for M9 implementation
 
@@ -568,9 +568,9 @@ Transform design artifacts from M8 into a fully functional, polished UI. This co
 
 **Dependencies:** Milestone 8 (Visual Redesign - Design Phase)
 
-**Planning (Archived):** [planning-history/milestone-9-visual-redesign-implementation/](planning-history/milestone-9-visual-redesign-implementation/)
+**Planning (Archived):** [.planning/legacy/milestone-9-visual-redesign-implementation/](.planning/legacy/milestone-9-visual-redesign-implementation/)
 
-**Design References:** [planning-history/milestone-8-visual-redesign-design/](planning-history/milestone-8-visual-redesign-design/)
+**Design References:** [.planning/legacy/milestone-8-visual-redesign-design/](.planning/legacy/milestone-8-visual-redesign-design/)
 
 **Completed Deliverables:**
 - ✅ Phase 1: Foundation (~2.5 hours)
@@ -902,7 +902,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - ✅ **Milestone 9.8 - Polish & Production Readiness** (2026-01-13 to 2026-01-15)
   - ✅ 37 sub-milestones complete (~4 days)
   - Server status, container health, disk metrics, agent logs, UI polish
-  - See [MILESTONE-M98.md](MILESTONE-M98.md) for details
+  - See [MILESTONE-M98.md](.planning/MILESTONE-M98.md) for details
 - ✅ **P1 - Metrics Sparklines** (2026-01-18)
   - D1 storage with 3-day retention, 10s intervals
   - Sparklines on Overview cards (CPU, Memory, Players)
@@ -922,7 +922,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
 - M7.5 Phase 6 testing moved to M11
-- **Agent Disconnect Functionality** - Add ability to disconnect agent from manager UI (see [MILESTONE-M98.md](MILESTONE-M98.md) Future Enhancements section)
+- **Agent Disconnect Functionality** - Add ability to disconnect agent from manager UI (see [MILESTONE-M98.md](.planning/MILESTONE-M98.md) Future Enhancements section)
   - Current: Disconnect button exists but is disabled/non-functional
   - Needs: Manager endpoint to force-close WebSocket, confirmation dialog, proper status handling
 

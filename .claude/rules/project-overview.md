@@ -31,4 +31,4 @@
 NATS-inspired subject-based routing over WebSocket:
 - Request/reply pattern: `server.start`, `docker.list`
 - Pub/sub for logs: `logs.{serverName}`
-- See @ARCHITECTURE.md#communication-protocol for full spec
+- See @.planning/ARCHITECTURE.md#communication-protocol for full spec
