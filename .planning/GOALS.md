@@ -17,6 +17,9 @@ None
 | 1 | Complete M10: Agent Deployment & Fix Status Bugs | M10 | Complete | 2026-02-07 | 2026-02-07 |
 | 2 | Dev/Prod Workflow Readiness | Infra | Complete | 2026-02-07 | 2026-02-07 |
 | 3 | Implement M12: Backup & Restore | M12 | Complete | 2026-02-07 | 2026-02-07 |
+| 4 | Smart Health Check | M14 | Complete | 2026-02-07 | 2026-02-07 |
+| 5 | ZedOps Integration Audit | M14 | Planned | | |
+| 6 | Distribution Strategy | M14 | Planned | | |
 
 ---
 

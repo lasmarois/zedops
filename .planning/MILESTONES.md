@@ -875,6 +875,45 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ---
 
+## Milestone 14: Docker Image Improvements (steam-zomboid) 🚧 In Progress
+
+**Goal:** Improve the steam-zomboid Docker image for better ZedOps integration and broader distribution
+
+**Duration:** 1-2 weeks (estimated)
+
+**Started:** 2026-02-07
+
+**Context:** The steam-zomboid Docker image (cloned into workspace at `steam-zomboid/`, gitignored) is the foundation container that ZedOps manages. Work here is tightly coupled with ZedOps agent behavior.
+
+**Repository:** `https://gitlab.nicomarois.com/nicolas/steam-zomboid.git` (local: `steam-zomboid/`)
+
+**Goals:**
+
+### Goal #4: Smart Health Check 🚧
+- Replace binary health check with lifecycle-aware script
+- Current check only passes when Java + UDP ports are up → shows "Unhealthy" during Steam updates
+- New check understands boot phases: steamcmd running → healthy, Java running → healthy, nothing → unhealthy
+- Keeps frontend status aligned with Docker state (no frontend hacks needed)
+
+### Goal #5: ZedOps Integration Audit ⏳
+- Review ENV variables the agent sets vs what the image expects
+- Identify missing hooks or signals for better orchestration
+- Document integration contract between agent and image
+
+### Goal #6: Distribution Strategy ⏳
+- Evaluate: GitLab registry (current) vs DockerHub vs GitHub Container Registry
+- Consider moving codebase to GitHub for public discoverability
+- CI/CD implications and migration path
+
+**Success Criteria:**
+- Health check correctly reports status during all boot phases
+- Integration gaps between agent and image documented and addressed
+- Distribution strategy decided with clear next steps
+
+**Dependencies:** Milestone 12 (Backup & Restore - uses the image extensively)
+
+---
+
 ## Future Milestones (Ideas)
 
 ### Mod Management UI
@@ -919,10 +958,11 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | M11: Testing & Verification | 1-2 weeks | TBD | ⏳ Planned |
 | M12: Backup & Restore | 1-2 weeks | ~6 hours | ✅ Complete |
 | M13: Backup Transfer & Migration | 1-2 weeks | TBD | ⏳ Planned |
+| M14: Docker Image Improvements | 1-2 weeks | TBD | 🚧 In Progress |
 
-**Progress:** 16/18 milestones complete (89%)
+**Progress:** 16/19 milestones complete (84%)
 
-**Active Milestone:** None - ready for M11 or M12
+**Active Milestone:** M14 - Docker Image Improvements
 
 **Total to MVP:** ~12 weeks estimated → ~3 weeks actual (current pace: 75% under estimate!)
 
@@ -932,7 +972,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ## Current Status
 
-**Active Milestone:** None - Ready for M11, M13, or new work
+**Active Milestone:** M14 - Docker Image Improvements (steam-zomboid)
 
 **Completed Milestones:**
 - ✅ Milestone 1 - Agent Connection (2026-01-10)
@@ -986,7 +1026,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - **Milestone 13** - Backup Transfer & Migration (download, upload, cross-server restore)
 - **Documentation** - Comprehensive API and user documentation
 
-**Next Steps:** Choose from M11 (Testing), M13 (Backup Transfer), or new work
+**Next Steps:** Complete M14 goals, then M11 (Testing) or M13 (Backup Transfer)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
