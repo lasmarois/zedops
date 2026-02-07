@@ -889,25 +889,30 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 **Goals:**
 
-### Goal #4: Smart Health Check 🚧
-- Replace binary health check with lifecycle-aware script
-- Current check only passes when Java + UDP ports are up → shows "Unhealthy" during Steam updates
-- New check understands boot phases: steamcmd running → healthy, Java running → healthy, nothing → unhealthy
-- Keeps frontend status aligned with Docker state (no frontend hacks needed)
+### Goal #4: Smart Health Check ✅
+- Replaced binary health check with lifecycle-aware script
+- Understands boot phases: steamcmd running → healthy, Java running → healthy, nothing → unhealthy
+- Keeps frontend status aligned with Docker state
 
-### Goal #5: ZedOps Integration Audit ⏳
-- Review ENV variables the agent sets vs what the image expects
-- Identify missing hooks or signals for better orchestration
-- Document integration contract between agent and image
+### Goal #5: ZedOps Integration Audit + Fix All Gaps ✅
+- Full audit of agent-image integration (6 gaps identified, all resolved)
+- Graceful shutdown: RCON save before stop/restart/delete/rebuild (agent v1.0.7)
+- Game settings UI: 9 settings exposed in create + edit forms
+- Mod management UI: SERVER_MODS + SERVER_WORKSHOP_ITEMS in create + edit forms
+- No backend/DB/protocol changes needed — all settings flow through existing config map
 
-### Goal #6: Distribution Strategy ⏳
+### Goal #6: Fix Health Check: Healthy Only When Game Ready ⏳
+- Current lifecycle check reports healthy during steamcmd/boot — should only be healthy when game accepts connections
+- Tracked separately from Goal #4
+
+### Goal #7: Distribution Strategy ⏳
 - Evaluate: GitLab registry (current) vs DockerHub vs GitHub Container Registry
 - Consider moving codebase to GitHub for public discoverability
 - CI/CD implications and migration path
 
 **Success Criteria:**
-- Health check correctly reports status during all boot phases
-- Integration gaps between agent and image documented and addressed
+- ✅ Health check correctly reports status during all boot phases
+- ✅ Integration gaps between agent and image documented and addressed
 - Distribution strategy decided with clear next steps
 
 **Dependencies:** Milestone 12 (Backup & Restore - uses the image extensively)
@@ -917,7 +922,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 ## Future Milestones (Ideas)
 
 ### Mod Management UI
-- UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)
+- ~~UI for managing mods (SERVER_MODS, SERVER_WORKSHOP_ITEMS)~~ ✅ Complete (Goal #5)
 - Mod browser (popular mods with descriptions)
 - One-click mod installation
 
@@ -927,10 +932,10 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - Alerts for resource thresholds
 - Email/Discord notifications
 
-### Agent Auto-Update
-- Manager notifies agents of new version
-- Agent downloads and replaces binary
-- Graceful restart without losing connections
+### Agent Auto-Update ✅ Complete (M10)
+- ~~Manager notifies agents of new version~~ ✅ WebSocket push broadcast
+- ~~Agent downloads and replaces binary~~ ✅ exec-restart with new binary
+- ~~Graceful restart without losing connections~~ ✅
 - Rollback on failure
 
 ---
@@ -1026,7 +1031,7 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - **Milestone 13** - Backup Transfer & Migration (download, upload, cross-server restore)
 - **Documentation** - Comprehensive API and user documentation
 
-**Next Steps:** Complete M14 goals, then M11 (Testing) or M13 (Backup Transfer)
+**Next Steps:** Complete M14 remaining goals (#6, #7), then M11 (Testing) or M13 (Backup Transfer)
 
 **Backlog:**
 - See [ISSUE-metrics-enhancements.md](ISSUE-metrics-enhancements.md) for deferred M5 enhancements
