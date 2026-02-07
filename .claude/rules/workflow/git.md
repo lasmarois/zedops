@@ -1,5 +1,49 @@
 # Git Workflow
 
+## Branching Strategy
+
+All code changes follow a **dev-first workflow**:
+
+```
+dev branch (development) → main branch (production)
+```
+
+| Branch | Purpose | CI Action |
+|--------|---------|-----------|
+| `dev` | Development & testing | Deploys to `zedops-dev` worker |
+| `main` | Production | Deploys to `zedops` worker |
+
+### Daily Workflow
+
+1. **Work on `dev`** branch (or feature branches that merge into `dev`)
+2. **Push to `dev`** → CI deploys to dev environment
+3. **Test on dev** → verify at `https://zedops-dev.mail-bcf.workers.dev`
+4. **When satisfied** → merge `dev` into `main`
+5. **Push `main`** → CI deploys to production
+
+### Switching Between Branches
+
+```bash
+# Start working on dev
+git checkout dev
+
+# After testing, merge to production
+git checkout main && git merge dev && git push origin main
+
+# Go back to dev for more work
+git checkout dev
+```
+
+### Agent Releases
+
+Agent releases use tags (independent of branch workflow):
+
+```bash
+git tag agent-v1.0.X && git push origin agent-v1.0.X
+```
+
+This triggers the Release Agent workflow → builds binaries → creates GitHub release → broadcasts update to agents.
+
 ## Commit Timing
 
 ### When to Commit
@@ -20,7 +64,7 @@
 
 <body - what changed and why>
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 ### Types
@@ -45,9 +89,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 
 ### Completing a Milestone
 1. Final implementation commit
-2. Archive planning files to `planning-history/`
+2. Archive planning files to `.planning/history/`
 3. Commit archive move with milestone summary
-4. Update MILESTONE-M98.md or MILESTONES.md
+4. Update MILESTONES.md
 5. Commit tracker updates
 
 ## Common Commands
@@ -66,16 +110,22 @@ git add -u <path>
 git commit -m "$(cat <<'EOF'
 Commit message here
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 
 # View recent commits
 git log --oneline -5
+
+# Deploy to dev
+git push origin dev
+
+# Merge dev to main for production deploy
+git checkout main && git merge dev && git push origin main && git checkout dev
 ```
 
 ## Safety Rules
-- NEVER use `--force` without explicit user approval
+- NEVER use `--force` on `main` without explicit user approval
 - NEVER commit secrets (.dev.vars, tokens, credentials)
 - NEVER amend commits without explicit user request
 - Check `git status` before and after commits

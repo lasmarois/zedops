@@ -1,8 +1,21 @@
 # Local Development Setup
 
-## Frontend Development (Against Production Backend)
+## Development Workflow
 
-The manager (Cloudflare Worker) cannot run locally on this server due to GLIBC version requirements. Use the production backend instead.
+All code changes follow the **dev-first workflow**:
+
+```
+work on dev branch → push to dev → CI deploys to zedops-dev → test → merge to main → CI deploys to prod
+```
+
+| Environment | Worker | URL | D1 Database |
+|-------------|--------|-----|-------------|
+| Dev | `zedops-dev` | `https://zedops-dev.mail-bcf.workers.dev` | `zedops-db-dev` |
+| Prod | `zedops` | `https://zedops.mail-bcf.workers.dev` | `zedops-db` |
+
+## Frontend Development (Against Dev Backend)
+
+The manager (Cloudflare Worker) cannot run locally on this server due to GLIBC version requirements. Use the dev backend instead.
 
 ### Start Frontend Dev Server
 
@@ -14,24 +27,15 @@ The `--host 0.0.0.0` flag binds to all interfaces (required for remote access).
 
 ### Vite Proxy Configuration
 
-The `frontend/vite.config.ts` includes proxy settings to forward API calls to production:
+The `frontend/vite.config.ts` proxies API/WS calls to the dev environment by default.
+Override with `VITE_BACKEND_URL` to point at production if needed:
 
-```typescript
-server: {
-  proxy: {
-    '/api': {
-      target: 'https://zedops.mail-bcf.workers.dev',
-      changeOrigin: true,
-      secure: true,
-    },
-    '/ws': {
-      target: 'wss://zedops.mail-bcf.workers.dev',
-      changeOrigin: true,
-      ws: true,
-      secure: true,
-    },
-  },
-},
+```bash
+# Default: proxies to dev
+cd frontend && npm run dev -- --host 0.0.0.0
+
+# Override: proxy to production
+VITE_BACKEND_URL=https://zedops.mail-bcf.workers.dev npm run dev -- --host 0.0.0.0
 ```
 
 ### Access Points
@@ -42,8 +46,8 @@ server: {
 ### Limitations
 
 - Frontend changes are visible immediately (HMR)
-- Backend changes require deployment to production
-- Data comes from production database
+- Backend changes require deployment (`push to dev` triggers CI)
+- Data comes from dev database
 
 ## Why Wrangler Dev Doesn't Work
 
@@ -56,28 +60,39 @@ workerd: /lib64/libc.so.6: version `GLIBC_2.35' not found
 
 ### Workarounds
 
-1. **Proxy to production** (current approach) - Test frontend against live backend
-2. **Deploy and test** - Deploy changes to Cloudflare and test in production
+1. **Proxy to dev environment** (current approach) - Test frontend against dev backend
+2. **Push to dev branch** - CI deploys to dev environment automatically
 3. **Use newer Linux** - Container or VM with Ubuntu 22.04+ / Fedora 36+
 
-## Production Deployment
+## Deployment
 
-### Deploy Frontend + Manager to Cloudflare
+### CI/CD (Preferred — No Manual Steps)
 
 ```bash
-# Build frontend and deploy everything in one command
+# Deploy to dev: push to dev branch
+git push origin dev
+
+# Deploy to prod: merge dev into main and push
+git checkout main && git merge dev && git push origin main
+```
+
+CI handles: build frontend → apply D1 migrations → deploy Worker + assets.
+
+SPA routing is handled by Cloudflare's asset handler (`not_found_handling = "single-page-application"` in wrangler.toml). No hardcoded asset paths — CI builds are fully self-contained.
+
+### Manual Deployment (Emergency Only)
+
+```bash
+# Deploy to dev
+cd frontend && npm run build && cd ../manager && npx wrangler deploy --env dev
+
+# Deploy to prod
 cd frontend && npm run build && cd ../manager && npx wrangler deploy
 ```
 
-This will:
-1. Build the React frontend to `frontend/dist/`
-2. Upload static assets to Cloudflare
-3. Deploy the Worker (API + Durable Objects)
-4. Output the deployment URL
-
 ### Deploy Agent to Host
 
-**IMPORTANT: No systemd service yet!** Until the agent installation milestone is complete, the agent runs as a manual process. Do NOT attempt to use systemctl commands - they will fail.
+Agent runs as a systemd service on maestroserver (enabled on boot).
 
 #### Build the Agent
 
@@ -117,39 +132,12 @@ ps aux | grep zedops-agent | grep -v grep
 tail -f /tmp/zedops-agent.log
 ```
 
-### Deployment Checklist
-
-1. **Build frontend**: `cd frontend && npm run build`
-2. **Fix any TypeScript errors** if build fails
-3. **Update index.ts asset paths** (CRITICAL - see below)
-4. **Deploy to Cloudflare**: `cd ../manager && npx wrangler deploy`
-5. **Verify deployment**: Check https://zedops.mail-bcf.workers.dev
-6. **Update agent** (if agent code changed): Build and deploy binary to host
-
-### CRITICAL: Update index.ts After Build
-
-The SPA fallback in `manager/src/index.ts` has hardcoded asset filenames that must match the build output. After `npm run build`, check the generated filenames:
-
-```bash
-ls frontend/dist/assets/
-# Example output: index-C8OaW8Lz.js  index-dc-jheIq.css  vite.svg
-```
-
-Then update `manager/src/index.ts` to match:
-```typescript
-<script type="module" crossorigin src="/assets/index-C8OaW8Lz.js"></script>
-<link rel="stylesheet" crossorigin href="/assets/index-dc-jheIq.css">
-```
-
-**If you skip this step**: Users will get a blank page on refresh (the old asset files don't exist).
-
 ### Common Build Errors
 
 | Error | Solution |
 |-------|----------|
 | Unused imports (TS6133) | Remove the unused import from the file |
 | GLIBC error on wrangler dev | Use deploy instead - local dev not supported on this server |
-| Blank page on refresh | Update asset paths in `manager/src/index.ts` to match build output |
 
 ## Test VM (zedops-test-agent)
 
@@ -242,10 +230,14 @@ curl -s http://127.0.0.1:9222/json/version
 |------|---------|
 | Frontend dev (local) | `cd frontend && npm run dev -- --host 0.0.0.0` |
 | Build frontend only | `cd frontend && npm run build` |
-| Deploy to Cloudflare | `cd frontend && npm run build && cd ../manager && npx wrangler deploy` |
+| Deploy to dev (CI) | `git push origin dev` |
+| Deploy to prod (CI) | merge dev→main, `git push origin main` |
+| Deploy to dev (manual) | `cd frontend && npm run build && cd ../manager && npx wrangler deploy --env dev` |
+| Deploy to prod (manual) | `cd frontend && npm run build && cd ../manager && npx wrangler deploy` |
 | Build agent binary | `cd agent && ./scripts/build.sh` |
 | Stop agent | `sudo pkill -f zedops-agent` |
 | Start agent | `cd agent && nohup sudo ./bin/zedops-agent --manager-url wss://zedops.mail-bcf.workers.dev/ws --name maestroserver > /tmp/zedops-agent.log 2>&1 &` |
 | View agent logs | `tail -f /tmp/zedops-agent.log` |
 | Deploy to test VM | `scp agent/bin/zedops-agent zedops@10.0.13.208:/tmp/` |
+| Check dev | `https://zedops-dev.mail-bcf.workers.dev` |
 | Check production | `https://zedops.mail-bcf.workers.dev` |
