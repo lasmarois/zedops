@@ -198,6 +198,44 @@ ssh zedops@10.0.13.208 'tail -f /tmp/agent.log'
 ssh zedops@10.0.13.208 'docker network ls | grep zomboid'
 ```
 
+## Browser Debugging (Chrome DevTools MCP)
+
+Allows Claude Code to see and interact with the Brave browser on your laptop via the Chrome DevTools Protocol.
+
+### Setup
+
+**Option A: From your laptop (recommended)**
+```bash
+# Launches Brave with debug port + creates SSH tunnel to server
+./scripts/dev/browser-debug-laptop.sh root@<server-ip>
+```
+
+**Option B: From the server**
+```bash
+# 1. On laptop: launch Brave manually
+/Applications/Brave\ Browser.app/Contents/MacOS/Brave\ Browser \
+    --remote-debugging-port=9222 --user-data-dir="$HOME/BraveDebug"
+
+# 2. On server: create tunnel to laptop
+./scripts/dev/browser-debug-server.sh nicolas@192.168.200.250
+```
+
+### MCP Configuration (already configured)
+```bash
+claude mcp add chrome-devtools -- npx chrome-devtools-mcp@latest --browserUrl http://127.0.0.1:9222
+```
+
+### Verify
+```bash
+# From server - should return Brave version JSON
+curl -s http://127.0.0.1:9222/json/version
+```
+
+### Notes
+- Uses `--user-data-dir` for a separate Brave profile (required for Chrome 136+ security)
+- Must use `127.0.0.1` not `localhost` (IPv6 issue on macOS)
+- Tunnel must stay open for the duration of the session
+
 ## Quick Reference
 
 | Task | Command |
