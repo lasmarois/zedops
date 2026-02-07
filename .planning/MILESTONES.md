@@ -942,6 +942,11 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 - **Agent Disconnect Functionality** - Add ability to disconnect agent from manager UI (see [MILESTONE-M98.md](.planning/MILESTONE-M98.md) Future Enhancements section)
   - Current: Disconnect button exists but is disabled/non-functional
   - Needs: Manager endpoint to force-close WebSocket, confirmation dialog, proper status handling
+- **Auto-update race condition on first install** (found 2026-02-07)
+  - If an outdated binary is manually started with `--token` (ephemeral), the auto-update `exec` restart happens before the ephemeral→permanent token exchange completes
+  - After restart, the agent reads the ephemeral token from disk and tries permanent auth, which fails
+  - **Impact:** Low — the install script always downloads the latest binary, so this only affects manual installs with old binaries
+  - **Fix:** Either defer auto-update until after auth completes, or save the token type to disk so the restarted agent knows to retry ephemeral auth
 
 ### Reminders
 - ✅ ~~ability to remove server data~~ (Implemented via purge in M9.8.7)
