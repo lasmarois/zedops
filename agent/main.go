@@ -25,6 +25,7 @@ var (
 	token       = flag.String("token", "", "Ephemeral token for registration (required on first run)")
 	agentName   = flag.String("name", "", "Agent name (default: hostname)")
 	showVersion = flag.Bool("version", false, "Print version and exit")
+	noUpdate    = flag.Bool("no-update", false, "Skip auto-update check on startup (for development)")
 )
 
 // volumeSizeCache holds cached volume sizes with expiry
@@ -166,11 +167,13 @@ func main() {
 	log.Printf("Agent version: %s", Version)
 
 	// Create auto-updater and assign to agent for push notification handling
-	updater := NewAutoUpdater(*managerURL)
-	agent.updater = updater
-
-	// Check for updates on startup only (no polling - updates pushed via WebSocket)
-	updater.CheckOnce()
+	if *noUpdate {
+		log.Println("Auto-update disabled via --no-update flag")
+	} else {
+		updater := NewAutoUpdater(*managerURL)
+		agent.updater = updater
+		updater.CheckOnce()
+	}
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
 		// Check if this is an authentication failure - exit with special code
