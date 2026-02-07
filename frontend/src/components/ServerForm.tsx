@@ -56,6 +56,23 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
   const [customUdpPort, setCustomUdpPort] = useState(editServer?.udp_port?.toString() || '');
   const [customRconPort, setCustomRconPort] = useState(editServer?.rcon_port?.toString() || '');
 
+  // Game settings
+  const [showGameSettings, setShowGameSettings] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState('');
+  const [serverMap, setServerMap] = useState('');
+  const [serverPublic, setServerPublic] = useState('');
+  const [serverOpen, setServerOpen] = useState('');
+  const [serverPvp, setServerPvp] = useState('');
+  const [pauseEmpty, setPauseEmpty] = useState('');
+  const [globalChat, setGlobalChat] = useState('');
+  const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [publicDescription, setPublicDescription] = useState('');
+
+  // Mod management
+  const [showModSettings, setShowModSettings] = useState(false);
+  const [serverMods, setServerMods] = useState('');
+  const [workshopItems, setWorkshopItems] = useState('');
+
   // Server data path (M9.8.23: Per-server path override)
   const [customDataPath, setCustomDataPath] = useState('');
   const [dataPathError, setDataPathError] = useState('');
@@ -145,6 +162,21 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     if (betaBranch && betaBranch !== 'none') {
       config.BETABRANCH = betaBranch;
     }
+
+    // Game settings (only include non-empty/non-default values)
+    if (maxPlayers) config.SERVER_MAX_PLAYERS = maxPlayers;
+    if (serverMap) config.SERVER_MAP = serverMap;
+    if (serverPublic && serverPublic !== 'default') config.SERVER_PUBLIC = serverPublic;
+    if (serverOpen && serverOpen !== 'default') config.SERVER_OPEN = serverOpen;
+    if (serverPvp && serverPvp !== 'default') config.SERVER_PVP = serverPvp;
+    if (pauseEmpty && pauseEmpty !== 'default') config.SERVER_PAUSE_EMPTY = pauseEmpty;
+    if (globalChat && globalChat !== 'default') config.SERVER_GLOBAL_CHAT = globalChat;
+    if (welcomeMessage) config.SERVER_WELCOME_MESSAGE = welcomeMessage;
+    if (publicDescription) config.SERVER_PUBLIC_DESCRIPTION = publicDescription;
+
+    // Mod management
+    if (serverMods) config.SERVER_MODS = serverMods;
+    if (workshopItems) config.SERVER_WORKSHOP_ITEMS = workshopItems;
 
     const request: CreateServerRequest = {
       name: serverName,
@@ -327,6 +359,186 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
             <p className="text-xs text-muted-foreground">
               Optional: Password required to join server
             </p>
+          </div>
+
+          {/* Game Settings Section (Collapsible) */}
+          <div className="border rounded-md">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowGameSettings(!showGameSettings)}
+              className="w-full justify-between font-semibold"
+            >
+              <span>Game Settings (Optional)</span>
+              <span>{showGameSettings ? '▼' : '▶'}</span>
+            </Button>
+
+            {showGameSettings && (
+              <div className="p-4 space-y-4 border-t">
+                {/* Max Players */}
+                <div className="space-y-1">
+                  <Label htmlFor="maxPlayers" className="text-sm">Max Players</Label>
+                  <Input
+                    id="maxPlayers"
+                    type="number"
+                    value={maxPlayers}
+                    onChange={(e) => setMaxPlayers(e.target.value)}
+                    placeholder="32"
+                    min="1"
+                    max="100"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* Map */}
+                <div className="space-y-1">
+                  <Label htmlFor="serverMap" className="text-sm">Map</Label>
+                  <Input
+                    id="serverMap"
+                    value={serverMap}
+                    onChange={(e) => setServerMap(e.target.value)}
+                    placeholder="Muldraugh, KY"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* Boolean toggles */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="serverPublic" className="text-sm">Public (Server Browser)</Label>
+                    <Select value={serverPublic} onValueChange={setServerPublic} disabled={isSubmitting}>
+                      <SelectTrigger id="serverPublic"><SelectValue placeholder="Default" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="serverOpen" className="text-sm">Open (No Whitelist)</Label>
+                    <Select value={serverOpen} onValueChange={setServerOpen} disabled={isSubmitting}>
+                      <SelectTrigger id="serverOpen"><SelectValue placeholder="Default" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="serverPvp" className="text-sm">PvP</Label>
+                    <Select value={serverPvp} onValueChange={setServerPvp} disabled={isSubmitting}>
+                      <SelectTrigger id="serverPvp"><SelectValue placeholder="Default" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="pauseEmpty" className="text-sm">Pause When Empty</Label>
+                    <Select value={pauseEmpty} onValueChange={setPauseEmpty} disabled={isSubmitting}>
+                      <SelectTrigger id="pauseEmpty"><SelectValue placeholder="Default" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="globalChat" className="text-sm">Global Chat</Label>
+                    <Select value={globalChat} onValueChange={setGlobalChat} disabled={isSubmitting}>
+                      <SelectTrigger id="globalChat"><SelectValue placeholder="Default" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Welcome Message */}
+                <div className="space-y-1">
+                  <Label htmlFor="welcomeMessage" className="text-sm">Welcome Message</Label>
+                  <textarea
+                    id="welcomeMessage"
+                    value={welcomeMessage}
+                    onChange={(e) => setWelcomeMessage(e.target.value)}
+                    placeholder="Welcome to our server!"
+                    disabled={isSubmitting}
+                    rows={2}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                {/* Public Description */}
+                <div className="space-y-1">
+                  <Label htmlFor="publicDescription" className="text-sm">Public Description</Label>
+                  <textarea
+                    id="publicDescription"
+                    value={publicDescription}
+                    onChange={(e) => setPublicDescription(e.target.value)}
+                    placeholder="Server description for server browser"
+                    disabled={isSubmitting}
+                    rows={2}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Mod Management Section (Collapsible) */}
+          <div className="border rounded-md">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowModSettings(!showModSettings)}
+              className="w-full justify-between font-semibold"
+            >
+              <span>Mod Management (Optional)</span>
+              <span>{showModSettings ? '▼' : '▶'}</span>
+            </Button>
+
+            {showModSettings && (
+            <div className="p-4 space-y-4 border-t">
+              <div className="space-y-1">
+                <Label htmlFor="serverMods" className="text-sm">Server Mods</Label>
+                <textarea
+                  id="serverMods"
+                  value={serverMods}
+                  onChange={(e) => setServerMods(e.target.value)}
+                  placeholder="ModID1;ModID2;ModID3"
+                  disabled={isSubmitting}
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Semicolon-separated list of mod IDs
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="workshopItems" className="text-sm">Workshop Items</Label>
+                <textarea
+                  id="workshopItems"
+                  value={workshopItems}
+                  onChange={(e) => setWorkshopItems(e.target.value)}
+                  placeholder="123456789;987654321"
+                  disabled={isSubmitting}
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Semicolon-separated list of Steam Workshop item IDs
+                </p>
+              </div>
+            </div>
+            )}
           </div>
 
           {/* Server Data Path - M9.8.23 */}

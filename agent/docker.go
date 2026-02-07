@@ -16,7 +16,11 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/gorcon/rcon"
 )
+
+// GracefulStopTimeout is the Docker stop timeout after RCON save (seconds)
+const GracefulStopTimeout = 30
 
 // RequiredNetworks lists Docker networks the agent needs for server communication
 var RequiredNetworks = []string{"zomboid-backend", "zomboid-servers"}
@@ -42,6 +46,70 @@ func (dc *DockerClient) Close() error {
 		return dc.cli.Close()
 	}
 	return nil
+}
+
+// GracefulSave inspects a running container's ENV for RCON_PORT and RCON_PASSWORD,
+// connects to RCON via the zomboid-backend network, and sends a "save" command.
+// Returns true if save succeeded. Failures are non-fatal (logged but don't block the operation).
+func (dc *DockerClient) GracefulSave(ctx context.Context, containerID string) bool {
+	if containerID == "" {
+		return false
+	}
+
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		log.Printf("[GracefulSave] Failed to inspect container %s: %v", containerID, err)
+		return false
+	}
+
+	// Only attempt save on running containers
+	if !inspect.State.Running {
+		log.Printf("[GracefulSave] Container %s is not running, skipping save", containerID)
+		return false
+	}
+
+	// Extract RCON_PORT and RCON_PASSWORD from container ENV
+	var rconPort string
+	var rconPassword string
+	for _, env := range inspect.Config.Env {
+		if strings.HasPrefix(env, "RCON_PORT=") {
+			rconPort = strings.TrimPrefix(env, "RCON_PORT=")
+		} else if strings.HasPrefix(env, "RCON_PASSWORD=") {
+			rconPassword = strings.TrimPrefix(env, "RCON_PASSWORD=")
+		}
+	}
+
+	if rconPort == "" || rconPassword == "" {
+		log.Printf("[GracefulSave] Container %s missing RCON_PORT or RCON_PASSWORD ENV, skipping save", containerID)
+		return false
+	}
+
+	// Get container IP on zomboid-backend network
+	net := inspect.NetworkSettings.Networks["zomboid-backend"]
+	if net == nil || net.IPAddress == "" {
+		log.Printf("[GracefulSave] Container %s not on zomboid-backend network, skipping save", containerID)
+		return false
+	}
+
+	addr := fmt.Sprintf("%s:%s", net.IPAddress, rconPort)
+	log.Printf("[GracefulSave] Connecting to RCON at %s for pre-stop save", addr)
+
+	conn, err := rcon.Dial(addr, rconPassword, rcon.SetDialTimeout(5*time.Second))
+	if err != nil {
+		log.Printf("[GracefulSave] RCON connection failed: %v", err)
+		return false
+	}
+	defer conn.Close()
+
+	_, err = conn.Execute("save")
+	if err != nil {
+		log.Printf("[GracefulSave] RCON save command failed: %v", err)
+		return false
+	}
+
+	log.Printf("[GracefulSave] Save command sent, waiting 3s for disk flush")
+	time.Sleep(3 * time.Second)
+	return true
 }
 
 // EnsureNetworks creates required Docker networks if they don't exist
@@ -140,11 +208,14 @@ func (dc *DockerClient) StartContainer(ctx context.Context, containerID string) 
 	return nil
 }
 
-// StopContainer stops a container by ID
+// StopContainer stops a container by ID with graceful RCON save
 func (dc *DockerClient) StopContainer(ctx context.Context, containerID string) error {
 	log.Printf("Stopping container: %s", containerID)
 
-	timeout := 10
+	// Attempt graceful save before stopping
+	dc.GracefulSave(ctx, containerID)
+
+	timeout := GracefulStopTimeout
 	err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
 	if err != nil {
 		return fmt.Errorf("failed to stop container %s: %w", containerID, err)
@@ -154,11 +225,14 @@ func (dc *DockerClient) StopContainer(ctx context.Context, containerID string) e
 	return nil
 }
 
-// RestartContainer restarts a container by ID
+// RestartContainer restarts a container by ID with graceful RCON save
 func (dc *DockerClient) RestartContainer(ctx context.Context, containerID string) error {
 	log.Printf("Restarting container: %s", containerID)
 
-	timeout := 10
+	// Attempt graceful save before restarting
+	dc.GracefulSave(ctx, containerID)
+
+	timeout := GracefulStopTimeout
 	err := dc.cli.ContainerRestart(ctx, containerID, container.StopOptions{Timeout: &timeout})
 	if err != nil {
 		return fmt.Errorf("failed to restart container %s: %w", containerID, err)

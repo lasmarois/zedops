@@ -37,6 +37,21 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
   const [timezone, setTimezone] = useState(config.TZ || 'UTC')
   const [puid, setPuid] = useState(config.PUID || '')
 
+  // Game settings
+  const [maxPlayers, setMaxPlayers] = useState(config.SERVER_MAX_PLAYERS || '')
+  const [serverMap, setServerMap] = useState(config.SERVER_MAP || '')
+  const [serverPublic, setServerPublic] = useState(config.SERVER_PUBLIC || '')
+  const [serverOpen, setServerOpen] = useState(config.SERVER_OPEN || '')
+  const [serverPvp, setServerPvp] = useState(config.SERVER_PVP || '')
+  const [pauseEmpty, setPauseEmpty] = useState(config.SERVER_PAUSE_EMPTY || '')
+  const [globalChat, setGlobalChat] = useState(config.SERVER_GLOBAL_CHAT || '')
+  const [welcomeMessage, setWelcomeMessage] = useState(config.SERVER_WELCOME_MESSAGE || '')
+  const [publicDescription, setPublicDescription] = useState(config.SERVER_PUBLIC_DESCRIPTION || '')
+
+  // Mod management
+  const [serverMods, setServerMods] = useState(config.SERVER_MODS || '')
+  const [workshopItems, setWorkshopItems] = useState(config.SERVER_WORKSHOP_ITEMS || '')
+
   // Helper to render immutable field (read-only)
   const renderImmutableField = (label: string, value: string | number) => {
     return (
@@ -78,6 +93,32 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
     if (puid) {
       newConfig.PUID = puid
     }
+
+    // Game settings (only include non-empty values)
+    if (maxPlayers) newConfig.SERVER_MAX_PLAYERS = maxPlayers
+    else delete newConfig.SERVER_MAX_PLAYERS
+    if (serverMap) newConfig.SERVER_MAP = serverMap
+    else delete newConfig.SERVER_MAP
+    if (serverPublic) newConfig.SERVER_PUBLIC = serverPublic
+    else delete newConfig.SERVER_PUBLIC
+    if (serverOpen) newConfig.SERVER_OPEN = serverOpen
+    else delete newConfig.SERVER_OPEN
+    if (serverPvp) newConfig.SERVER_PVP = serverPvp
+    else delete newConfig.SERVER_PVP
+    if (pauseEmpty) newConfig.SERVER_PAUSE_EMPTY = pauseEmpty
+    else delete newConfig.SERVER_PAUSE_EMPTY
+    if (globalChat) newConfig.SERVER_GLOBAL_CHAT = globalChat
+    else delete newConfig.SERVER_GLOBAL_CHAT
+    if (welcomeMessage) newConfig.SERVER_WELCOME_MESSAGE = welcomeMessage
+    else delete newConfig.SERVER_WELCOME_MESSAGE
+    if (publicDescription) newConfig.SERVER_PUBLIC_DESCRIPTION = publicDescription
+    else delete newConfig.SERVER_PUBLIC_DESCRIPTION
+
+    // Mod management
+    if (serverMods) newConfig.SERVER_MODS = serverMods
+    else delete newConfig.SERVER_MODS
+    if (workshopItems) newConfig.SERVER_WORKSHOP_ITEMS = workshopItems
+    else delete newConfig.SERVER_WORKSHOP_ITEMS
 
     // RCON password (use admin password if not set)
     if (!config.RCON_PASSWORD) {
@@ -168,6 +209,172 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
 
           <div className="text-sm text-muted-foreground bg-muted p-3 rounded">
             <strong>RCON Password:</strong> {config.RCON_PASSWORD ? 'Set (will not be changed)' : 'Uses admin password'}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Game Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Game Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="editMaxPlayers">Max Players</Label>
+              <Input
+                id="editMaxPlayers"
+                type="number"
+                value={maxPlayers}
+                onChange={(e) => setMaxPlayers(e.target.value)}
+                placeholder="32"
+                min="1"
+                max="100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editServerMap">Map</Label>
+              <Input
+                id="editServerMap"
+                value={serverMap}
+                onChange={(e) => setServerMap(e.target.value)}
+                placeholder="Muldraugh, KY"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="editServerPublic">Public (Server Browser)</Label>
+              <select
+                id="editServerPublic"
+                value={serverPublic}
+                onChange={(e) => setServerPublic(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Default</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editServerOpen">Open (No Whitelist)</Label>
+              <select
+                id="editServerOpen"
+                value={serverOpen}
+                onChange={(e) => setServerOpen(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Default</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editServerPvp">PvP</Label>
+              <select
+                id="editServerPvp"
+                value={serverPvp}
+                onChange={(e) => setServerPvp(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Default</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editPauseEmpty">Pause When Empty</Label>
+              <select
+                id="editPauseEmpty"
+                value={pauseEmpty}
+                onChange={(e) => setPauseEmpty(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Default</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editGlobalChat">Global Chat</Label>
+              <select
+                id="editGlobalChat"
+                value={globalChat}
+                onChange={(e) => setGlobalChat(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Default</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="editWelcomeMessage">Welcome Message</Label>
+            <textarea
+              id="editWelcomeMessage"
+              value={welcomeMessage}
+              onChange={(e) => setWelcomeMessage(e.target.value)}
+              placeholder="Welcome to our server!"
+              rows={2}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="editPublicDescription">Public Description</Label>
+            <textarea
+              id="editPublicDescription"
+              value={publicDescription}
+              onChange={(e) => setPublicDescription(e.target.value)}
+              placeholder="Server description for server browser"
+              rows={2}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Mod Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Mod Management</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="editServerMods">Server Mods</Label>
+            <textarea
+              id="editServerMods"
+              value={serverMods}
+              onChange={(e) => setServerMods(e.target.value)}
+              placeholder="ModID1;ModID2;ModID3"
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <p className="text-xs text-muted-foreground">
+              Semicolon-separated list of mod IDs (e.g. <code>Mod1;Mod2;Mod3</code>)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="editWorkshopItems">Workshop Items</Label>
+            <textarea
+              id="editWorkshopItems"
+              value={workshopItems}
+              onChange={(e) => setWorkshopItems(e.target.value)}
+              placeholder="123456789;987654321"
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <p className="text-xs text-muted-foreground">
+              Semicolon-separated list of Steam Workshop item IDs
+            </p>
+          </div>
+
+          <div className="text-sm text-muted-foreground bg-muted p-3 rounded">
+            <strong>Note:</strong> Mods are merged with existing mods on the server. Removing a mod here will not uninstall it — clear the server's mod list manually if needed.
           </div>
         </CardContent>
       </Card>

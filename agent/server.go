@@ -199,9 +199,12 @@ func (dc *DockerClient) DeleteServer(ctx context.Context, containerID string, se
 			log.Printf("Removing container for server: %s", serverName)
 		}
 
+		// Graceful save before stopping
+		dc.GracefulSave(ctx, containerID)
+
 		// Stop container if running
 		log.Printf("Stopping container: %s", containerID)
-		timeout := 10
+		timeout := GracefulStopTimeout
 		if err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
 			log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
 		}
@@ -292,9 +295,11 @@ func (dc *DockerClient) RebuildServer(ctx context.Context, containerID string) (
 		}
 	}
 
-	// 3. Stop and remove old container
+	// 3. Graceful save, then stop and remove old container
+	dc.GracefulSave(ctx, containerID)
+
 	log.Printf("Stopping old container: %s", containerID)
-	timeout := 10
+	timeout := GracefulStopTimeout
 	if err := dc.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
 		log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
 	}
@@ -454,9 +459,11 @@ func (dc *DockerClient) rebuildWithNewConfig(ctx context.Context, req ServerRebu
 		nat.Port(fmt.Sprintf("%d/udp", req.UDPPort)):  struct{}{},
 	}
 
-	// 7. Stop and remove old container
+	// 7. Graceful save, then stop and remove old container
+	dc.GracefulSave(ctx, req.ContainerID)
+
 	log.Printf("Stopping old container: %s", req.ContainerID)
-	timeout := 10
+	timeout := GracefulStopTimeout
 	if err := dc.cli.ContainerStop(ctx, req.ContainerID, container.StopOptions{Timeout: &timeout}); err != nil {
 		log.Printf("Warning: failed to stop container (may already be stopped): %v", err)
 	}
