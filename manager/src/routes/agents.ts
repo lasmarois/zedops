@@ -3071,4 +3071,314 @@ agents.post('/:id/servers/:serverId/rcon/command', async (c) => {
   }
 });
 
+// ============================================================================
+// M12: Backup & Restore Endpoints
+// ============================================================================
+
+/**
+ * POST /agents/:id/servers/:serverId/backups — Create a backup
+ */
+agents.post('/:id/servers/:serverId/backups', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden - you do not have permission to control this server' }, 403);
+    }
+
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, server_data_path FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    ).bind(serverId, agentId).first();
+    if (!server) return c.json({ error: 'Server not found' }, 404);
+
+    const body = await c.req.json() as { notes?: string };
+    const backupId = crypto.randomUUID();
+    const dataPath = (server.server_data_path || agent.server_data_path || '/data') as string;
+    const config = JSON.parse((server.config as string) || '{}');
+
+    // Insert D1 row with status=creating
+    await c.env.DB.prepare(
+      `INSERT INTO backups (id, server_id, agent_id, filename, size_bytes, notes, status, created_at)
+       VALUES (?, ?, ?, '', 0, ?, 'creating', ?)`
+    ).bind(backupId, serverId, agentId, body.notes || null, Date.now()).run();
+
+    // Call DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const doResponse = await stub.fetch(`http://do/servers/${serverId}/backup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serverName: server.name,
+        dataPath,
+        backupId,
+        notes: body.notes || '',
+        containerId: server.status === 'running' ? (server.container_id || '') : '',
+        rconPort: server.rcon_port || 0,
+        rconPassword: config.RCON_PASSWORD || '',
+      }),
+    });
+
+    const result = await doResponse.json() as any;
+
+    if (result.success) {
+      // Update D1 row with filename, size, status=complete
+      await c.env.DB.prepare(
+        `UPDATE backups SET filename = ?, size_bytes = ?, status = 'complete', pre_save_success = ?, completed_at = ? WHERE id = ?`
+      ).bind(result.filename, result.sizeBytes, result.preSaveSuccess ? 1 : 0, Date.now(), backupId).run();
+
+      await logServerOperation(c.env.DB, c, user.id, 'backup.created', serverId, server.name as string, agentId);
+    } else {
+      // Mark as failed
+      await c.env.DB.prepare(
+        `UPDATE backups SET status = 'failed' WHERE id = ?`
+      ).bind(backupId).run();
+    }
+
+    return c.json({ ...result, backupId }, doResponse.ok ? 200 : 500);
+  } catch (error) {
+    console.error('[Agents API] Error creating backup:', error);
+    return c.json({ error: 'Failed to create backup' }, 500);
+  }
+});
+
+/**
+ * GET /agents/:id/servers/:serverId/backups — List backups from D1
+ */
+agents.get('/:id/servers/:serverId/backups', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    const hasPermission = await canViewServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    const server = await c.env.DB.prepare(
+      `SELECT id FROM servers WHERE id = ? AND agent_id = ?`
+    ).bind(serverId, agentId).first();
+    if (!server) return c.json({ error: 'Server not found' }, 404);
+
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM backups WHERE server_id = ? ORDER BY created_at DESC`
+    ).bind(serverId).all();
+
+    return c.json({ success: true, backups: results || [] });
+  } catch (error) {
+    console.error('[Agents API] Error listing backups:', error);
+    return c.json({ error: 'Failed to list backups' }, 500);
+  }
+});
+
+/**
+ * POST /agents/:id/servers/:serverId/backups/sync — Sync D1 with agent disk
+ */
+agents.post('/:id/servers/:serverId/backups/sync', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, server_data_path FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    ).bind(serverId, agentId).first();
+    if (!server) return c.json({ error: 'Server not found' }, 404);
+
+    const dataPath = (server.server_data_path || agent.server_data_path || '/data') as string;
+
+    // Ask agent for disk backups
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const doResponse = await stub.fetch(`http://do/servers/${serverId}/backups/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName: server.name, dataPath }),
+    });
+
+    const result = await doResponse.json() as any;
+    if (!result.success) {
+      return c.json({ error: result.error || 'Sync failed' }, 500);
+    }
+
+    const diskBackups: any[] = result.backups || [];
+
+    // Get current D1 backups
+    const { results: d1Backups } = await c.env.DB.prepare(
+      `SELECT * FROM backups WHERE server_id = ?`
+    ).bind(serverId).all();
+
+    const d1Map = new Map((d1Backups || []).map((b: any) => [b.filename, b]));
+    const diskSet = new Set(diskBackups.map((b: any) => b.filename));
+
+    // Add disk backups missing from D1
+    for (const disk of diskBackups) {
+      if (!d1Map.has(disk.filename)) {
+        await c.env.DB.prepare(
+          `INSERT INTO backups (id, server_id, agent_id, filename, size_bytes, notes, status, pre_save_success, created_at, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'complete', ?, ?, ?)`
+        ).bind(
+          disk.backupId || crypto.randomUUID(),
+          serverId, agentId, disk.filename, disk.sizeBytes, disk.notes || null,
+          disk.preSaveSuccess ? 1 : 0, disk.createdAt * 1000, disk.createdAt * 1000
+        ).run();
+      }
+    }
+
+    // Remove D1 rows for backups no longer on disk
+    for (const [filename, backup] of d1Map) {
+      if (!diskSet.has(filename) && (backup as any).status === 'complete') {
+        await c.env.DB.prepare(`DELETE FROM backups WHERE id = ?`).bind((backup as any).id).run();
+      }
+    }
+
+    return c.json({ success: true, synced: diskBackups.length });
+  } catch (error) {
+    console.error('[Agents API] Error syncing backups:', error);
+    return c.json({ error: 'Failed to sync backups' }, 500);
+  }
+});
+
+/**
+ * DELETE /agents/:id/servers/:serverId/backups/:backupId — Delete a backup
+ */
+agents.delete('/:id/servers/:serverId/backups/:backupId', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+  const backupId = c.req.param('backupId');
+
+  try {
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, server_data_path FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    ).bind(serverId, agentId).first();
+    if (!server) return c.json({ error: 'Server not found' }, 404);
+
+    const backup = await c.env.DB.prepare(
+      `SELECT * FROM backups WHERE id = ? AND server_id = ?`
+    ).bind(backupId, serverId).first();
+    if (!backup) return c.json({ error: 'Backup not found' }, 404);
+
+    const dataPath = (server.server_data_path || agent.server_data_path || '/data') as string;
+
+    // Delete from agent disk
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const doResponse = await stub.fetch(`http://do/servers/${serverId}/backups/${encodeURIComponent(backup.filename as string)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName: server.name, dataPath }),
+    });
+
+    const result = await doResponse.json() as any;
+
+    // Delete from D1 regardless (file may already be gone)
+    await c.env.DB.prepare(`DELETE FROM backups WHERE id = ?`).bind(backupId).run();
+
+    await logServerOperation(c.env.DB, c, user.id, 'backup.deleted', serverId, server.name as string, agentId);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[Agents API] Error deleting backup:', error);
+    return c.json({ error: 'Failed to delete backup' }, 500);
+  }
+});
+
+/**
+ * POST /agents/:id/servers/:serverId/backups/:backupId/restore — Restore from backup
+ */
+agents.post('/:id/servers/:serverId/backups/:backupId/restore', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+  const backupId = c.req.param('backupId');
+
+  try {
+    const hasPermission = await canControlServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, server_data_path FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+    if (!agent) return c.json({ error: 'Agent not found' }, 404);
+
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ? AND agent_id = ?`
+    ).bind(serverId, agentId).first();
+    if (!server) return c.json({ error: 'Server not found' }, 404);
+
+    const backup = await c.env.DB.prepare(
+      `SELECT * FROM backups WHERE id = ? AND server_id = ?`
+    ).bind(backupId, serverId).first();
+    if (!backup) return c.json({ error: 'Backup not found' }, 404);
+
+    const dataPath = (server.server_data_path || agent.server_data_path || '/data') as string;
+
+    // Call DO to restore
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const doResponse = await stub.fetch(`http://do/servers/${serverId}/backups/${encodeURIComponent(backup.filename as string)}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serverName: server.name,
+        dataPath,
+        backupId: backup.id,
+        containerId: server.container_id || '',
+      }),
+    });
+
+    const result = await doResponse.json() as any;
+
+    if (result.success) {
+      // Update server status (it was restarted)
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'running', updated_at = ? WHERE id = ?`
+      ).bind(Date.now(), serverId).run();
+
+      await logServerOperation(c.env.DB, c, user.id, 'backup.restored', serverId, server.name as string, agentId);
+    }
+
+    return c.json(result, doResponse.ok ? 200 : 500);
+  } catch (error) {
+    console.error('[Agents API] Error restoring backup:', error);
+    return c.json({ error: 'Failed to restore backup' }, 500);
+  }
+});
+
 export { agents };

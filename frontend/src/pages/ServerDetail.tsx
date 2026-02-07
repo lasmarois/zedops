@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Breadcrumb } from "@/components/layout/Breadcrumb"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -22,6 +22,7 @@ import { ErrorDialog } from "@/components/ui/error-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ServerOverview } from "@/components/server-overview"
 import { PerformanceTab } from "@/components/performance"
+import { BackupsTab } from "@/components/BackupsTab"
 
 function ServerDetailContent() {
   const { id } = useParams<{ id: string }>()
@@ -537,19 +538,12 @@ function ServerDetailContent() {
 
         {/* Backups Tab */}
         <TabsContent value="backups" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Server Backups</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Backup management will be available in a future update.
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Planned features: Automatic backups, manual backup creation, backup restore, retention policies.
-              </p>
-            </CardContent>
-          </Card>
+          <BackupsTab
+            serverId={serverId}
+            agentId={agentId}
+            serverName={serverName}
+            serverStatus={status}
+          />
         </TabsContent>
       </Tabs>
 

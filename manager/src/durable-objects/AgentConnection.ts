@@ -239,6 +239,44 @@ export class AgentConnection extends DurableObject {
       return this.handleOneShotRconCommand(request);
     }
 
+    // M12: Backup create endpoint
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/backup") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleBackupCreateRequest(request, serverId);
+      }
+    }
+
+    // M12: Backup sync endpoint (sync D1 with agent disk)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/backups/sync") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      if (serverId) {
+        return this.handleBackupSyncRequest(request, serverId);
+      }
+    }
+
+    // M12: Backup delete endpoint
+    if (url.pathname.match(/^\/servers\/[^/]+\/backups\/[^/]+$/) && request.method === "DELETE") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      const filename = parts[4];
+      if (serverId && filename) {
+        return this.handleBackupDeleteRequest(request, serverId, filename);
+      }
+    }
+
+    // M12: Backup restore endpoint
+    if (url.pathname.match(/^\/servers\/[^/]+\/backups\/[^/]+\/restore$/) && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      const filename = parts[4];
+      if (serverId && filename) {
+        return this.handleBackupRestoreRequest(request, serverId, filename);
+      }
+    }
+
     return new Response("Not Found", { status: 404 });
   }
 
@@ -399,6 +437,11 @@ export class AgentConnection extends DurableObject {
       case "move.progress":
         // M9.8.31: Forward data move progress to all connected frontends
         await this.handleMoveProgress(message);
+        break;
+
+      case "backup.progress":
+        // M12: Forward backup/restore progress to all connected frontends
+        await this.handleBackupProgress(message);
         break;
 
       case "players.update":
@@ -1951,6 +1994,302 @@ export class AgentConnection extends DurableObject {
         console.error(`[AgentConnection] Failed to send move progress to subscriber ${subscriber.id}:`, error);
         this.logSubscribers.delete(subscriber.id);
       }
+    }
+  }
+
+  /**
+   * M12: Handle backup.progress from agent
+   * Broadcast to all connected frontends (they filter by backupId/serverName)
+   */
+  private async handleBackupProgress(message: Message): Promise<void> {
+    const progress = message.data as {
+      backupId: string;
+      serverName: string;
+      phase: string;
+      percent: number;
+      error?: string;
+    };
+
+    console.log(`[AgentConnection] Backup progress: ${progress.serverName} - ${progress.phase} ${progress.percent}%`);
+
+    // Broadcast to ALL connected frontends
+    const broadcastMessage = JSON.stringify(createMessage("backup.progress", progress));
+
+    for (const subscriber of this.logSubscribers.values()) {
+      try {
+        subscriber.ws.send(broadcastMessage);
+      } catch (error) {
+        console.error(`[AgentConnection] Failed to send backup progress to subscriber ${subscriber.id}:`, error);
+        this.logSubscribers.delete(subscriber.id);
+      }
+    }
+  }
+
+  /**
+   * M12: HTTP handler for backup create request
+   */
+  private async handleBackupCreateRequest(request: Request, serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverName, dataPath, backupId, notes, containerId, rconPort, rconPassword } = body;
+    if (!serverName || !dataPath || !backupId) {
+      return new Response(JSON.stringify({ error: "Missing required fields: serverName, dataPath, backupId" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[AgentConnection] Creating backup for ${serverName} (ID: ${backupId})`);
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Backup creation timeout - operation took longer than 5 minutes"));
+      }, 300000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "backup.create",
+      data: { serverName, dataPath, backupId, notes, containerId: containerId || "", rconPort: rconPort || 0, rconPassword: rconPassword || "" },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Backup creation failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * M12: HTTP handler for backup sync request (sync D1 with agent disk)
+   */
+  private async handleBackupSyncRequest(request: Request, serverId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverName, dataPath } = body;
+    if (!serverName || !dataPath) {
+      return new Response(JSON.stringify({ error: "Missing required fields: serverName, dataPath" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Backup sync timeout"));
+      }, 30000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "backup.list",
+      data: { serverName, dataPath },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Backup sync failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * M12: HTTP handler for backup delete request
+   */
+  private async handleBackupDeleteRequest(request: Request, serverId: string, filename: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverName, dataPath } = body;
+    if (!serverName || !dataPath) {
+      return new Response(JSON.stringify({ error: "Missing required fields: serverName, dataPath" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Backup delete timeout"));
+      }, 30000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "backup.delete",
+      data: { serverName, dataPath, filename: decodeURIComponent(filename) },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Backup delete failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * M12: HTTP handler for backup restore request
+   */
+  private async handleBackupRestoreRequest(request: Request, serverId: string, filename: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverName, dataPath, backupId, containerId } = body;
+    if (!serverName || !dataPath || !backupId) {
+      return new Response(JSON.stringify({ error: "Missing required fields: serverName, dataPath, backupId" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[AgentConnection] Restoring backup for ${serverName} from ${filename} (ID: ${backupId})`);
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Backup restore timeout - operation took longer than 10 minutes"));
+      }, 600000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "backup.restore",
+      data: { serverName, dataPath, filename: decodeURIComponent(filename), backupId, containerId: containerId || "" },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Backup restore failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 

@@ -1386,6 +1386,158 @@ export async function getServerStorage(
   return response.json();
 }
 
+// ==================== Backups ====================
+
+export interface Backup {
+  id: string;
+  server_id: string;
+  agent_id: string;
+  filename: string;
+  size_bytes: number;
+  notes: string | null;
+  status: 'creating' | 'complete' | 'failed' | 'deleting';
+  pre_save_success: number;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export interface BackupsResponse {
+  success: boolean;
+  backups: Backup[];
+}
+
+export interface CreateBackupResponse {
+  success: boolean;
+  backupId: string;
+  filename?: string;
+  sizeBytes?: number;
+  preSaveSuccess?: boolean;
+  error?: string;
+}
+
+/**
+ * List backups for a server (from D1)
+ */
+export async function listBackups(
+  agentId: string,
+  serverId: string
+): Promise<BackupsResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/backups`,
+    { headers: getAuthHeaders() }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to list backups');
+  }
+
+  return response.json();
+}
+
+/**
+ * Create a backup
+ */
+export async function createBackup(
+  agentId: string,
+  serverId: string,
+  notes?: string
+): Promise<CreateBackupResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/backups`,
+    {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ notes }),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to create backup');
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a backup
+ */
+export async function deleteBackup(
+  agentId: string,
+  serverId: string,
+  backupId: string
+): Promise<{ success: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/backups/${backupId}`,
+    {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to delete backup');
+  }
+
+  return response.json();
+}
+
+/**
+ * Restore from a backup
+ */
+export async function restoreBackup(
+  agentId: string,
+  serverId: string,
+  backupId: string
+): Promise<{ success: boolean; error?: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/backups/${backupId}/restore`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to restore backup');
+  }
+
+  return response.json();
+}
+
+/**
+ * Sync D1 with agent disk backups
+ */
+export async function syncBackups(
+  agentId: string,
+  serverId: string
+): Promise<{ success: boolean; synced: number }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/backups/sync`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to sync backups');
+  }
+
+  return response.json();
+}
+
 // ==================== RCON Commands ====================
 
 export interface RconCommandResponse {

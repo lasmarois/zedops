@@ -398,6 +398,14 @@ func (a *Agent) receiveMessages() {
 			a.handleRCONDisconnect(msg)
 		case "images.inspect":
 			a.handleImageInspect(msg)
+		case "backup.create":
+			go a.handleBackupCreate(msg)
+		case "backup.list":
+			a.handleBackupList(msg)
+		case "backup.delete":
+			a.handleBackupDelete(msg)
+		case "backup.restore":
+			go a.handleBackupRestore(msg)
 		case "agent.logs.subscribe":
 			a.handleAgentLogsSubscribe(msg)
 		case "agent.logs.unsubscribe":
