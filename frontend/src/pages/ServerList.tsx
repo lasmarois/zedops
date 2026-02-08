@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAllServers, usePurgeServer, useRestoreServer, useCreateServer } from "@/hooks/useServers"
 import { useAgents } from "@/hooks/useAgents"
-import { Plus, Search, Trash2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
+import { Plus, Search, Trash2, ChevronDown, ChevronUp, RefreshCw, ShieldAlert } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import type { Server, CreateServerRequest } from "@/lib/api"
 import { ServerCard } from "@/components/ServerCard"
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog"
 import { ServerForm } from "@/components/ServerForm"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useUser } from "@/contexts/UserContext"
 
 interface ServerWithAgent {
   id: string
@@ -60,6 +61,8 @@ interface ServerWithAgent {
 
 export function ServerList() {
   const navigate = useNavigate()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
   const { data: serversData, isLoading } = useAllServers()
   const { data: agentsData } = useAgents()
   const { layout } = useServerCardLayout()
@@ -279,51 +282,67 @@ export function ServerList() {
         <Card>
           <CardContent className="py-16">
             <div className="text-center text-muted-foreground">
-              <p className="text-lg font-medium mb-2">No servers found</p>
-              <p className="text-sm mb-6">
-                Create your first server to get started
-              </p>
-              {hasAgents ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4" />
-                      Create Server
-                      <ChevronDown className="h-4 w-4 ml-2" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" className="w-64">
-                    <DropdownMenuLabel>Select Agent</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {hasOnlineAgents ? (
-                      agents.map(agent => (
-                        <DropdownMenuItem
-                          key={agent.id}
-                          disabled={agent.status !== 'online'}
-                          onClick={() => agent.status === 'online' && handleAgentSelect(agent.id)}
-                          className="flex flex-col items-start py-3"
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            <div className={`h-2 w-2 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
-                            <span className="font-medium">{agent.name}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground ml-4">
-                            {agent.status === 'online' ? 'Ready' : 'Offline - cannot create servers'}
-                          </span>
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-                        All agents are offline
-                      </div>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {!isAdmin && activeServers.length === 0 ? (
+                <>
+                  <ShieldAlert className="h-12 w-12 mx-auto mb-4" />
+                  <p className="text-lg font-medium mb-2">No servers assigned</p>
+                  <p className="text-sm">
+                    You don't have access to any servers yet. Contact your administrator to get access.
+                  </p>
+                </>
               ) : (
-                <Button onClick={() => navigate('/agents')}>
-                  <Plus className="h-4 w-4" />
-                  Add Agent First
-                </Button>
+                <>
+                  <p className="text-lg font-medium mb-2">No servers found</p>
+                  <p className="text-sm mb-6">
+                    {searchQuery || statusFilter !== "all"
+                      ? "No servers match your filters"
+                      : "Create your first server to get started"}
+                  </p>
+                  {!searchQuery && statusFilter === "all" && isAdmin && (
+                    hasAgents ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button>
+                            <Plus className="h-4 w-4" />
+                            Create Server
+                            <ChevronDown className="h-4 w-4 ml-2" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="center" className="w-64">
+                          <DropdownMenuLabel>Select Agent</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {hasOnlineAgents ? (
+                            agents.map(agent => (
+                              <DropdownMenuItem
+                                key={agent.id}
+                                disabled={agent.status !== 'online'}
+                                onClick={() => agent.status === 'online' && handleAgentSelect(agent.id)}
+                                className="flex flex-col items-start py-3"
+                              >
+                                <div className="flex items-center gap-2 w-full">
+                                  <div className={`h-2 w-2 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                  <span className="font-medium">{agent.name}</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground ml-4">
+                                  {agent.status === 'online' ? 'Ready' : 'Offline - cannot create servers'}
+                                </span>
+                              </DropdownMenuItem>
+                            ))
+                          ) : (
+                            <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                              All agents are offline
+                            </div>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <Button onClick={() => navigate('/agents')}>
+                        <Plus className="h-4 w-4" />
+                        Add Agent First
+                      </Button>
+                    )
+                  )}
+                </>
               )}
             </div>
           </CardContent>

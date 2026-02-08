@@ -10,12 +10,12 @@ import { useUser } from '../contexts/UserContext';
  * Hook to fetch audit logs with optional filters
  */
 export function useAuditLogs(query?: AuditLogsQuery) {
-  const { isAuthenticated } = useUser();
+  const { isAuthenticated, user } = useUser();
 
   return useQuery({
     queryKey: ['auditLogs', query],
     queryFn: () => fetchAuditLogs(query),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && user?.role === 'admin',
     staleTime: 10000, // Consider data stale after 10 seconds
     // No refetchInterval - audit logs are invalidated by mutations that create them
   });

@@ -20,6 +20,14 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 
 const queryClient = new QueryClient();
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { isAuthenticated } = useUser();
 
@@ -47,8 +55,8 @@ function AppContent() {
         <Route path="agents/:id" element={<AgentDetail />} />
         <Route path="servers" element={<ServerList />} />
         <Route path="servers/:id" element={<ServerDetail />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+        <Route path="audit-logs" element={<AdminRoute><AuditLogsPage /></AdminRoute>} />
       </Route>
     </Routes>
   );

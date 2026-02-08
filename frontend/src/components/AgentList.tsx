@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick } from 'lucide-react';
+import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick, ShieldAlert } from 'lucide-react';
+import { useUser } from '@/contexts/UserContext';
 import { formatDistanceToNow } from 'date-fns';
 import { InstallAgentDialog } from './InstallAgentDialog';
 
@@ -74,6 +75,8 @@ function ResourceMeter({
 
 export function AgentList({ onSelectAgent }: AgentListProps) {
   const { data, isLoading, error } = useAgents();
+  const { user } = useUser();
+  const isAdmin = user?.role === 'admin';
   const [showInstallDialog, setShowInstallDialog] = useState(false);
 
   if (isLoading) {
@@ -138,10 +141,12 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
             Manage your connected infrastructure agents
           </p>
         </div>
-        <Button onClick={() => setShowInstallDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Agent
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => setShowInstallDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Agent
+          </Button>
+        )}
       </div>
 
       {/* Stats Summary */}
@@ -171,20 +176,37 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
         <Card className="p-12">
           <div className="text-center space-y-4">
             <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-              <Laptop className="h-8 w-8 text-muted-foreground" />
+              {isAdmin ? (
+                <Laptop className="h-8 w-8 text-muted-foreground" />
+              ) : (
+                <ShieldAlert className="h-8 w-8 text-muted-foreground" />
+              )}
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-2">No agents registered yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Get started by installing the ZedOps agent on your game server host.
-                The agent will automatically connect and appear here.
-              </p>
+              {isAdmin ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-2">No agents registered yet</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Get started by installing the ZedOps agent on your game server host.
+                    The agent will automatically connect and appear here.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold mb-2">No agents assigned</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    You don't have access to any agents yet. Contact your administrator to get access.
+                  </p>
+                </>
+              )}
             </div>
-            <div className="pt-4">
-              <Button variant="outline" disabled>
-                View Installation Guide
-              </Button>
-            </div>
+            {isAdmin && (
+              <div className="pt-4">
+                <Button variant="outline" disabled>
+                  View Installation Guide
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
       ) : (

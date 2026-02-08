@@ -18,12 +18,12 @@ import { useUser } from '../contexts/UserContext';
  * Hook to fetch all users
  */
 export function useUsers() {
-  const { isAuthenticated } = useUser();
+  const { isAuthenticated, user } = useUser();
 
   return useQuery({
     queryKey: ['users'],
     queryFn: () => fetchUsers(),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && user?.role === 'admin',
   });
 }
 

@@ -573,9 +573,10 @@ agents.get('/:id/ports/availability', async (c) => {
   const agentId = c.req.param('id');
   const count = parseInt(c.req.query('count') || '1', 10);
 
-  // Only admins can check port availability (administrative operation)
-  if (user.role !== 'admin') {
-    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  // Users who can create servers on this agent need port info
+  const hasPermission = await canCreateServer(c.env.DB, user.id, user.role, agentId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - requires server creation permission' }, 403);
   }
 
   if (count < 1 || count > 10) {
@@ -1433,10 +1434,16 @@ agents.post('/:id/servers/sync', async (c) => {
  * Used by frontend before showing recreate confirmation dialogs.
  */
 agents.get('/:id/servers/:serverId/check-data', async (c) => {
+  const user = c.get('user');
   const agentId = c.req.param('id');
   const serverId = c.req.param('serverId');
 
   try {
+    const hasPermission = await canViewServer(c.env.DB, user.id, user.role, serverId);
+    if (!hasPermission) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
     const server = await c.env.DB.prepare(
       `SELECT s.id, s.name, s.status, s.data_exists, s.server_data_path, s.agent_id
        FROM servers s WHERE s.id = ? AND s.agent_id = ?`

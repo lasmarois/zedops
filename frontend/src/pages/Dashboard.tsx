@@ -10,13 +10,16 @@ import { useAgents } from "@/hooks/useAgents"
 import { useAllServers } from "@/hooks/useServers"
 import { useUsers } from "@/hooks/useUsers"
 import { useAuditLogs } from "@/hooks/useAuditLogs"
-import { Server as ServerIcon, Laptop, Users, GamepadIcon, RefreshCw, Plus } from "lucide-react"
+import { useUser } from "@/contexts/UserContext"
+import { Server as ServerIcon, Laptop, Users, GamepadIcon, RefreshCw, Plus, ShieldAlert } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { getDisplayStatus } from "@/lib/server-status"
 import type { Server } from "@/lib/api"
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
   const { data: agentsData, isLoading: agentsLoading } = useAgents()
   const { data: serversData, isLoading: serversLoading } = useAllServers()
   const { data: usersData, isLoading: usersLoading } = useUsers()
@@ -127,8 +130,23 @@ export function Dashboard() {
         </Button>
       </div>
 
+      {/* Non-admin empty state */}
+      {!isAdmin && !serversLoading && totalServers === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-12">
+            <div className="text-center">
+              <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h2 className="text-lg font-semibold mb-2">No servers assigned yet</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                You don't have access to any servers. Contact your administrator to get server access assigned to your account.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? 'xl:grid-cols-4' : 'xl:grid-cols-3'} gap-6`}>
         {/* Agents Card */}
         <Card className="hover:shadow-md transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -191,35 +209,37 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Users Card */}
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Users
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {usersLoading ? (
-              <Skeleton className="h-9 w-12" />
-            ) : (
-              <>
-                <div className="text-3xl font-bold">{totalUsers}</div>
-                <div className="mt-2 space-y-1">
-                  <div className="text-sm text-muted-foreground">Manage access</div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="mt-4 w-full"
-                  onClick={() => navigate('/users')}
-                >
-                  View All →
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* Users Card (admin only) */}
+        {isAdmin && (
+          <Card className="hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Users
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {usersLoading ? (
+                <Skeleton className="h-9 w-12" />
+              ) : (
+                <>
+                  <div className="text-3xl font-bold">{totalUsers}</div>
+                  <div className="mt-2 space-y-1">
+                    <div className="text-sm text-muted-foreground">Manage access</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-4 w-full"
+                    onClick={() => navigate('/users')}
+                  >
+                    View All →
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Players Card */}
         <Card className="hover:shadow-md transition-shadow duration-200">
@@ -335,39 +355,41 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Recent Activity</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Latest system events and actions
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/audit-logs')}
-          >
-            View All →
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {auditLoading ? (
-            <div className="space-y-1">
-              {[1, 2, 3, 4, 5].map(i => (
-                <Skeleton key={i} className="h-10 w-full rounded-md" />
-              ))}
+      {/* Recent Activity (admin only) */}
+      {isAdmin && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Recent Activity</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Latest system events and actions
+              </p>
             </div>
-          ) : auditEntries.length > 0 ? (
-            <CompactAuditLog entries={auditEntries} />
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No recent activity
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/audit-logs')}
+            >
+              View All →
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {auditLoading ? (
+              <div className="space-y-1">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Skeleton key={i} className="h-10 w-full rounded-md" />
+                ))}
+              </div>
+            ) : auditEntries.length > 0 ? (
+              <CompactAuditLog entries={auditEntries} />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No recent activity
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Actions */}
       <Card>
@@ -376,16 +398,23 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={() => navigate('/agents')}>
-              <Plus className="h-4 w-4" />
-              Create Server
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/users')}>
-              <Plus className="h-4 w-4" />
-              Invite User
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/audit-logs')}>
-              View All Logs
+            {isAdmin && (
+              <>
+                <Button onClick={() => navigate('/agents')}>
+                  <Plus className="h-4 w-4" />
+                  Create Server
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/users')}>
+                  <Plus className="h-4 w-4" />
+                  Invite User
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/audit-logs')}>
+                  View All Logs
+                </Button>
+              </>
+            )}
+            <Button variant={isAdmin ? "outline" : "default"} onClick={() => navigate('/servers')}>
+              View Servers
             </Button>
           </div>
         </CardContent>
