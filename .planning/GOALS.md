@@ -23,6 +23,7 @@ None
 | 7 | Show Image Version & Dynamic Tag Selection | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 8 | Server Recreate — Recover Missing/Deleted Servers | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 9 | Fix Missing DO Route for checkdata in Apply-Config | Bugfix | Complete | 2026-02-07 | 2026-02-07 |
+| 10 | M15 - User Management, RBAC & Permissions Review | M15 | Complete | 2026-02-07 | 2026-02-07 |
 
 ---
 

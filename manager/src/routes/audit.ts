@@ -15,16 +15,11 @@ type Bindings = {
 
 const audit = new Hono<{ Bindings: Bindings }>();
 
-// Public test endpoint (no auth required)
-audit.get('/ping', (c) => {
-  return c.json({ message: 'Audit route is working', timestamp: Date.now() });
-});
-
 /**
  * GET /api/audit/test
- * Test endpoint to check if database is accessible
+ * Test endpoint to check if database is accessible (admin only)
  */
-audit.get('/test', async (c) => {
+audit.get('/test', requireAuth(), async (c) => {
   const user = c.get('user');
 
   if (user.role !== 'admin') {
@@ -32,19 +27,6 @@ audit.get('/test', async (c) => {
   }
 
   try {
-    // Test if audit_logs table exists
-    const tableCheck = await c.env.DB.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'"
-    ).first();
-
-    if (!tableCheck) {
-      return c.json({
-        error: 'Table does not exist',
-        suggestion: 'Run migration 0006_create_rbac_tables.sql'
-      }, 500);
-    }
-
-    // Try a simple count
     const count = await c.env.DB.prepare('SELECT COUNT(*) as count FROM audit_logs').first();
 
     return c.json({
@@ -181,6 +163,41 @@ audit.get('/', requireAuth(), async (c) => {
       error: 'Failed to fetch audit logs',
       details: error instanceof Error ? error.message : String(error)
     }, 500);
+  }
+});
+
+/**
+ * POST /api/audit/cleanup
+ * Delete audit logs older than specified days (default: 90)
+ * Admin only
+ */
+audit.post('/cleanup', requireAuth(), async (c) => {
+  const user = c.get('user');
+
+  if (user.role !== 'admin') {
+    return c.json({ error: 'Forbidden - requires admin role' }, 403);
+  }
+
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const retentionDays = Math.max(1, parseInt(body.retentionDays) || 90);
+    const cutoffTimestamp = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+
+    const result = await c.env.DB.prepare(
+      'DELETE FROM audit_logs WHERE timestamp < ?'
+    ).bind(cutoffTimestamp).run();
+
+    const deletedCount = result.meta?.changes || 0;
+
+    return c.json({
+      success: true,
+      deletedCount,
+      retentionDays,
+      cutoffDate: new Date(cutoffTimestamp).toISOString(),
+    });
+  } catch (error) {
+    console.error('[Audit API] Cleanup error:', error);
+    return c.json({ error: 'Failed to cleanup audit logs' }, 500);
   }
 });
 

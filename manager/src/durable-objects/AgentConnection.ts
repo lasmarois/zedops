@@ -1470,7 +1470,10 @@ export class AgentConnection extends DurableObject {
       return new Response("Expected Upgrade: websocket", { status: 426 });
     }
 
-    // Extract user ID from header (passed by agents.ts for audit logging)
+    // Extract user ID from header (passed by agents.ts for audit logging).
+    // Trust boundary: This header is set by the Worker (agents.ts) after JWT
+    // validation, NOT by the client. Worker→DO communication is internal to
+    // the Cloudflare runtime and cannot be spoofed by external requests.
     const userId = request.headers.get("X-User-Id") || undefined;
     if (userId) {
       console.log(`[AgentConnection] UI connection with user ID: ${userId}`);

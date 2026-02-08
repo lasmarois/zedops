@@ -1011,7 +1011,7 @@ export async function fetchServerMetricsHistory(
 export interface UserAccount {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | null;
   created_at: number;
 }
 
@@ -1021,7 +1021,7 @@ export interface UsersResponse {
 
 export interface InviteUserRequest {
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'agent-admin' | 'operator' | 'viewer';
 }
 
 export interface InviteUserResponse {
@@ -1036,19 +1036,6 @@ export interface InviteUserResponse {
   error?: string;
 }
 
-export interface Permission {
-  id: string;
-  user_id: string;
-  resource_type: 'agent' | 'server' | 'global';
-  resource_id: string | null;
-  permission: 'view' | 'control' | 'delete' | 'manage_users';
-  created_at: number;
-}
-
-export interface UserPermissionsResponse {
-  user: UserAccount;
-  permissions: Permission[];
-}
 
 /**
  * Fetch all users
@@ -1106,62 +1093,27 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; me
   return response.json();
 }
 
-/**
- * Get user permissions
- */
-export async function fetchUserPermissions(userId: string): Promise<UserPermissionsResponse> {
-  const response = await fetch(`${API_BASE}/api/permissions/${userId}`, {
-    headers: getAuthHeaders(),
-  });
-
-  if (!response.ok) {
-    handleAuthError(response);
-    throw new Error('Failed to fetch user permissions');
-  }
-
-  return response.json();
-}
 
 /**
- * Grant a permission to a user
+ * Change own password
  */
-export async function grantPermission(
-  userId: string,
-  resourceType: 'agent' | 'server' | 'global',
-  resourceId: string | null,
-  permission: 'view' | 'control' | 'delete' | 'manage_users'
-): Promise<{ success: boolean; permission: Permission }> {
-  const response = await fetch(`${API_BASE}/api/permissions/${userId}`, {
-    method: 'POST',
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/api/auth/password`, {
+    method: 'PATCH',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ resourceType, resourceId, permission }),
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 
   if (!response.ok) {
     handleAuthError(response);
     const data = await response.json();
-    throw new Error(data.error || 'Failed to grant permission');
-  }
-
-  return response.json();
-}
-
-/**
- * Revoke a permission
- */
-export async function revokePermission(permissionId: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/api/permissions/${permissionId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-
-  if (!response.ok) {
-    handleAuthError(response);
-    const data = await response.json();
-    throw new Error(data.error || 'Failed to revoke permission');
+    throw new Error(data.error || 'Failed to change password');
   }
 
   return response.json();

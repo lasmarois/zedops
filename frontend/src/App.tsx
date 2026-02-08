@@ -48,7 +48,6 @@ function AppContent() {
         <Route path="servers" element={<ServerList />} />
         <Route path="servers/:id" element={<ServerDetail />} />
         <Route path="users" element={<UsersPage />} />
-        <Route path="permissions" element={<div className="p-8">Permissions Page (Phase 3)</div>} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
       </Route>
     </Routes>

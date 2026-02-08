@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/auth';
-import { getUserVisibleServers } from '../lib/permissions';
+import { getUserVisibleServers, canViewServer } from '../lib/permissions';
 
 type Bindings = {
   DB: D1Database;
@@ -346,13 +346,10 @@ servers.get('/:serverId/metrics/history', async (c) => {
       return c.json({ error: 'Server not found' }, 404);
     }
 
-    // Check user permission (admin can view all, non-admin needs permission)
+    // Check user permission using RBAC system
     if (user.role !== 'admin') {
-      const permission = await c.env.DB.prepare(
-        'SELECT 1 FROM user_server_permissions WHERE user_id = ? AND server_id = ?'
-      ).bind(user.id, serverId).first();
-
-      if (!permission) {
+      const hasAccess = await canViewServer(c.env.DB, user.id, user.role, serverId);
+      if (!hasAccess) {
         return c.json({ error: 'Access denied' }, 403);
       }
     }

@@ -7,9 +7,6 @@ import {
   fetchUsers,
   inviteUser,
   deleteUser,
-  fetchUserPermissions,
-  grantPermission,
-  revokePermission,
   fetchUserRoleAssignments,
   grantRoleAssignment,
   revokeRoleAssignment,
@@ -60,62 +57,8 @@ export function useDeleteUser() {
   });
 }
 
-/**
- * Hook to fetch user permissions
- */
-export function useUserPermissions(userId: string | null) {
-  const { isAuthenticated } = useUser();
-
-  return useQuery({
-    queryKey: ['userPermissions', userId],
-    queryFn: () => fetchUserPermissions(userId!),
-    enabled: isAuthenticated && !!userId,
-  });
-}
-
-/**
- * Hook to grant a permission
- */
-export function useGrantPermission() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      userId,
-      resourceType,
-      resourceId,
-      permission,
-    }: {
-      userId: string;
-      resourceType: 'agent' | 'server' | 'global';
-      resourceId: string | null;
-      permission: 'view' | 'control' | 'delete' | 'manage_users';
-    }) => grantPermission(userId, resourceType, resourceId, permission),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['userPermissions', variables.userId] });
-      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
-    },
-  });
-}
-
-/**
- * Hook to revoke a permission
- */
-export function useRevokePermission() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ permissionId }: { permissionId: string; userId: string }) =>
-      revokePermission(permissionId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['userPermissions', variables.userId] });
-      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
-    },
-  });
-}
-
 // ============================================================================
-// Role Assignment Hooks (New RBAC System)
+// Role Assignment Hooks (RBAC System)
 // ============================================================================
 
 /**

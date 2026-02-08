@@ -42,7 +42,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
 
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'agent-admin' | 'operator' | 'viewer'>('viewer');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ userId: string; userEmail: string } | null>(null);
@@ -205,12 +205,14 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
               <Label htmlFor="role" className="text-gray-300">
                 Role
               </Label>
-              <Select value={inviteRole} onValueChange={(val) => setInviteRole(val as 'admin' | 'user')}>
+              <Select value={inviteRole} onValueChange={(val) => setInviteRole(val as 'admin' | 'agent-admin' | 'operator' | 'viewer')}>
                 <SelectTrigger id="role" className="bg-[#1a1a1a] border-[#444] text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="operator">Operator</SelectItem>
+                  <SelectItem value="agent-admin">Agent Admin</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
@@ -277,13 +279,10 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'}>
-                      {user.role === 'admin' ? 'admin' : 'user'}
-                    </Badge>
-                    {!user.role && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        (role assignments)
-                      </span>
+                    {user.role === 'admin' ? (
+                      <Badge variant="destructive">Admin</Badge>
+                    ) : (
+                      <Badge variant="secondary">Member</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">

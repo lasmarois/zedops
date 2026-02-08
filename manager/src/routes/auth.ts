@@ -8,11 +8,13 @@ import { Hono } from 'hono';
 // Using crypto.randomUUID() for ID generation
 import {
   verifyPassword,
+  hashPassword,
+  validatePasswordStrength,
   generateSessionToken,
   hashToken,
 } from '../lib/auth';
 import { requireAuth } from '../middleware/auth';
-import { logUserLogin, logUserLogout } from '../lib/audit';
+import { logUserLogin, logUserLogout, logUserPasswordChanged } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -196,6 +198,58 @@ auth.post('/refresh', requireAuth(), async (c) => {
     });
   } catch (error) {
     console.error('Refresh token error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// PATCH /api/auth/password
+// Change own password (requires current password verification)
+// ============================================================================
+
+auth.patch('/password', requireAuth(), async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { currentPassword, newPassword } = body;
+
+    if (!currentPassword || !newPassword) {
+      return c.json({ error: 'Current password and new password are required' }, 400);
+    }
+
+    // Validate new password strength
+    const validation = validatePasswordStrength(newPassword);
+    if (!validation.valid) {
+      return c.json({ error: validation.errors[0] }, 400);
+    }
+
+    // Fetch current password hash
+    const dbUser = await c.env.DB.prepare(
+      'SELECT password_hash FROM users WHERE id = ?'
+    ).bind(user.id).first<{ password_hash: string }>();
+
+    if (!dbUser) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+
+    // Verify current password
+    const isValid = await verifyPassword(currentPassword, dbUser.password_hash);
+    if (!isValid) {
+      return c.json({ error: 'Current password is incorrect' }, 401);
+    }
+
+    // Hash and update new password
+    const newHash = await hashPassword(newPassword);
+    await c.env.DB.prepare(
+      'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?'
+    ).bind(newHash, Date.now(), user.id).run();
+
+    // Log the password change
+    await logUserPasswordChanged(c.env.DB, c, user.id, user.id);
+
+    return c.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Password change error:', error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });

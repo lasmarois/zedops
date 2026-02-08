@@ -1,10 +1,10 @@
+import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import {
   Server,
   Laptop,
   Users,
-  Shield,
   FileText,
   LayoutDashboard,
   Settings,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useUser } from "@/contexts/UserContext"
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog"
 
 interface NavItem {
   label: string
@@ -33,13 +34,13 @@ const infrastructureItems: NavItem[] = [
 
 const managementItems: NavItem[] = [
   { label: "Users", href: "/users", icon: Users },
-  { label: "Permissions", href: "/permissions", icon: Shield },
   { label: "Audit Logs", href: "/audit-logs", icon: FileText },
 ]
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation()
   const { user, logout } = useUser()
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
 
   const handleNavClick = () => {
     // Close mobile menu when navigating
@@ -108,23 +109,25 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           </div>
         </div>
 
-        {/* Management */}
-        <div>
-          <SectionHeader>Management</SectionHeader>
-          <div className="space-y-1">
-            {managementItems.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                icon={item.icon}
-                label={item.label}
-                count={item.count}
-                active={location.pathname.startsWith(item.href)}
-                onClick={handleNavClick}
-              />
-            ))}
+        {/* Management (admin only) */}
+        {user?.role === 'admin' && (
+          <div>
+            <SectionHeader>Management</SectionHeader>
+            <div className="space-y-1">
+              {managementItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  count={item.count}
+                  active={location.pathname.startsWith(item.href)}
+                  onClick={handleNavClick}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </nav>
 
       <Separator />
@@ -141,7 +144,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="ghost" className="flex-1" title="Settings">
+          <Button size="sm" variant="ghost" className="flex-1" title="Change Password" onClick={() => setShowPasswordDialog(true)}>
             <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="ghost" className="flex-1" title="Logout" onClick={logout}>
@@ -149,6 +152,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           </Button>
         </div>
       </div>
+
+      <ChangePasswordDialog
+        open={showPasswordDialog}
+        onOpenChange={setShowPasswordDialog}
+      />
     </div>
   )
 }

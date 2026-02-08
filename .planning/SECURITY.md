@@ -4,13 +4,13 @@
 
 This project uses Cloudflare Workers secret management:
 
-### ✅ Safe to Commit
+### Safe to Commit
 
-- **D1 Database IDs** - These are account-scoped identifiers, not secrets
+- **D1 Database IDs** - Account-scoped identifiers, not secrets
 - **`.dev.vars.example`** - Template file with example values only
 - **Configuration files** - `wrangler.toml`, `package.json`, etc.
 
-### ❌ NEVER Commit
+### NEVER Commit
 
 - **`.dev.vars`** - Local development secrets (gitignored)
 - **Production secrets** - Set via `wrangler secret put`
@@ -36,10 +36,7 @@ This project uses Cloudflare Workers secret management:
 Set secrets using Wrangler CLI (never hardcode in config files):
 
 ```bash
-# Generate a strong random secret
 openssl rand -base64 32
-
-# Set the secret
 npx wrangler secret put TOKEN_SECRET
 npx wrangler secret put ADMIN_PASSWORD
 ```
@@ -49,171 +46,149 @@ npx wrangler secret put ADMIN_PASSWORD
 ### Manager (Cloudflare Worker)
 
 - **`TOKEN_SECRET`** (required)
-  - Purpose: JWT signing secret for agent authentication
+  - Purpose: JWT signing secret for agent and user session tokens
   - Format: Random string (at least 32 characters)
   - Generation: `openssl rand -base64 32`
 
 - **`ADMIN_PASSWORD`** (required)
-  - Purpose: Admin API authentication (MVP - replaced with proper auth in Milestone 6)
-  - Format: Strong password
-  - Note: Will be replaced with proper RBAC in future milestone
+  - Purpose: Bootstrap admin account creation (`POST /api/bootstrap`)
+  - Note: Only used once during initial setup; all subsequent auth uses JWT sessions
+
+---
+
+## User Authentication & RBAC
+
+### Role Model (4 roles)
+
+| Role | Scope | Capabilities |
+|------|-------|-------------|
+| **admin** | System (users.role column) | Full system access, user management, all servers |
+| **agent-admin** | Assignment (per-agent) | Create/delete servers on assigned agent + operator capabilities |
+| **operator** | Assignment (per-agent/server) | Start/stop/restart servers, RCON, view |
+| **viewer** | Assignment (per-agent/server) | View-only access to assigned servers |
+
+### Scope Hierarchy (most specific wins)
+
+1. **Server-level** assignment (overrides agent-level)
+2. **Agent-level** assignment (applies to all servers on that agent)
+3. **Global** assignment (applies to all agents/servers)
+4. **System role** (admin only — bypasses all checks)
+
+### Capability Hierarchy
+
+- admin > agent-admin > operator > viewer
+- operator implies viewer (can view what they control)
+- agent-admin implies operator + viewer for their assigned agent
+
+### User Session Flow
+
+1. User logs in with email + password (`POST /api/auth/login`)
+2. Server generates JWT session token (HS256, 7-day expiry)
+3. Session stored in D1 `sessions` table (token hash only)
+4. Client stores JWT in localStorage, sends as `Authorization: Bearer <token>`
+5. `requireAuth()` middleware validates JWT signature + session existence on each request
+
+### Session Management
+
+- **Token format**: JWT (HS256) with `type: 'user_session'`, `userId`, `email`, `role`
+- **Expiry**: 7 days from issuance
+- **Storage**: SHA-256 hash in D1 `sessions` table
+- **Refresh**: `POST /api/auth/refresh` generates new token, updates session
+- **Logout**: Deletes session from D1
+- **Password change**: Self-service via `PATCH /api/auth/password` (requires current password)
+
+### Password Requirements
+
+- Minimum 8 characters
+- At least 1 uppercase letter
+- At least 1 lowercase letter
+- At least 1 number
+- Hashed with bcrypt (10 rounds) before storage
+
+### User Invitation Flow
+
+1. Admin creates invitation with email + role (`POST /api/users/invite`)
+2. System generates invitation token (24-hour expiry)
+3. Admin shares invitation link with user
+4. User accepts invitation, sets password (`POST /api/invite/accept/:token`)
+5. User account created with specified role
+
+### Audit Logging
+
+All sensitive operations are logged to `audit_logs` table:
+- User login/logout (success and failure)
+- User creation, deletion, role changes
+- Server operations (create, start, stop, delete, rebuild)
+- RCON command execution
+- Role assignment changes
+- Invitation lifecycle
+
+Retention: 90-day default (configurable via `POST /api/audit/cleanup`)
+
+---
 
 ## Agent Authentication
-
-The agent authentication system uses a two-token flow with JWT signatures and SHA-256 hashing.
 
 ### Token Types
 
 **1. Ephemeral Tokens**
-- **Purpose**: One-time registration of new agents
-- **Lifetime**: 1 hour
-- **Generation**: Admin API (`POST /api/admin/tokens`)
-- **Usage**: First-time agent registration only
-- **Payload**:
-  ```json
-  {
-    "type": "ephemeral",
-    "agentName": "agent-name",
-    "iat": 1768028645,
-    "exp": 1768032245
-  }
-  ```
+- Purpose: One-time registration of new agents
+- Lifetime: 1 hour
+- Generation: Admin API (`POST /api/admin/tokens`)
+- Payload: `{ type: "ephemeral", agentName, iat, exp }`
 
 **2. Permanent Tokens**
-- **Purpose**: Ongoing agent authentication (reconnection)
-- **Lifetime**: No expiry (valid until revoked)
-- **Generation**: Issued by manager during registration
-- **Storage**:
-  - Agent: `~/.zedops-agent/token` (plaintext file)
-  - Manager: SHA-256 hash in D1 database
-- **Payload**:
-  ```json
-  {
-    "type": "permanent",
-    "agentId": "uuid",
-    "agentName": "agent-name",
-    "iat": 1768028668
-  }
-  ```
+- Purpose: Ongoing agent authentication (reconnection)
+- Lifetime: No expiry (valid until agent deleted)
+- Storage: Agent saves to `~/.zedops-agent/token` (plaintext); manager stores SHA-256 hash in D1
+- Payload: `{ type: "permanent", agentId, agentName, iat }`
 
-### Registration Flow (agent.register)
+### Registration Flow
 
-**Step 1: Admin generates ephemeral token**
-```bash
-curl -X POST https://manager/api/admin/tokens \
-  -H "Authorization: Bearer admin" \
-  -d '{"agentName":"my-agent"}'
-```
+1. Admin generates ephemeral token via API
+2. Agent connects to WebSocket with ephemeral token
+3. Manager verifies JWT signature, type, expiry, agent name match
+4. Manager issues permanent token, stores hash in D1
+5. Agent saves permanent token to disk
 
-**Step 2: Agent connects with ephemeral token**
-- Agent connects to WebSocket: `wss://manager/ws`
-- Sends `agent.register` message with ephemeral token
-- Manager verifies:
-  - JWT signature (using `TOKEN_SECRET`)
-  - Token type is "ephemeral"
-  - Token not expired
-  - Agent name matches token payload
+### Authentication Flow (reconnection)
 
-**Step 3: Manager issues permanent token**
-- Generates new permanent token (no expiry)
-- Hashes token with SHA-256
-- Stores hash in D1 database (NOT the raw token)
-- Returns permanent token to agent
-- Agent saves to `~/.zedops-agent/token`
+1. Agent reads permanent token from `~/.zedops-agent/token`
+2. Agent connects to WebSocket, sends `agent.auth` with token
+3. Manager verifies JWT signature, type, agent ID existence, hash match
+4. Manager sets agent status to "online"
 
-### Authentication Flow (agent.auth)
+### Worker-to-DO Trust Boundary
 
-**Used when agent reconnects with permanent token**
-
-**Step 1: Agent loads permanent token**
-- Reads token from `~/.zedops-agent/token`
-- Connects to WebSocket: `wss://manager/ws`
-
-**Step 2: Agent sends authentication request**
-- Sends `agent.auth` message with permanent token
-- Manager verifies:
-  - JWT signature (using `TOKEN_SECRET`)
-  - Token type is "permanent"
-  - Agent ID exists in database
-  - Token hash matches stored hash
-
-**Step 3: Manager authenticates agent**
-- Calculates SHA-256 hash of received token
-- Compares with stored hash in database
-- If match: Sets agent status to "online", updates `last_seen`
-- Returns `agent.auth.success` message
+The `X-User-Id` header passed from the Worker to Durable Objects is set after JWT validation in the Worker layer. Worker-to-DO communication is internal to the Cloudflare runtime and cannot be spoofed by external requests.
 
 ### Security Properties
 
-**Token Signing**
-- Algorithm: HS256 (HMAC-SHA256)
-- Secret: `TOKEN_SECRET` environment variable
-- Signature prevents token forgery
-
-**Token Hashing**
-- Algorithm: SHA-256
-- Purpose: Prevent token exposure if database is compromised
-- Only hash is stored, never the raw permanent token
-
-**Token Rotation**
-- Ephemeral tokens auto-expire (1 hour)
-- Permanent tokens never expire (stateless)
-- Revocation: Delete agent from database (hash no longer matches)
-
-**Defense in Depth**
-1. **TLS encryption**: All WebSocket traffic uses `wss://` (TLS)
-2. **Signature verification**: JWT prevents token tampering
-3. **Hash matching**: Database compromise doesn't leak tokens
-4. **Expiry enforcement**: Ephemeral tokens have strict time limits
-5. **Type checking**: Tokens can't be used for wrong purpose
-
-**Attack Scenarios**
-
-| Attack | Mitigation |
-|--------|------------|
-| Token forgery | JWT signature verification with `TOKEN_SECRET` |
-| Token reuse | Ephemeral tokens expire after 1 hour |
-| Database breach | Only SHA-256 hashes stored, not raw tokens |
-| Man-in-the-middle | TLS encryption (`wss://`) required |
-| Token theft from agent | File system security (agent responsibility) |
+| Layer | Mechanism |
+|-------|-----------|
+| Transport | TLS encryption (`wss://`) |
+| Token integrity | JWT HS256 signature |
+| Database protection | SHA-256 token hashing (raw tokens never stored) |
+| Token scope | Type checking prevents cross-purpose use |
+| Ephemeral expiry | 1-hour strict time limit |
 | Brute force | Token secret is 256+ bits of entropy |
 
-**Known Limitations (MVP)**
-- No token refresh mechanism (permanent tokens never expire)
-- No rate limiting on authentication attempts
-- No audit log of authentication events
-- Agent token stored in plaintext on disk
+### Known Limitations
 
-**Planned Improvements (Future Milestones)**
-- Token refresh with sliding expiry
-- Rate limiting and brute force protection
-- Audit logging to D1 database
-- Agent-side token encryption at rest
-- Multi-factor authentication for agents
+- No token refresh mechanism for permanent agent tokens
+- No rate limiting on login endpoint (acceptable for small user base)
+- Agent token stored in plaintext on disk (agent host responsibility)
+
+---
+
+## Security Best Practices
+
+1. **Never commit `.dev.vars`** — Always gitignored
+2. **Use `wrangler secret put` for production** — Never hardcode secrets
+3. **Rotate secrets regularly** — Especially before making repository public
+4. **Use strong random strings** — `openssl rand -base64 32`
+5. **Different secrets per environment** — Dev and production use separate values
 
 ## Reporting Security Issues
 
 If you discover a security vulnerability, please email the maintainer directly instead of using the issue tracker.
-
-## Security Best Practices
-
-1. **Never commit `.dev.vars`** - Always gitignored
-2. **Use `wrangler secret put` for production** - Never hardcode secrets in `wrangler.toml`
-3. **Rotate secrets regularly** - Especially before making repository public
-4. **Use strong random strings** - Use `openssl rand -base64 32` or similar
-5. **Different secrets per environment** - Development and production should use different values
-
-## Current Security Status (MVP)
-
-⚠️ **Note:** This is an MVP implementation with hardcoded admin authentication.
-
-**Current limitations:**
-- Single admin password (no user management)
-- No role-based access control (RBAC)
-- No password reset functionality
-
-**Planned improvements (Milestone 6):**
-- Full RBAC implementation (admin/operator/viewer roles)
-- User management with D1 database
-- Per-server role assignments
-- Proper authentication flow
