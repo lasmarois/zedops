@@ -1,6 +1,14 @@
-# Goal #7: Show Image Version & Dynamic Tag Selection — COMPLETE
+# Goal #7: Show Image Version & Dynamic Tag Selection
 
-## Phase 2-4: Core implementation
+## Phase 1: OCI label in steam-zomboid Docker image — COMPLETE
+- [x] Add `ARG IMAGE_VERSION=latest` to Dockerfile
+- [x] Add `LABEL org.opencontainers.image.version="${IMAGE_VERSION}"` to Dockerfile
+- [x] Create `.gitlab-ci.yml` — builds image on tag/master push, passes tag as IMAGE_VERSION
+- [x] Push to steam-zomboid repo and verify CI builds
+- [x] Tag v2.1.5 — CI pipeline passed, image published with OCI version label
+- [x] Verified end-to-end: created server on dev, version shows "2.1.5" in Server Info
+
+## Phase 2-4: Core implementation (COMPLETE)
 - [x] Agent: ImageVersion extraction from OCI labels + ListRegistryTags via crane
 - [x] Manager: image_version passthrough in server APIs + registry-tags endpoint
 - [x] Frontend: dynamic tag dropdown in ServerForm + ConfigurationEdit
