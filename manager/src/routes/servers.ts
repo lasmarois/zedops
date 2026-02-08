@@ -57,8 +57,9 @@ servers.get('/', async (c) => {
       serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
     }
 
-    // Fetch container health from each unique online agent
+    // Fetch container health and image version from each unique online agent
     const containerHealthMap: Record<string, string> = {};
+    const containerVersionMap: Record<string, string> = {};
     const onlineAgents = new Map<string, string>(); // agentName -> agentId
 
     // Collect unique online agents
@@ -84,11 +85,14 @@ servers.get('/', async (c) => {
         ]);
 
         if (containerResponse.ok) {
-          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string; image_version?: string }> };
           if (containerData.containers) {
             for (const container of containerData.containers) {
               if (container.health) {
                 containerHealthMap[container.id] = container.health;
+              }
+              if (container.image_version) {
+                containerVersionMap[container.id] = container.image_version;
               }
             }
           }
@@ -127,6 +131,7 @@ servers.get('/', async (c) => {
       config: row.config,
       image: row.image, // M9.8.32: Per-server image override
       image_tag: row.image_tag,
+      image_version: row.container_id ? containerVersionMap[row.container_id] : undefined, // Resolved image version from OCI label
       game_port: row.game_port,
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,
@@ -200,8 +205,9 @@ servers.get('/:id', async (c) => {
       }
     }
 
-    // Fetch container health and player stats if agent is online
+    // Fetch container health, image version, and player stats if agent is online
     let health: string | undefined;
+    let imageVersion: string | undefined;
     let playerStats: { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean } | null = null;
     if (server.agent_status === 'online' && server.agent_name) {
       try {
@@ -215,11 +221,14 @@ servers.get('/:id', async (c) => {
         ]);
 
         if (containerResponse.ok && server.container_id) {
-          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string; image_version?: string }> };
           if (containerData.containers) {
             const container = containerData.containers.find(c => c.id === server.container_id);
             if (container?.health) {
               health = container.health;
+            }
+            if (container?.image_version) {
+              imageVersion = container.image_version;
             }
           }
         }
@@ -251,6 +260,7 @@ servers.get('/:id', async (c) => {
       config: server.config, // Full config (ENV vars)
       image: server.image, // M9.8.32: Per-server image override
       image_tag: server.image_tag,
+      image_version: imageVersion, // Resolved image version from OCI label
       game_port: server.game_port,
       udp_port: server.udp_port,
       rcon_port: server.rcon_port,

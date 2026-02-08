@@ -6,12 +6,21 @@
  */
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Lock } from 'lucide-react'
 import type { Server } from '../lib/api'
+import { fetchRegistryTags } from '../lib/api'
 
 interface ConfigurationEditProps {
   server: Server
@@ -51,6 +60,14 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
   // Mod management
   const [serverMods, setServerMods] = useState(config.SERVER_MODS || '')
   const [workshopItems, setWorkshopItems] = useState(config.SERVER_WORKSHOP_ITEMS || '')
+
+  // Fetch available image tags from registry
+  const { data: registryTags, isLoading: tagsLoading } = useQuery({
+    queryKey: ['registryTags', server.agent_id, image || server.steam_zomboid_registry],
+    queryFn: () => fetchRegistryTags(server.agent_id, image || undefined),
+    enabled: !!server.agent_id,
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Helper to render immutable field (read-only)
   const renderImmutableField = (label: string, value: string | number) => {
@@ -406,14 +423,31 @@ export function ConfigurationEdit({ server, onSave, onCancel, isSaving }: Config
 
           <div className="space-y-2">
             <Label htmlFor="imageTag">Image Tag</Label>
-            <Input
-              id="imageTag"
-              value={imageTag}
-              onChange={(e) => setImageTag(e.target.value)}
-              placeholder="latest"
-            />
+            {tagsLoading ? (
+              <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                Loading tags...
+              </div>
+            ) : registryTags && registryTags.length > 0 ? (
+              <Select value={imageTag} onValueChange={setImageTag}>
+                <SelectTrigger id="imageTag">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {registryTags.map((tag) => (
+                    <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="imageTag"
+                value={imageTag}
+                onChange={(e) => setImageTag(e.target.value)}
+                placeholder="latest"
+              />
+            )}
             <p className="text-xs text-muted-foreground">
-              Only affects next rebuild (not applied immediately)
+              {registryTags ? `${registryTags.length} tags available — ` : ''}Only affects next rebuild
             </p>
           </div>
 

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CreateServerRequest, ServerConfig, PortSet, Server } from '../lib/api';
 import { usePortAvailability } from '../hooks/usePortAvailability';
-import { fetchAgentConfig } from '../lib/api';
+import { fetchAgentConfig, fetchRegistryTags } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -85,6 +85,14 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     queryKey: ['agentConfig', agentId],
     queryFn: () => fetchAgentConfig(agentId),
     enabled: !!agentId,
+  });
+
+  // Fetch available image tags from registry
+  const { data: registryTags, isLoading: tagsLoading } = useQuery({
+    queryKey: ['registryTags', agentId],
+    queryFn: () => fetchRegistryTags(agentId),
+    enabled: !!agentId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   // Port availability query (manual trigger via checkPorts state)
@@ -282,18 +290,34 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
           {/* Image Tag */}
           <div className="space-y-2">
             <Label htmlFor="imageTag">Image Tag</Label>
-            <Select value={imageTag} onValueChange={setImageTag} disabled={isSubmitting}>
-              <SelectTrigger id="imageTag">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">latest (v2.1.0)</SelectItem>
-                <SelectItem value="2.1.0">2.1.0</SelectItem>
-                <SelectItem value="2.1">2.1</SelectItem>
-                <SelectItem value="2.0.1">2.0.1</SelectItem>
-                <SelectItem value="2.0.0">2.0.0</SelectItem>
-              </SelectContent>
-            </Select>
+            {tagsLoading ? (
+              <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                Loading tags...
+              </div>
+            ) : registryTags && registryTags.length > 0 ? (
+              <Select value={imageTag} onValueChange={setImageTag} disabled={isSubmitting}>
+                <SelectTrigger id="imageTag">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {registryTags.map((tag) => (
+                    <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="imageTag"
+                type="text"
+                value={imageTag}
+                onChange={(e) => setImageTag(e.target.value)}
+                placeholder="latest"
+                disabled={isSubmitting}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              {registryTags ? `${registryTags.length} tags available` : 'Enter image tag manually'}
+            </p>
           </div>
 
           {/* Beta Branch */}

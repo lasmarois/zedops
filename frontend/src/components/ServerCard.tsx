@@ -152,7 +152,7 @@ export function ServerCard({
   const storage: ServerStorageSizes | null = storageData?.success ? storageData.sizes || null : null;
 
   const uptime = formatUptime(server, container);
-  const imageTag = server.image_tag || 'latest';
+  const displayVersion = server.image_version || server.image_tag || 'latest';
 
   // Navigate to server detail
   const handleNavigate = () => {
@@ -394,7 +394,7 @@ export function ServerCard({
                 </div>
                 <div className="text-sm text-muted-foreground truncate">
                   {showAgent && <span>{server.agent_name} • </span>}
-                  {imageTag} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                  {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
                   {server.player_count !== null && server.player_count !== undefined && (
                     <span className="text-info"> • {server.player_count}/{server.max_players || 32} players</span>
                   )}
@@ -457,7 +457,7 @@ export function ServerCard({
                   )}
                   <span className="text-sm text-muted-foreground truncate hidden sm:inline">
                     {showAgent && <span>{server.agent_name} • </span>}
-                    {imageTag} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                    {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
                     {server.player_count !== null && server.player_count !== undefined && (
                       <span className="text-info"> • {server.player_count}/{server.max_players || 32}</span>
                     )}

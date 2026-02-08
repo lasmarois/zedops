@@ -371,6 +371,7 @@ function ServerDetailContent() {
               status: status,
               health: server.health,
               image_tag: server.image_tag,
+              image_version: server.image_version,
               config: server.config,
               server_data_path: server.server_data_path,
               game_port: server.game_port,

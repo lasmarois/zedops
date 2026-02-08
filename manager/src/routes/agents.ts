@@ -259,6 +259,66 @@ agents.get('/:id/config', async (c) => {
 });
 
 /**
+ * GET /api/agents/:id/registry-tags
+ * Fetch available image tags from the agent's container registry
+ *
+ * Query params:
+ *   - registry (optional): Override registry URL. Defaults to agent's steam_zomboid_registry.
+ *
+ * Returns: { success: boolean, tags: string[] }
+ * Permission: Admin or user with create-server access
+ */
+agents.get('/:id/registry-tags', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+
+  // Check access (admin or user with agent-level access)
+  if (user.role !== 'admin') {
+    const effectiveRole = await getEffectiveRoleForAgent(c.env.DB, user.id, agentId);
+    if (!effectiveRole || effectiveRole === 'viewer') {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+  }
+
+  try {
+    // Get agent to verify it exists and is online
+    const agent = await c.env.DB.prepare(
+      'SELECT id, name, status, steam_zomboid_registry FROM agents WHERE id = ?'
+    )
+      .bind(agentId)
+      .first<{ id: string; name: string; status: string; steam_zomboid_registry: string }>();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    if (agent.status !== 'online') {
+      return c.json({ error: 'Agent is not online' }, 503);
+    }
+
+    // Use query param registry or fall back to agent's default
+    const registry = c.req.query('registry') || agent.steam_zomboid_registry;
+    if (!registry) {
+      return c.json({ error: 'No registry configured for this agent' }, 400);
+    }
+
+    // Forward request to agent via Durable Object
+    const id = c.env.AGENT_CONNECTION.idFromName(agent.name);
+    const stub = c.env.AGENT_CONNECTION.get(id);
+    const response = await stub.fetch(
+      `http://do/registry/tags?registry=${encodeURIComponent(registry)}`,
+      { method: 'GET' }
+    );
+
+    const data = await response.json();
+    return c.json(data, response.status as 200 | 503 | 504);
+  } catch (error) {
+    console.error('[Agents API] Error fetching registry tags:', error);
+    return c.json({ error: 'Failed to fetch registry tags' }, 500);
+  }
+});
+
+/**
  * PUT /api/agents/:id/config
  * Update agent configuration
  *
@@ -1229,8 +1289,9 @@ agents.get('/:id/servers', async (c) => {
       serverRows = serverRows.filter((server: any) => visibleServerIds.includes(server.id));
     }
 
-    // Fetch container health and player stats from agent (if online)
+    // Fetch container health, image version, and player stats from agent (if online)
     let containerHealthMap: Record<string, string> = {};
+    let containerVersionMap: Record<string, string> = {};
     let playerStatsMap: Record<string, { playerCount: number; maxPlayers: number; players: string[] }> = {};
     if (agent.status === 'online') {
       try {
@@ -1244,11 +1305,14 @@ agents.get('/:id/servers', async (c) => {
         ]);
 
         if (containerResponse.ok) {
-          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string }> };
+          const containerData = await containerResponse.json() as { containers?: Array<{ id: string; health?: string; image_version?: string }> };
           if (containerData.containers) {
             for (const container of containerData.containers) {
               if (container.health) {
                 containerHealthMap[container.id] = container.health;
+              }
+              if (container.image_version) {
+                containerVersionMap[container.id] = container.image_version;
               }
             }
           }
@@ -1281,6 +1345,7 @@ agents.get('/:id/servers', async (c) => {
       container_id: row.container_id,
       config: row.config,
       image_tag: row.image_tag,
+      image_version: row.container_id ? containerVersionMap[row.container_id] : undefined, // Resolved image version from OCI label
       game_port: row.game_port,
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,

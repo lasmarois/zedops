@@ -20,7 +20,7 @@ None
 | 4 | Smart Health Check | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 5 | ZedOps Integration Audit + Fix All Gaps | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 6 | Fix Health Check: Healthy Only When Game Ready | M14 | Complete | 2026-02-07 | 2026-02-07 |
-| 7 | Distribution Strategy | M14 | Planned | | |
+| 7 | Show Image Version & Dynamic Tag Selection | M14 | Complete | 2026-02-07 | 2026-02-07 |
 
 ---
 

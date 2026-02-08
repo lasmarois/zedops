@@ -3,6 +3,7 @@ import { Server, Map, Package, FolderOpen } from "lucide-react"
 
 interface ServerInfoCardProps {
   imageTag: string | null
+  imageVersion: string | null
   config: Record<string, string>
   serverDataPath: string | null
   agentDefaultDataPath: string | null
@@ -10,6 +11,7 @@ interface ServerInfoCardProps {
 
 export function ServerInfoCard({
   imageTag,
+  imageVersion,
   config,
   serverDataPath,
   agentDefaultDataPath,
@@ -39,7 +41,11 @@ export function ServerInfoCard({
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Version</span>
           <span className="text-sm font-medium font-mono">
-            {imageTag || "latest"}
+            {imageVersion
+              ? imageTag && imageTag !== "latest" && imageTag !== imageVersion
+                ? `${imageVersion} (${imageTag})`
+                : imageVersion
+              : imageTag || "latest"}
           </span>
         </div>
 

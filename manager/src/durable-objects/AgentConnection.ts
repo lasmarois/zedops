@@ -106,6 +106,11 @@ export class AgentConnection extends DurableObject {
       return this.handleContainersRequest();
     }
 
+    // Registry tags endpoint
+    if (url.pathname === "/registry/tags" && request.method === "GET") {
+      return this.handleRegistryTagsRequest(request);
+    }
+
     // Player stats endpoint (all servers)
     if (url.pathname === "/players" && request.method === "GET") {
       return new Response(JSON.stringify({
@@ -1094,6 +1099,63 @@ export class AgentConnection extends DurableObject {
       // Wait for reply
       const reply = await replyPromise;
 
+      return new Response(JSON.stringify(reply.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Request failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * HTTP handler for registry tags request
+   * Implements request/reply pattern with agent
+   */
+  private async handleRegistryTagsRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({
+        error: "Agent not connected",
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Get registry from query param
+    const url = new URL(request.url);
+    const registry = url.searchParams.get("registry") || "";
+
+    // Generate unique inbox for reply
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    // Create promise to wait for reply
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Request timeout"));
+      }, 15000); // 15s timeout for registry queries
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    // Send request to agent with reply inbox
+    this.send({
+      subject: "registry.tags",
+      data: { registry },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
       return new Response(JSON.stringify(reply.data), {
         status: 200,
         headers: { "Content-Type": "application/json" },

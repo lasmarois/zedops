@@ -14,6 +14,7 @@ interface ServerOverviewProps {
     status: string
     health?: string | null
     image_tag?: string | null
+    image_version?: string | null
     config?: string | null
     server_data_path?: string | null
     game_port: number
@@ -115,6 +116,7 @@ export function ServerOverview({
   const serverInfoCard = (
     <ServerInfoCard
       imageTag={server.image_tag || null}
+      imageVersion={server.image_version || null}
       config={config}
       serverDataPath={server.server_data_path || null}
       agentDefaultDataPath={agentDefaultDataPath || null}

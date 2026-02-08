@@ -138,6 +138,24 @@ export async function fetchAgentConfig(agentId: string): Promise<AgentConfig> {
 }
 
 /**
+ * Fetch available image tags from agent's container registry
+ */
+export async function fetchRegistryTags(agentId: string, registry?: string): Promise<string[]> {
+  const params = registry ? `?registry=${encodeURIComponent(registry)}` : '';
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/registry-tags${params}`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch registry tags');
+  }
+
+  const data = await response.json();
+  return data.tags || [];
+}
+
+/**
  * Update agent configuration
  */
 export async function updateAgentConfig(
@@ -372,6 +390,7 @@ export interface Server {
   config: string; // JSON string of ENV variables
   image: string | null; // M9.8.32: Per-server image override (NULL = use agent default)
   image_tag: string;
+  image_version?: string | null; // Resolved OCI image version (e.g., "2.1.4")
   game_port: number;
   udp_port: number;
   rcon_port: number;

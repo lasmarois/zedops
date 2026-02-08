@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/gorcon/rcon"
 )
 
@@ -178,6 +180,11 @@ func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, er
 			Labels:  c.Labels, // Include container labels for sync matching
 		}
 
+		// Extract OCI version label from container labels
+		if version, ok := c.Labels["org.opencontainers.image.version"]; ok {
+			info.ImageVersion = version
+		}
+
 		// For running containers, get health status via ContainerInspect
 		// The ContainerList API doesn't include health info directly
 		if c.State == "running" {
@@ -291,15 +298,16 @@ func convertPorts(ports []types.Port) []PortMapping {
 
 // ContainerInfo represents container metadata
 type ContainerInfo struct {
-	ID      string            `json:"id"`
-	Names   []string          `json:"names"`
-	Image   string            `json:"image"`
-	State   string            `json:"state"`
-	Status  string            `json:"status"`
-	Health  string            `json:"health,omitempty"` // Health check status: "starting", "healthy", "unhealthy", or "" (no healthcheck)
-	Created int64             `json:"created"`
-	Ports   []PortMapping     `json:"ports"`
-	Labels  map[string]string `json:"labels"` // Container labels (for sync matching)
+	ID           string            `json:"id"`
+	Names        []string          `json:"names"`
+	Image        string            `json:"image"`
+	ImageVersion string            `json:"image_version,omitempty"` // OCI version label from image (e.g., "2.1.4")
+	State        string            `json:"state"`
+	Status       string            `json:"status"`
+	Health       string            `json:"health,omitempty"` // Health check status: "starting", "healthy", "unhealthy", or "" (no healthcheck)
+	Created      int64             `json:"created"`
+	Ports        []PortMapping     `json:"ports"`
+	Labels       map[string]string `json:"labels"` // Container labels (for sync matching)
 }
 
 // PortMapping represents a port mapping
@@ -698,4 +706,34 @@ func (dc *DockerClient) GetImageDefaults(ctx context.Context, imageTag string) (
 
 	log.Printf("Extracted %d ENV defaults from image %s", len(defaults), imageTag)
 	return defaults, nil
+}
+
+// ListRegistryTags queries a container registry for available tags
+// Uses go-containerregistry/crane which auto-reads Docker credentials
+func ListRegistryTags(registry string) ([]string, error) {
+	if registry == "" {
+		return nil, fmt.Errorf("registry is required")
+	}
+
+	log.Printf("Fetching tags from registry: %s", registry)
+
+	tags, err := crane.ListTags(registry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tags from %s: %w", registry, err)
+	}
+
+	// Sort: "latest" first, then semver descending
+	sort.Slice(tags, func(i, j int) bool {
+		if tags[i] == "latest" {
+			return true
+		}
+		if tags[j] == "latest" {
+			return false
+		}
+		// Reverse alphabetical (works for semver with same prefix)
+		return tags[i] > tags[j]
+	})
+
+	log.Printf("Found %d tags from registry %s", len(tags), registry)
+	return tags, nil
 }

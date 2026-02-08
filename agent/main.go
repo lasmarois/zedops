@@ -399,6 +399,8 @@ func (a *Agent) receiveMessages() {
 			a.handleRCONCommand(msg)
 		case "rcon.disconnect":
 			a.handleRCONDisconnect(msg)
+		case "registry.tags":
+			a.handleRegistryTags(msg)
 		case "images.inspect":
 			a.handleImageInspect(msg)
 		case "backup.create":
@@ -1539,6 +1541,77 @@ func (a *Agent) sendRCONError(sessionID, errorMsg, errorCode, replyTo string) {
 		Timestamp: time.Now().Unix(),
 	}
 	a.sendMessage(response)
+}
+
+// handleRegistryTags handles registry.tags messages - returns available tags from a container registry
+func (a *Agent) handleRegistryTags(msg Message) {
+	// Parse request
+	var req struct {
+		Registry string `json:"registry"`
+	}
+	data, _ := json.Marshal(msg.Data)
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   fmt.Sprintf("Invalid request: %v", err),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	if req.Registry == "" {
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   "registry is required",
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Fetching registry tags for: %s", req.Registry)
+
+	tags, err := ListRegistryTags(req.Registry)
+	if err != nil {
+		log.Printf("Failed to fetch registry tags: %v", err)
+		if msg.Reply != "" {
+			response := Message{
+				Subject: msg.Reply,
+				Data: map[string]interface{}{
+					"success": false,
+					"error":   fmt.Sprintf("Failed to fetch tags: %v", err),
+				},
+				Timestamp: time.Now().Unix(),
+			}
+			a.sendMessage(response)
+		}
+		return
+	}
+
+	log.Printf("Found %d registry tags for %s", len(tags), req.Registry)
+
+	if msg.Reply != "" {
+		response := Message{
+			Subject: msg.Reply,
+			Data: map[string]interface{}{
+				"success": true,
+				"tags":    tags,
+			},
+			Timestamp: time.Now().Unix(),
+		}
+		a.sendMessage(response)
+	}
 }
 
 // handleImageInspect handles images.inspect messages - returns default ENV variables from Docker image
