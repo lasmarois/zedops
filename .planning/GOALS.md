@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-**Goal #15**: Button Polish + Solar Flare Color Fix (UX)
+None
 
 ---
 
@@ -28,7 +28,7 @@
 | 12 | Settings Page + Theme Switcher (6 themes, per-user) | M16 | Complete | 2026-02-07 | 2026-02-08 |
 | 13 | Cloudflare Free Tier — Hibernatable WebSocket Migration | Infra | Complete | 2026-02-08 | 2026-02-08 |
 | 14 | Log Viewer Revamp — xterm.js Terminal-Style Logs | UX | Complete | 2026-02-08 | 2026-02-08 |
-| 15 | Button Polish + Solar Flare Color Fix | UX | In Progress | 2026-02-08 | - |
+| 15 | Button Polish + Solar Flare Color Fix | UX | Complete | 2026-02-08 | 2026-02-08 |
 
 ---
 
