@@ -2,7 +2,7 @@
  * ANSI formatting utilities for log lines
  *
  * Converts structured log data into ANSI-colored strings
- * for rendering in xterm.js terminals.
+ * for rendering in react-logviewer's LazyLog component.
  */
 
 import type { AgentLogLine } from '../hooks/useAgentLogStream'
@@ -17,12 +17,12 @@ const BOLD_RED = '\x1b[1;31m'     // ERROR
 const DIM = '\x1b[2;90m'          // DEBUG
 const RED = '\x1b[31m'            // stderr
 
-// Level badge: Unicode icon + color (matches original Lucide icons)
-const LEVEL_BADGES: Record<string, { icon: string; color: string }> = {
-  INFO:  { icon: 'ℹ', color: GREEN },      // Lucide: Info
-  WARN:  { icon: '⚠', color: YELLOW },     // Lucide: AlertTriangle
-  ERROR: { icon: '✖', color: BOLD_RED },   // Lucide: XCircle
-  DEBUG: { icon: '⚙', color: DIM },        // Lucide: Bug
+// Level ANSI colors
+const LEVEL_COLORS: Record<string, string> = {
+  INFO: GREEN,
+  WARN: YELLOW,
+  ERROR: BOLD_RED,
+  DEBUG: DIM,
 }
 
 /** Format timestamp (ms) to HH:MM:SS.mmm */
@@ -38,10 +38,9 @@ function formatTimestamp(timestamp: number): string {
 /** Format an agent log line with ANSI colors */
 export function formatAgentLogLine(log: AgentLogLine): string {
   const ts = `${DIM_GRAY}${formatTimestamp(log.timestamp)}${RESET}`
-  const badge = LEVEL_BADGES[log.level]
-  const level = badge
-    ? `${badge.color}${badge.icon} ${log.level}${RESET}`
-    : `${DIM_GRAY}${log.level}${RESET}`
+  const levelColor = LEVEL_COLORS[log.level] || DIM_GRAY
+  // Use a marker token that formatPart will detect and replace with a Lucide icon
+  const level = `${levelColor}@@LEVEL:${log.level}@@${RESET}`
   const msgColor = log.level === 'ERROR' ? BOLD_RED : log.level === 'DEBUG' ? DIM : ''
   const msgReset = msgColor ? RESET : ''
   return `${ts} ${level} ${msgColor}${log.message}${msgReset}`
@@ -51,7 +50,7 @@ export function formatAgentLogLine(log: AgentLogLine): string {
 export function formatContainerLogLine(log: ContainerLogLine): string {
   const ts = `${DIM_GRAY}${formatTimestamp(log.timestamp)}${RESET}`
   if (log.stream === 'stderr') {
-    return `${ts} ${RED}⚠ stderr${RESET} ${RED}${log.message}${RESET}`
+    return `${ts} ${RED}@@STREAM:stderr@@ ${log.message}${RESET}`
   }
   return `${ts} ${log.message}`
 }
