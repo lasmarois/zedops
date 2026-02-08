@@ -20,7 +20,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-8 space-y-6">
       <Breadcrumb items={[
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'Settings' },
