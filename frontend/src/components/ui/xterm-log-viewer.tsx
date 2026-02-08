@@ -3,10 +3,10 @@
  *
  * Virtualized DOM-based log viewer using @melloware/react-logviewer.
  * Supports ANSI colors, Lucide icon injection via formatPart,
- * follow mode, and search. Replaces the previous xterm.js approach.
+ * follow mode, and search.
  */
 
-import { useMemo, useCallback, forwardRef, useImperativeHandle, useRef, createElement } from 'react'
+import { useMemo, useCallback, forwardRef, useImperativeHandle, useRef, useState, useEffect, createElement } from 'react'
 import { LazyLog } from '@melloware/react-logviewer'
 import { cn } from '@/lib/utils'
 import { Info, AlertTriangle, XCircle, Bug, AlertOctagon } from 'lucide-react'
@@ -105,6 +105,23 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement>(null)
+    const [containerHeight, setContainerHeight] = useState(0)
+
+    // Measure container height with ResizeObserver
+    useEffect(() => {
+      const el = containerRef.current
+      if (!el) return
+
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContainerHeight(entry.contentRect.height)
+        }
+      })
+      observer.observe(el)
+      // Initial measurement
+      setContainerHeight(el.clientHeight)
+      return () => observer.disconnect()
+    }, [])
 
     // Join lines into single text blob for LazyLog
     const text = useMemo(() => {
@@ -139,18 +156,16 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
       <div
         ref={containerRef}
         className={cn('rounded-lg overflow-hidden', className)}
+        style={{ backgroundColor: '#1e1e1e' }}
       >
         {showEmpty ? (
-          <div
-            className="flex items-center justify-center h-full min-h-[200px]"
-            style={{ backgroundColor: '#1e1e1e' }}
-          >
+          <div className="flex items-center justify-center h-full min-h-[200px]">
             <div className="text-muted-foreground/60 text-sm font-mono flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30 animate-pulse" />
               {emptyMessage || 'Waiting for output...'}
             </div>
           </div>
-        ) : (
+        ) : containerHeight > 0 ? (
           <LazyLog
             text={text}
             follow={follow}
@@ -162,7 +177,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
             selectableLines
             formatPart={formatPart}
             onScroll={handleScroll}
-            height="auto"
+            height={containerHeight}
             rowHeight={22}
             overscanRowCount={50}
             style={{
@@ -171,7 +186,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
               fontSize: '13px',
             }}
           />
-        )}
+        ) : null}
       </div>
     )
   }
