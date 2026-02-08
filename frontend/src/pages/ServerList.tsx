@@ -206,7 +206,7 @@ export function ServerList() {
         {hasAgents ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button>
+              <Button variant="glass-primary">
                 <Plus className="h-4 w-4" />
                 Create Server
                 <ChevronDown className="h-4 w-4 ml-2" />
@@ -240,7 +240,7 @@ export function ServerList() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button onClick={() => navigate('/agents')}>
+          <Button variant="glass-primary" onClick={() => navigate('/agents')}>
             <Plus className="h-4 w-4" />
             Add Agent First
           </Button>
@@ -302,7 +302,7 @@ export function ServerList() {
                     hasAgents ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button>
+                          <Button variant="glass-primary">
                             <Plus className="h-4 w-4" />
                             Create Server
                             <ChevronDown className="h-4 w-4 ml-2" />
@@ -336,7 +336,7 @@ export function ServerList() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <Button onClick={() => navigate('/agents')}>
+                      <Button variant="glass-primary" onClick={() => navigate('/agents')}>
                         <Plus className="h-4 w-4" />
                         Add Agent First
                       </Button>
@@ -451,7 +451,7 @@ export function ServerList() {
                           </div>
                         </div>
                         <Button
-                          variant="success"
+                          variant="glass-success"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation()
@@ -463,7 +463,7 @@ export function ServerList() {
                           {restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'Restoring...' : 'Restore'}
                         </Button>
                         <Button
-                          variant="destructive"
+                          variant="glass-destructive"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation()

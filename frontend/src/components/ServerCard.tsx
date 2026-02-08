@@ -174,9 +174,9 @@ export function ServerCard({
     const segmentedContainer = "flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm";
     const segmentedDivider = "w-px h-5 bg-white/10";
     const baseButton = "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 disabled:opacity-50";
-    const startButton = `${baseButton} text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)]`;
-    const stopButton = `${baseButton} text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)]`;
-    const restartButton = `${baseButton} text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)]`;
+    const startButton = `${baseButton} text-success hover:bg-success/20 glow-success hover:glow-inset`;
+    const stopButton = `${baseButton} text-warning hover:bg-warning/20 glow-warning hover:glow-inset`;
+    const restartButton = `${baseButton} text-info hover:bg-info/20 glow-info hover:glow-inset`;
 
     if (container) {
       if (!isRunning && onStart) {
@@ -238,7 +238,7 @@ export function ServerCard({
         <div className={segmentedContainer}>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className={`${baseButton} text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)]`}
+            className={`${baseButton} text-warning hover:bg-warning/20 glow-warning hover:glow-inset`}
           >
             <Wrench className="h-3.5 w-3.5" />
             <span>Edit</span>

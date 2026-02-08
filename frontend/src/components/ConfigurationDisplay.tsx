@@ -173,7 +173,7 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
         <Button
           onClick={onEdit}
           disabled={!onEdit}
-          variant="default"
+          variant="glass-info"
         >
           Edit Configuration
         </Button>

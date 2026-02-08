@@ -142,7 +142,7 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={() => setShowInstallDialog(true)}>
+          <Button variant="glass-primary" onClick={() => setShowInstallDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Agent
           </Button>

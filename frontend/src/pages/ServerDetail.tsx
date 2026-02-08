@@ -323,7 +323,7 @@ function ServerDetailContent() {
               <button
                 onClick={handleStart}
                 disabled={startServerMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_20px_rgba(61,220,151,0.2)] disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-success hover:bg-success/20 glow-success hover:glow-inset disabled:opacity-50"
               >
                 <PlayCircle className={`h-4 w-4 ${startServerMutation.isPending ? 'animate-spin' : ''}`} />
                 <span className="font-medium">
@@ -337,7 +337,7 @@ function ServerDetailContent() {
                 <button
                   onClick={handleStop}
                   disabled={stopServerMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_20px_rgba(255,201,82,0.2)] disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-warning hover:bg-warning/20 glow-warning hover:glow-inset disabled:opacity-50"
                 >
                   <StopCircle className={`h-4 w-4 ${stopServerMutation.isPending ? 'animate-pulse' : ''}`} />
                   <span className="font-medium">{stopServerMutation.isPending ? 'Stopping...' : 'Stop'}</span>
@@ -346,7 +346,7 @@ function ServerDetailContent() {
                 <button
                   onClick={handleRestart}
                   disabled={restartContainerMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_20px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 glow-info hover:glow-inset disabled:opacity-50"
                 >
                   <RefreshCw className={`h-4 w-4 ${restartContainerMutation.isPending ? 'animate-spin' : ''}`} />
                   <span className="font-medium">{restartContainerMutation.isPending ? 'Restarting...' : 'Restart'}</span>
@@ -360,7 +360,7 @@ function ServerDetailContent() {
             <button
               onClick={handleRebuild}
               disabled={rebuildServerMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_20px_rgba(51,225,255,0.2)] disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-info hover:bg-info/20 glow-info hover:glow-inset disabled:opacity-50"
             >
               <Wrench className={`h-4 w-4 ${rebuildServerMutation.isPending ? 'animate-spin' : ''}`} />
               <span className="font-medium">{rebuildServerMutation.isPending ? 'Rebuilding...' : 'Rebuild'}</span>
@@ -369,7 +369,7 @@ function ServerDetailContent() {
             <button
               onClick={handleDelete}
               disabled={deleteServerMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-destructive hover:bg-destructive/20 hover:shadow-[inset_0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-destructive hover:bg-destructive/20 glow-destructive hover:glow-inset disabled:opacity-50"
             >
               <Trash2 className={`h-4 w-4 ${deleteServerMutation.isPending ? 'animate-pulse' : ''}`} />
               <span className="font-medium">{deleteServerMutation.isPending ? 'Deleting...' : 'Delete'}</span>

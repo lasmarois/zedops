@@ -24,7 +24,7 @@ export interface Theme {
 
 export const THEMES: Theme[] = [
   {
-    id: 'solar-flare',
+    id: 'midnight-blue',
     name: 'Midnight Blue',
     description: 'Professional blue tones',
     preview: {
@@ -235,7 +235,7 @@ export const THEMES: Theme[] = [
     preview: {
       background: '15 35% 8%',
       primary: '25 95% 55%',
-      info: '45 95% 60%',
+      info: '190 85% 55%',
       success: '145 65% 48%',
     },
     colors: {
@@ -258,7 +258,7 @@ export const THEMES: Theme[] = [
       '--success': '145 65% 48%',
       '--warning': '48 95% 55%',
       '--error': '0 80% 58%',
-      '--info': '45 95% 60%',
+      '--info': '190 85% 55%',
       '--border': '18 20% 25%',
       '--input': '18 20% 25%',
       '--ring': '25 95% 55%',

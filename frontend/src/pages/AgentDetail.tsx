@@ -203,8 +203,7 @@ export function AgentDetail() {
         </div>
 
         <Button
-          variant="outline"
-          className="text-error hover:text-error"
+          variant="glass-destructive"
           disabled
           title="Not yet implemented - Planned for future release"
         >
@@ -348,7 +347,7 @@ export function AgentDetail() {
                 <CardTitle>Server Settings</CardTitle>
                 {!isEditing ? (
                   <Button
-                    variant="outline"
+                    variant="glass-info"
                     onClick={handleStartEdit}
                     disabled={agent.status !== 'online' || isLoadingConfig}
                   >
@@ -357,13 +356,14 @@ export function AgentDetail() {
                 ) : (
                   <div className="flex gap-2">
                     <Button
-                      variant="outline"
+                      variant="glass-muted"
                       onClick={handleCancelEdit}
                       disabled={isSaving}
                     >
                       Cancel
                     </Button>
                     <Button
+                      variant="glass-success"
                       onClick={handleSaveConfig}
                       disabled={isSaving || configSuccess}
                     >

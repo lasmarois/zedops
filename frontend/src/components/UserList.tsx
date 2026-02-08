@@ -166,6 +166,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
         </div>
         {isAdmin && (
           <Button
+            variant={showInviteForm ? 'glass-muted' : 'glass-primary'}
             onClick={() => {
               setShowInviteForm(!showInviteForm);
               setInviteToken(null);
@@ -293,6 +294,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                       <div className="flex gap-2 justify-end">
                         <Button
                           size="sm"
+                          variant="glass-info"
                           onClick={() => onManagePermissions(user)}
                         >
                           Permissions
@@ -300,7 +302,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                         {user.id !== currentUser?.id && (
                           <Button
                             size="sm"
-                            variant="destructive"
+                            variant="glass-destructive"
                             onClick={() => handleDeleteUser(user.id, user.email)}
                             disabled={deleteUserMutation.isPending && deleteUserMutation.variables === user.id}
                           >

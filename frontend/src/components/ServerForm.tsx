@@ -776,7 +776,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
           <DialogFooter className="gap-2">
             <Button
               type="button"
-              variant="secondary"
+              variant="glass-muted"
               onClick={onCancel}
               disabled={isSubmitting}
             >
@@ -784,7 +784,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
             </Button>
             <Button
               type="submit"
-              variant="success"
+              variant="glass-success"
               disabled={isSubmitting}
             >
               {isSubmitting

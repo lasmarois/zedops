@@ -179,6 +179,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
           <h1 className="text-3xl font-bold">Role Assignments for {user.email}</h1>
         </div>
         <Button
+          variant={showGrantForm ? 'glass-muted' : 'glass-primary'}
           onClick={() => {
             setShowGrantForm(!showGrantForm);
             setMessage(null);
@@ -302,7 +303,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
               </div>
             )}
 
-            <Button type="submit" disabled={grantMutation.isPending}>
+            <Button type="submit" variant="glass-primary" disabled={grantMutation.isPending}>
               {grantMutation.isPending ? 'Granting...' : 'Grant Role'}
             </Button>
           </form>
@@ -339,7 +340,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
                   <TableCell className="text-right">
                     <Button
                       size="sm"
-                      variant="destructive"
+                      variant="glass-destructive"
                       onClick={() => handleRevokeRoleAssignment(assignment.id)}
                       disabled={revokeMutation.isPending && revokeMutation.variables?.assignmentId === assignment.id}
                     >

@@ -782,7 +782,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         </div>
         <div className="flex gap-4 items-center">
           <ServerCardLayoutToggle />
-          <Button onClick={() => setShowServerForm(true)} size="lg">
+          <Button variant="glass-primary" onClick={() => setShowServerForm(true)} size="lg">
             + Create Server
           </Button>
           {serversData && serversData.servers.some(s => s.status === 'failed') && (
@@ -933,7 +933,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     <button
                                       onClick={() => handleStart(container.id)}
                                       disabled={startMutation.isPending && startMutation.variables?.containerId === container.id}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)] disabled:opacity-50"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 glow-success hover:glow-inset disabled:opacity-50"
                                     >
                                       <Play className={`h-3.5 w-3.5 ${startMutation.isPending && startMutation.variables?.containerId === container.id ? 'animate-spin' : ''}`} />
                                       <span>{startMutation.isPending && startMutation.variables?.containerId === container.id ? 'Starting...' : 'Start'}</span>
@@ -944,7 +944,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       <button
                                         onClick={() => handleStop(container.id)}
                                         disabled={stopMutation.isPending && stopMutation.variables?.containerId === container.id}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-warning hover:bg-warning/20 hover:shadow-[inset_0_0_15px_rgba(255,201,82,0.2)] disabled:opacity-50"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-warning hover:bg-warning/20 glow-warning hover:glow-inset disabled:opacity-50"
                                       >
                                         <Square className={`h-3.5 w-3.5 ${stopMutation.isPending && stopMutation.variables?.containerId === container.id ? 'animate-pulse' : ''}`} />
                                         <span>{stopMutation.isPending && stopMutation.variables?.containerId === container.id ? 'Stopping...' : 'Stop'}</span>
@@ -953,7 +953,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                       <button
                                         onClick={() => handleRestart(container.id)}
                                         disabled={restartMutation.isPending && restartMutation.variables?.containerId === container.id}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 glow-info hover:glow-inset disabled:opacity-50"
                                       >
                                         <RotateCw className={`h-3.5 w-3.5 ${restartMutation.isPending && restartMutation.variables?.containerId === container.id ? 'animate-spin' : ''}`} />
                                         <span>{restartMutation.isPending && restartMutation.variables?.containerId === container.id ? 'Restarting...' : 'Restart'}</span>
@@ -1062,7 +1062,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                         <button
                                           onClick={() => handleRecoverMissing(server)}
                                           disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)] disabled:opacity-50"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 glow-success hover:glow-inset disabled:opacity-50"
                                         >
                                           <Play className={`h-3.5 w-3.5 ${startServerMutation.isPending && startServerMutation.variables?.serverId === server.id ? 'animate-spin' : ''}`} />
                                           <span>{startServerMutation.isPending && startServerMutation.variables?.serverId === server.id ? 'Recovering...' : 'Recover'}</span>
@@ -1072,7 +1072,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                         <button
                                           onClick={() => handleServerRestore(server.id, server.name)}
                                           disabled={restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 hover:shadow-[inset_0_0_15px_rgba(51,225,255,0.2)] disabled:opacity-50"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-info hover:bg-info/20 glow-info hover:glow-inset disabled:opacity-50"
                                         >
                                           <RotateCw className={`h-3.5 w-3.5 ${restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'animate-spin' : ''}`} />
                                           <span>{restoreServerMutation.isPending && restoreServerMutation.variables?.serverId === server.id ? 'Restoring...' : 'Restore'}</span>
@@ -1086,7 +1086,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     <button
                                       onClick={() => setConfirmPurge({ serverId: server.id, serverName: server.name })}
                                       disabled={purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-destructive hover:bg-destructive/20 hover:shadow-[inset_0_0_15px_rgba(220,38,38,0.2)] disabled:opacity-50"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-destructive hover:bg-destructive/20 glow-destructive hover:glow-inset disabled:opacity-50"
                                     >
                                       <Trash2 className={`h-3.5 w-3.5 ${purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id ? 'animate-pulse' : ''}`} />
                                       <span>{purgeServerMutation.isPending && purgeServerMutation.variables?.serverId === server.id ? 'Purging...' : 'Purge'}</span>

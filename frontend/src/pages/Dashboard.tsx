@@ -400,11 +400,11 @@ export function Dashboard() {
           <div className="flex flex-wrap gap-3">
             {isAdmin && (
               <>
-                <Button onClick={() => navigate('/agents')}>
+                <Button variant="glass-primary" onClick={() => navigate('/agents')}>
                   <Plus className="h-4 w-4" />
                   Create Server
                 </Button>
-                <Button variant="outline" onClick={() => navigate('/users')}>
+                <Button variant="glass-primary" onClick={() => navigate('/users')}>
                   <Plus className="h-4 w-4" />
                   Invite User
                 </Button>
