@@ -96,6 +96,7 @@ auth.post('/login', async (c) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        theme: user.theme || 'midnight-blue',
       },
     });
   } catch (error) {
@@ -144,7 +145,7 @@ auth.get('/me', requireAuth(), async (c) => {
 
     // Fetch full user details from database
     const userDetails = await c.env.DB.prepare(
-      'SELECT id, email, role, created_at, updated_at, last_login FROM users WHERE id = ?'
+      'SELECT id, email, role, theme, created_at, updated_at, last_login FROM users WHERE id = ?'
     )
       .bind(user.id)
       .first();

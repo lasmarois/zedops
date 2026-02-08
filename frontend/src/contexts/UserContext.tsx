@@ -8,6 +8,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import * as authLib from '../lib/auth';
 import type { User } from '../lib/auth';
+import { syncThemeFromUser } from '../lib/theme';
 
 interface UserContextType {
   user: User | null;
@@ -37,6 +38,7 @@ export function UserProvider({ children }: UserProviderProps) {
   const login = (token: string, userData: User) => {
     authLib.login(token, userData);
     setUser(userData);
+    syncThemeFromUser(userData.theme);
   };
 
   const logout = () => {

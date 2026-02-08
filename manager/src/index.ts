@@ -19,6 +19,7 @@ import { invitations } from './routes/invitations';
 // import { permissions } from './routes/permissions'; // DEPRECATED - Removed (incompatible with role-based system)
 import { roleAssignments } from './routes/role-assignments';
 import { audit } from './routes/audit';
+import { preferences } from './routes/preferences';
 import { hashPassword } from './lib/auth';
 
 // Export Durable Object class
@@ -44,6 +45,7 @@ app.route('/api/invite', invitations); // Public invitation endpoints
 // app.route('/api/permissions', permissions); // DEPRECATED - Removed (incompatible with role-based system)
 app.route('/api/role-assignments', roleAssignments); // New role-based system
 app.route('/api/audit', audit); // Audit logs
+app.route('/api/preferences', preferences); // User preferences
 app.route('/api/admin', admin);
 app.route('/api/agents', agents);
 app.route('/api/servers', servers); // Global server endpoints

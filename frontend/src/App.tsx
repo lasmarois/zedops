@@ -17,6 +17,7 @@ import { ServerList } from './pages/ServerList';
 import { ServerDetail } from './pages/ServerDetail';
 import { UsersPage } from './pages/UsersPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ function AppContent() {
         <Route path="servers/:id" element={<ServerDetail />} />
         <Route path="users" element={<AdminRoute><UsersPage /></AdminRoute>} />
         <Route path="audit-logs" element={<AdminRoute><AuditLogsPage /></AdminRoute>} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   );

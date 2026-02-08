@@ -1,5 +1,4 @@
-import { useState } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import {
   Server,
@@ -13,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useUser } from "@/contexts/UserContext"
-import { ChangePasswordDialog } from "@/components/ChangePasswordDialog"
 
 interface NavItem {
   label: string
@@ -39,8 +37,8 @@ const managementItems: NavItem[] = [
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { user, logout } = useUser()
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
 
   const handleNavClick = () => {
     // Close mobile menu when navigating
@@ -144,7 +142,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="ghost" className="flex-1" title="Change Password" onClick={() => setShowPasswordDialog(true)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className={cn("flex-1", location.pathname === "/settings" && "bg-primary/10 text-primary")}
+            title="Settings"
+            onClick={() => { navigate('/settings'); handleNavClick(); }}
+          >
             <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="ghost" className="flex-1" title="Logout" onClick={logout}>
@@ -153,10 +157,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
       </div>
 
-      <ChangePasswordDialog
-        open={showPasswordDialog}
-        onOpenChange={setShowPasswordDialog}
-      />
     </div>
   )
 }
