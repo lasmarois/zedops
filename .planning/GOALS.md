@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-Goal #11: RBAC UX Polish & Remaining Gaps
+None
 
 ---
 
@@ -24,7 +24,7 @@ Goal #11: RBAC UX Polish & Remaining Gaps
 | 8 | Server Recreate — Recover Missing/Deleted Servers | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 9 | Fix Missing DO Route for checkdata in Apply-Config | Bugfix | Complete | 2026-02-07 | 2026-02-07 |
 | 10 | M15 - User Management, RBAC & Permissions Review | M15 | Complete | 2026-02-07 | 2026-02-07 |
-| 11 | RBAC UX Polish & Remaining Gaps | M15 | In Progress | 2026-02-07 | |
+| 11 | RBAC UX Polish & Remaining Gaps | M15 | Complete | 2026-02-07 | 2026-02-07 |
 
 ---
 
