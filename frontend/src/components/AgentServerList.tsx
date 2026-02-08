@@ -13,6 +13,7 @@ import {
 import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
 import { RconTerminal } from './RconTerminal';
+import { checkServerData } from '../lib/api';
 import type { Container, CreateServerRequest, Server } from '../lib/api';
 import { getDisplayStatus } from '../lib/server-status';
 import { Button } from '@/components/ui/button';
@@ -453,11 +454,20 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
-  // Recovery for missing servers: confirm if no data on disk, otherwise start directly
-  const handleRecoverMissing = (server: Server) => {
-    if (!server.data_exists) {
-      setConfirmRecover({ serverId: server.id, serverName: server.name });
-      return;
+  // Recovery for missing servers: live-check data on disk, confirm if no data
+  const handleRecoverMissing = async (server: Server) => {
+    try {
+      const check = await checkServerData(agentId, server.id);
+      if (!check.dataExists) {
+        setConfirmRecover({ serverId: server.id, serverName: server.name });
+        return;
+      }
+    } catch {
+      // Agent offline — fall through using cached data_exists
+      if (!server.data_exists) {
+        setConfirmRecover({ serverId: server.id, serverName: server.name });
+        return;
+      }
     }
     handleServerStart(server.id, server.name);
   };

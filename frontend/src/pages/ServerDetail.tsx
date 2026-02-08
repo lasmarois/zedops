@@ -12,6 +12,7 @@ import { ConfigurationDisplay } from "@/components/ConfigurationDisplay"
 import { ConfigurationEdit } from "@/components/ConfigurationEdit"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useServerById, useStartServer, useStopServer, useRebuildServer, useDeleteServer, useServerMetrics, useUpdateServerConfig, useApplyServerConfig, useServerStorage } from "@/hooks/useServers"
+import { checkServerData } from "@/lib/api"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { useMoveProgress } from "@/hooks/useMoveProgress"
 import { RconHistoryProvider } from "@/contexts/RconHistoryContext"
@@ -90,15 +91,22 @@ function ServerDetailContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Handler functions for button clicks
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!id) return
     const agentId = serverData?.server?.agent_id
     if (!agentId) return
 
-    // Missing server without data: confirm before fresh start
-    if (serverData?.server?.status === 'missing' && !serverData?.server?.data_exists) {
-      setShowStartMissingConfirm(true)
-      return
+    // Missing server: live-check data existence before deciding on dialog
+    if (serverData?.server?.status === 'missing') {
+      try {
+        const check = await checkServerData(agentId, id)
+        if (!check.dataExists) {
+          setShowStartMissingConfirm(true)
+          return
+        }
+      } catch {
+        // Agent offline — fall through to start, backend will handle it
+      }
     }
 
     startServerMutation.mutate({ agentId, serverId: id })

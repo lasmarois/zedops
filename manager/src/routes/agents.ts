@@ -1427,6 +1427,73 @@ agents.post('/:id/servers/sync', async (c) => {
 });
 
 /**
+ * GET /api/agents/:id/servers/:serverId/check-data
+ * Live check if server data exists on the agent's filesystem.
+ * Updates data_exists in D1 and returns the result.
+ * Used by frontend before showing recreate confirmation dialogs.
+ */
+agents.get('/:id/servers/:serverId/check-data', async (c) => {
+  const agentId = c.req.param('id');
+  const serverId = c.req.param('serverId');
+
+  try {
+    const server = await c.env.DB.prepare(
+      `SELECT s.id, s.name, s.status, s.data_exists, s.server_data_path, s.agent_id
+       FROM servers s WHERE s.id = ? AND s.agent_id = ?`
+    )
+      .bind(serverId, agentId)
+      .first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    const agent = await c.env.DB.prepare(
+      `SELECT name, server_data_path FROM agents WHERE id = ?`
+    )
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    const effectiveDataPath = server.server_data_path || agent.server_data_path || '/var/lib/zedops/servers';
+
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const checkResponse = await stub.fetch('http://internal/check-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serverName: server.name,
+        dataPath: effectiveDataPath,
+      }),
+    });
+
+    if (!checkResponse.ok) {
+      return c.json({ error: 'Agent not connected or check failed' }, 503);
+    }
+
+    const checkResult = await checkResponse.json() as { dataExists: boolean };
+    const dataExists = checkResult.dataExists || false;
+
+    // Update D1 with fresh value
+    await c.env.DB.prepare(
+      `UPDATE servers SET data_exists = ?, updated_at = ? WHERE id = ?`
+    )
+      .bind(dataExists ? 1 : 0, Date.now(), serverId)
+      .run();
+
+    return c.json({ success: true, dataExists });
+  } catch (error) {
+    console.error('[Agents API] Error checking data:', error);
+    return c.json({ error: 'Failed to check data existence' }, 500);
+  }
+});
+
+/**
  * Shared helper: Recreate a server container from stored config in D1.
  * Used by START (missing container), REBUILD (missing container), and RESTORE.
  * No agent-side changes needed — CreateServer() already creates dirs + pulls image.

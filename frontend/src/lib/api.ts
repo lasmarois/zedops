@@ -755,6 +755,30 @@ export async function cleanupFailedServers(
 /**
  * Start a server (with container recreation if missing)
  */
+/**
+ * Live check if server data exists on the agent's filesystem.
+ * Updates data_exists in D1 and returns fresh result.
+ */
+export async function checkServerData(
+  agentId: string,
+  serverId: string
+): Promise<{ success: boolean; dataExists: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/api/agents/${agentId}/servers/${serverId}/check-data`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to check data existence');
+  }
+
+  return response.json();
+}
+
 export async function startServer(
   agentId: string,
   serverId: string
