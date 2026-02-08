@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-**Goal #8**: Server Recreate — Recover Missing/Deleted Servers (M14)
+None
 
 ---
 
@@ -21,7 +21,7 @@
 | 5 | ZedOps Integration Audit + Fix All Gaps | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 6 | Fix Health Check: Healthy Only When Game Ready | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 7 | Show Image Version & Dynamic Tag Selection | M14 | Complete | 2026-02-07 | 2026-02-07 |
-| 8 | Server Recreate — Recover Missing/Deleted Servers | M14 | In Progress | 2026-02-07 | |
+| 8 | Server Recreate — Recover Missing/Deleted Servers | M14 | Complete | 2026-02-07 | 2026-02-07 |
 
 ---
 
