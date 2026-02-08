@@ -83,6 +83,7 @@ function ServerDetailContent() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false)
   const [showApplyConfigConfirm, setShowApplyConfigConfirm] = useState(false)
+  const [showStartMissingConfirm, setShowStartMissingConfirm] = useState(false)
   const [showPlayersDialog, setShowPlayersDialog] = useState(false)
 
   // Error dialog state
@@ -90,6 +91,20 @@ function ServerDetailContent() {
 
   // Handler functions for button clicks
   const handleStart = () => {
+    if (!id) return
+    const agentId = serverData?.server?.agent_id
+    if (!agentId) return
+
+    // Missing server without data: confirm before fresh start
+    if (serverData?.server?.status === 'missing' && !serverData?.server?.data_exists) {
+      setShowStartMissingConfirm(true)
+      return
+    }
+
+    startServerMutation.mutate({ agentId, serverId: id })
+  }
+
+  const confirmStartMissing = () => {
     if (!id) return
     const agentId = serverData?.server?.agent_id
     if (!agentId) return
@@ -239,7 +254,7 @@ function ServerDetailContent() {
   const serverName = server.name
   const agentName = server.agent_name
   const agentId = server.agent_id
-  const status = server.status as 'running' | 'stopped' | 'failed'
+  const status = server.status as 'running' | 'stopped' | 'failed' | 'missing' | 'creating'
   const containerID = server.container_id || ''
   const rconPort = server.rcon_port
 
@@ -296,14 +311,18 @@ function ServerDetailContent() {
         <div className="flex items-center gap-3">
           {/* Primary Actions Group */}
           <div className="flex items-center rounded-xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
-            {status === 'stopped' ? (
+            {status === 'stopped' || status === 'missing' ? (
               <button
                 onClick={handleStart}
                 disabled={startServerMutation.isPending}
                 className="flex items-center gap-2 px-4 py-2.5 transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_20px_rgba(61,220,151,0.2)] disabled:opacity-50"
               >
                 <PlayCircle className={`h-4 w-4 ${startServerMutation.isPending ? 'animate-spin' : ''}`} />
-                <span className="font-medium">{startServerMutation.isPending ? 'Starting...' : 'Start'}</span>
+                <span className="font-medium">
+                  {startServerMutation.isPending
+                    ? (status === 'missing' ? 'Recreating...' : 'Starting...')
+                    : (status === 'missing' ? 'Recreate' : 'Start')}
+                </span>
               </button>
             ) : (
               <>
@@ -380,6 +399,7 @@ function ServerDetailContent() {
               max_players: server.max_players,
               players: server.players,
               rcon_connected: server.rcon_connected,
+              data_exists: server.data_exists,
             }}
             agentId={server.agent_id}
             agentPublicIp={server.agent_public_ip}
@@ -563,10 +583,28 @@ function ServerDetailContent() {
       <ConfirmDialog
         open={showRebuildConfirm}
         onOpenChange={setShowRebuildConfirm}
-        title="Rebuild Server"
-        description="Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable."
-        confirmText="Rebuild"
+        title={status === 'missing' ? "Recreate Server" : "Rebuild Server"}
+        description={
+          status === 'missing'
+            ? (server.data_exists
+              ? "Recreate the server container? Your world saves and player data will be preserved."
+              : "Server data was not found on disk. This will create a fresh server with the same configuration. World saves and player progress will NOT be restored.")
+            : "Rebuild server? This will pull the latest image and recreate the container. The server will be temporarily unavailable."
+        }
+        confirmText={status === 'missing' ? "Recreate" : "Rebuild"}
+        variant={status === 'missing' && !server.data_exists ? "destructive" : "default"}
         onConfirm={confirmRebuild}
+      />
+
+      {/* Start Missing Server Confirmation (no data on disk) */}
+      <ConfirmDialog
+        open={showStartMissingConfirm}
+        onOpenChange={setShowStartMissingConfirm}
+        title="Recreate Server — Fresh Start"
+        description="Server data was not found on disk. This will create a fresh server with the same configuration (ports, mods, settings). World saves and player progress will NOT be restored. Continue?"
+        confirmText="Recreate (Fresh Start)"
+        variant="destructive"
+        onConfirm={confirmStartMissing}
       />
 
       {/* Apply Config Confirmation Dialog */}

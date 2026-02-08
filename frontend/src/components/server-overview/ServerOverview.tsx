@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MetricsRow } from "./MetricsRow"
 import { ServerInfoCard } from "./ServerInfoCard"
 import { ConnectionCard } from "./ConnectionCard"
@@ -23,6 +24,7 @@ interface ServerOverviewProps {
     max_players?: number | null
     players?: string[] | null
     rcon_connected?: boolean | null // P2: RCON health status
+    data_exists?: boolean // G8: Data exists on disk
   }
   agentId: string // P4: Needed for RCON commands
   agentDefaultDataPath?: string | null
@@ -233,6 +235,19 @@ export function ServerOverview({
 
   return (
     <div className="space-y-6">
+      {/* Missing Server Banner */}
+      {server.status === 'missing' && (
+        <Alert variant={server.data_exists ? 'warning' : 'destructive'}>
+          <AlertDescription>
+            {server.data_exists ? (
+              <span>Server container is missing but <strong>data was found on disk</strong>. Click <strong>Recreate</strong> to restore the server with your existing world saves and player data.</span>
+            ) : (
+              <span>Server container is missing and <strong>data was not found on disk</strong>. Recreating will start a fresh server with the same configuration. World saves and player progress will not be restored.</span>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Layout Switcher Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Server Overview</h2>

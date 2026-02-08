@@ -90,6 +90,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   const [confirmDelete, setConfirmDelete] = useState<{ serverId: string; serverName: string } | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState<{ serverId: string; serverName: string } | null>(null);
   const [confirmCleanup, setConfirmCleanup] = useState<number | null>(null); // Number of failed servers to clean
+  const [confirmRecover, setConfirmRecover] = useState<{ serverId: string; serverName: string } | null>(null); // Missing server without data
   const [rconServer, setRconServer] = useState<Server | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
@@ -452,6 +453,22 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     }
   };
 
+  // Recovery for missing servers: confirm if no data on disk, otherwise start directly
+  const handleRecoverMissing = (server: Server) => {
+    if (!server.data_exists) {
+      setConfirmRecover({ serverId: server.id, serverName: server.name });
+      return;
+    }
+    handleServerStart(server.id, server.name);
+  };
+
+  const confirmRecoverServer = () => {
+    if (!confirmRecover) return;
+    const { serverId, serverName } = confirmRecover;
+    setConfirmRecover(null);
+    handleServerStart(serverId, serverName);
+  };
+
   const handleServerStart = async (serverId: string, serverName: string) => {
     try {
       const result = await startServerMutation.mutateAsync({ agentId, serverId });
@@ -466,7 +483,9 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
       setServerMessage({
         message: result.recovered
-          ? `Server "${serverName}" container recreated and started successfully`
+          ? (result.freshStart
+            ? `Server "${serverName}" recreated with fresh data (previous data was not found)`
+            : `Server "${serverName}" container recreated and started successfully`)
           : `Server "${serverName}" started successfully`,
         type: 'success',
       });
@@ -509,11 +528,22 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
   const handleServerRestore = async (serverId: string, serverName: string) => {
     try {
-      await restoreServerMutation.mutateAsync({ agentId, serverId });
-      setServerMessage({
-        message: `Server "${serverName}" restored successfully. Click Start to recreate container.`,
-        type: 'success',
-      });
+      const result = await restoreServerMutation.mutateAsync({ agentId, serverId });
+      if (result.recreated) {
+        setServerMessage({
+          message: result.dataExists
+            ? `Server "${serverName}" restored and started successfully`
+            : `Server "${serverName}" restored with fresh data (previous data was not found on disk)`,
+          type: 'success',
+        });
+        // Navigate to server detail to see the running server
+        setTimeout(() => navigate(`/servers/${serverId}`), 1500);
+      } else {
+        setServerMessage({
+          message: `Server "${serverName}" restored. Container could not be recreated — use Start to bring it online.`,
+          type: 'success',
+        });
+      }
       setTimeout(() => setServerMessage(null), 5000);
     } catch (error) {
       setServerMessage({
@@ -816,6 +846,8 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                         onStart={() => {
                           if (container) {
                             handleStart(container.id);
+                          } else if (server.status === 'missing') {
+                            handleRecoverMissing(server);
                           } else {
                             handleServerStart(server.id, server.name);
                           }
@@ -1014,11 +1046,11 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
                                 <div className="flex gap-2 items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                                   {/* Recovery Actions Group */}
-                                  {(server.status === 'missing' && server.data_exists) || server.status === 'deleted' ? (
+                                  {server.status === 'missing' || server.status === 'deleted' ? (
                                     <div className="flex items-center rounded-lg overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
-                                      {server.status === 'missing' && server.data_exists && (
+                                      {server.status === 'missing' && (
                                         <button
-                                          onClick={() => handleServerStart(server.id, server.name)}
+                                          onClick={() => handleRecoverMissing(server)}
                                           disabled={startServerMutation.isPending && startServerMutation.variables?.serverId === server.id}
                                           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-200 text-success hover:bg-success/20 hover:shadow-[inset_0_0_15px_rgba(61,220,151,0.2)] disabled:opacity-50"
                                         >
@@ -1128,6 +1160,17 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         description={`Rebuild server "${confirmRebuild?.serverName}"? This will pull the latest image and recreate the container. Game data will be preserved.`}
         confirmText="Rebuild"
         onConfirm={confirmRebuildServer}
+      />
+
+      {/* Recover Missing Server (No Data) Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmRecover}
+        onOpenChange={(open) => !open && setConfirmRecover(null)}
+        title="Recreate Server — Fresh Start"
+        description={`Server data for "${confirmRecover?.serverName}" was not found on disk. This will create a fresh server with the same configuration (ports, mods, settings). World saves and player progress will NOT be restored. Continue?`}
+        confirmText="Recreate (Fresh Start)"
+        variant="destructive"
+        onConfirm={confirmRecoverServer}
       />
 
       {/* Cleanup Failed Servers Confirmation Dialog */}

@@ -217,7 +217,7 @@ export function ServerCard({
           </div>
         );
       }
-    } else if (server.status === 'stopped' && onStart) {
+    } else if ((server.status === 'stopped' || server.status === 'missing') && onStart) {
       return (
         <div className={segmentedContainer}>
           <button
@@ -226,7 +226,7 @@ export function ServerCard({
             className={startButton}
           >
             <Play className={`h-3.5 w-3.5 ${isStarting ? 'animate-spin' : ''}`} />
-            <span>{isStarting ? 'Starting...' : 'Start'}</span>
+            <span>{isStarting ? (server.status === 'missing' ? 'Recreating...' : 'Starting...') : (server.status === 'missing' ? 'Recreate' : 'Start')}</span>
           </button>
         </div>
       );

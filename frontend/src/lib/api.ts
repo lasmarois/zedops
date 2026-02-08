@@ -758,7 +758,7 @@ export async function cleanupFailedServers(
 export async function startServer(
   agentId: string,
   serverId: string
-): Promise<{ success: boolean; message: string; serverId: string; containerId: string; recovered?: boolean }> {
+): Promise<{ success: boolean; message: string; serverId: string; containerId: string; recovered?: boolean; freshStart?: boolean }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/start`,
     {
@@ -844,7 +844,7 @@ export async function purgeServer(
 export async function restoreServer(
   agentId: string,
   serverId: string
-): Promise<{ success: boolean; message: string; serverId: string; serverName: string }> {
+): Promise<{ success: boolean; message: string; serverId: string; serverName: string; dataExists?: boolean; recreated?: boolean; containerId?: string | null }> {
   const response = await fetch(
     `${API_BASE}/api/agents/${agentId}/servers/${serverId}/restore`,
     {

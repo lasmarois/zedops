@@ -1427,13 +1427,77 @@ agents.post('/:id/servers/sync', async (c) => {
 });
 
 /**
+ * Shared helper: Recreate a server container from stored config in D1.
+ * Used by START (missing container), REBUILD (missing container), and RESTORE.
+ * No agent-side changes needed — CreateServer() already creates dirs + pulls image.
+ *
+ * Returns { success, containerId } or throws.
+ */
+async function recreateServerContainer(
+  server: Record<string, unknown>,
+  agent: Record<string, unknown>,
+  stub: DurableObjectStub,
+  db: D1Database,
+): Promise<{ containerId: string }> {
+  // Parse config from DB and add port env vars
+  const config = server.config ? JSON.parse(server.config as string) : {};
+  const configWithPorts = {
+    ...config,
+    RCON_PORT: (server.rcon_port as number).toString(),
+    SERVER_DEFAULT_PORT: (server.game_port as number).toString(),
+    SERVER_UDP_PORT: (server.udp_port as number).toString(),
+  };
+
+  const dataPath = server.server_data_path || agent.server_data_path;
+  const imageRef = server.image || agent.steam_zomboid_registry;
+
+  // Set status to creating
+  await db.prepare(
+    `UPDATE servers SET status = 'creating', updated_at = ? WHERE id = ?`
+  )
+    .bind(Date.now(), server.id)
+    .run();
+
+  const createResponse = await stub.fetch(`http://do/servers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      serverId: server.id,
+      name: server.name,
+      registry: imageRef,
+      imageTag: server.image_tag,
+      config: configWithPorts,
+      gamePort: server.game_port,
+      udpPort: server.udp_port,
+      rconPort: server.rcon_port,
+      dataPath: dataPath,
+    }),
+  });
+
+  if (!createResponse.ok) {
+    const errorData = await createResponse.json() as { error?: string };
+    throw new Error(errorData.error || 'Failed to recreate container on agent');
+  }
+
+  const result = await createResponse.json() as { containerId: string };
+
+  // Update container_id and status to running
+  await db.prepare(
+    `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
+  )
+    .bind(result.containerId, Date.now(), server.id)
+    .run();
+
+  return { containerId: result.containerId };
+}
+
+/**
  * POST /api/agents/:id/servers/:serverId/start
  * Start a server (with container recreation if missing)
  *
  * Handles three scenarios:
  * 1. Container exists and stopped → start it
- * 2. Container missing + data exists → recreate container from DB config
- * 3. Container missing + no data → error
+ * 2. Container missing → recreate container from DB config (works with or without data on disk)
  *
  * NOTE: This route must be defined BEFORE /:id/servers/:serverId to avoid matching "start" as a full serverId
  */
@@ -1515,92 +1579,38 @@ agents.post('/:id/servers/:serverId/start', async (c) => {
       });
     }
 
-    // Scenario 2 & 3: Container missing (status='missing')
+    // Scenario 2: Container missing (status='missing') → recreate from DB config
     if (server.status === 'missing') {
-      // Check if data exists
-      if (!server.data_exists) {
+      console.log(`[Server Start] Recreating container for server: ${server.name} (data_exists=${server.data_exists})`);
+
+      try {
+        const result = await recreateServerContainer(server, agent, stub, c.env.DB);
+
+        // Audit log
+        await logServerOperation(c.env.DB, c, user.id, 'server.started', serverId, server.name as string, agentId);
+
         return c.json({
-          error: 'Cannot start server: no container or data found',
-          suggestion: 'This server is orphaned. Use DELETE to purge it.',
-        }, 400);
-      }
-
-      // Data exists → recreate container from DB config
-      console.log(`[Server Start] Recreating container for server: ${server.name}`);
-
-      // Update status to creating
-      await c.env.DB.prepare(
-        `UPDATE servers SET status = 'creating', updated_at = ? WHERE id = ?`
-      )
-        .bind(Date.now(), serverId)
-        .run();
-
-      // Parse config from DB and add port env vars
-      // M9.8.42: Added SERVER_DEFAULT_PORT and SERVER_UDP_PORT (were missing, causing INI to use defaults)
-      const config = JSON.parse(server.config as string);
-      const configWithPorts = {
-        ...config,
-        RCON_PORT: (server.rcon_port as number).toString(),
-        SERVER_DEFAULT_PORT: (server.game_port as number).toString(),
-        SERVER_UDP_PORT: (server.udp_port as number).toString(),
-      };
-
-      // Call server.create on agent
-      // M9.8.23: Use server's custom path if set, otherwise use agent default
-      const dataPath = server.server_data_path || agent.server_data_path;
-
-      // M9.8.32: Use server's custom image if set, otherwise use agent's registry
-      const imageRef = server.image || agent.steam_zomboid_registry;
-
-      const createResponse = await stub.fetch(`http://do/servers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverId: server.id,
-          name: server.name,
-          registry: imageRef,
-          imageTag: server.image_tag,
-          config: configWithPorts,
-          gamePort: server.game_port,
-          udpPort: server.udp_port,
-          rconPort: server.rcon_port,
-          dataPath: dataPath,
-        }),
-      });
-
-      if (!createResponse.ok) {
-        // Update status back to missing (failed to recreate)
+          success: true,
+          message: server.data_exists
+            ? 'Server container recreated and started successfully'
+            : 'Server recreated with fresh data (previous data was not found on disk)',
+          serverId,
+          containerId: result.containerId,
+          recovered: true,
+          freshStart: !server.data_exists,
+        });
+      } catch (error) {
+        // Revert status to missing on failure
         await c.env.DB.prepare(
           `UPDATE servers SET status = 'missing', updated_at = ? WHERE id = ?`
         )
           .bind(Date.now(), serverId)
           .run();
 
-        const errorData = await createResponse.json();
         return c.json({
-          error: errorData.error || 'Failed to recreate container',
-        }, createResponse.status);
+          error: error instanceof Error ? error.message : 'Failed to recreate container',
+        }, 500);
       }
-
-      const result = await createResponse.json();
-
-      // Update container_id and status to running
-      await c.env.DB.prepare(
-        `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
-      )
-        .bind(result.containerId, Date.now(), serverId)
-        .run();
-
-      // Audit log (container recreation + start)
-      await logServerOperation(c.env.DB, c, user.id, 'server.started', serverId, server.name as string, agentId);
-
-      return c.json({
-        success: true,
-        message: 'Server container recreated and started successfully',
-        serverId,
-        containerId: result.containerId,
-        recovered: true,
-      });
     }
 
     // Unexpected status
@@ -2043,9 +2053,12 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
   }
 
   try {
-    // Verify server exists and belongs to agent (include server_data_path for checking)
+    // Verify server exists and belongs to agent (fetch full config for recreation)
     const server = await c.env.DB.prepare(
-      `SELECT id, status, deleted_at, name, server_data_path FROM servers WHERE id = ? AND agent_id = ?`
+      `SELECT s.*, a.steam_zomboid_registry, a.server_data_path as agent_server_data_path
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ? AND s.agent_id = ?`
     )
       .bind(serverId, agentId)
       .first();
@@ -2101,7 +2114,7 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
       // If agent is offline or check fails, assume data doesn't exist (safe default)
     }
 
-    // Restore: clear deleted_at, set status to 'missing', set data_exists based on actual check
+    // Restore: clear deleted_at, set data_exists based on actual check
     const now = Date.now();
     await c.env.DB.prepare(
       `UPDATE servers SET status = 'missing', deleted_at = NULL, data_exists = ?, updated_at = ? WHERE id = ?`
@@ -2114,11 +2127,40 @@ agents.post('/:id/servers/:serverId/restore', async (c) => {
     // Audit log
     await logServerOperation(c.env.DB, c, user.id, 'server.restored', serverId, server.name as string, agentId);
 
+    // Attempt to recreate container immediately (agent may be online)
+    let recreated = false;
+    let containerId: string | null = null;
+    try {
+      const agentRecord = {
+        server_data_path: server.agent_server_data_path || agent.server_data_path,
+        steam_zomboid_registry: server.steam_zomboid_registry,
+      };
+      const result = await recreateServerContainer(server, agentRecord, stub, c.env.DB);
+      recreated = true;
+      containerId = result.containerId;
+      console.log(`[Restore] Server ${server.name} recreated with container ${containerId}`);
+    } catch (error) {
+      // Recreation failed (agent offline, image pull failed, etc.)
+      // Server stays in 'missing' status — user can manually start later
+      console.warn(`[Restore] Could not recreate container for ${server.name}: ${error}`);
+      // Revert status to missing (recreateServerContainer sets 'creating')
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'missing', updated_at = ? WHERE id = ?`
+      )
+        .bind(Date.now(), serverId)
+        .run();
+    }
+
     return c.json({
       success: true,
-      message: 'Server restored successfully. Use START to recreate container.',
+      message: recreated
+        ? `Server restored and started successfully${!dataExists ? ' (fresh start — previous data was not found on disk)' : ''}`
+        : 'Server restored. Container could not be recreated — use Start to bring it online.',
       serverId,
       serverName: server.name,
+      dataExists,
+      recreated,
+      containerId,
     });
   } catch (error) {
     console.error('[Agents API] Error restoring server:', error);
@@ -2159,20 +2201,48 @@ agents.post('/:id/servers/:serverId/rebuild', async (c) => {
       return c.json({ error: 'Server not found' }, 404);
     }
 
+    // Get Durable Object for this agent
+    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
+    const agentStub = c.env.AGENT_CONNECTION.get(doId);
+
+    // If no container exists (missing/never started), recreate from stored config
     if (!server.container_id) {
-      return c.json({ error: 'Server has no container to rebuild (never started)' }, 400);
+      console.log(`[Server Rebuild] No container found, recreating server: ${server.name}`);
+
+      try {
+        const agentRecord = {
+          server_data_path: server.agent_server_data_path,
+          steam_zomboid_registry: server.steam_zomboid_registry,
+        };
+        const result = await recreateServerContainer(server, agentRecord, agentStub, c.env.DB);
+
+        // Audit log
+        await logServerOperation(c.env.DB, c, user.id, 'server.rebuilt', serverId, server.name as string, agentId);
+
+        return c.json({
+          success: true,
+          message: `Server '${server.name}' recreated successfully (container was missing)`,
+          server: await c.env.DB.prepare(`SELECT * FROM servers WHERE id = ?`).bind(serverId).first(),
+        });
+      } catch (error) {
+        await c.env.DB.prepare(
+          `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+        )
+          .bind(Date.now(), serverId)
+          .run();
+
+        return c.json({
+          error: error instanceof Error ? error.message : 'Failed to recreate server',
+        }, 500);
+      }
     }
 
-    // Update status to rebuilding
+    // Update status to rebuilding (container exists, normal rebuild path)
     await c.env.DB.prepare(
       `UPDATE servers SET status = 'rebuilding', updated_at = ? WHERE id = ?`
     )
       .bind(Date.now(), serverId)
       .run();
-
-    // Get Durable Object for this agent
-    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
-    const agentStub = c.env.AGENT_CONNECTION.get(doId);
 
     // M9.8.42: Build full config with port env vars for rebuild
     const config = server.config ? JSON.parse(server.config as string) : {};
