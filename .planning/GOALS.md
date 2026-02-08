@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-None
+Goal #14: Log Viewer Revamp — xterm.js Terminal-Style Logs
 
 ---
 
@@ -27,6 +27,7 @@ None
 | 11 | RBAC UX Polish & Remaining Gaps | M15 | Complete | 2026-02-07 | 2026-02-07 |
 | 12 | Theming Showcase — 5 Theme Branches | M16 | Iced | 2026-02-07 | |
 | 13 | Cloudflare Free Tier — Hibernatable WebSocket Migration | Infra | Complete | 2026-02-08 | 2026-02-08 |
+| 14 | Log Viewer Revamp — xterm.js Terminal-Style Logs | UX | In Progress | 2026-02-08 | |
 
 ---
 

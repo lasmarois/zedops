@@ -2,11 +2,13 @@
  * Container Log Viewer
  *
  * Streams real-time logs from Docker containers with filtering,
- * search, and auto-scroll capabilities.
+ * search, and auto-scroll capabilities. Uses xterm.js for
+ * canvas-based terminal rendering.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useLogStream } from '../hooks/useLogStream'
+import { formatContainerLogLine } from '../lib/ansi-format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -18,12 +20,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  TerminalLog,
   TerminalStatus,
   TerminalLineCount,
-  type LogLine,
-  type TerminalLogRef,
 } from '@/components/ui/terminal-log'
+import { XTermLogViewer, type XTermLogViewerRef } from '@/components/ui/xterm-log-viewer'
 import { ArrowLeft, Pause, Play, ArrowDownToLine, Trash2, Search, ChevronUp } from 'lucide-react'
 
 interface LogViewerProps {
@@ -49,16 +49,28 @@ export function LogViewer({
   const [searchTerm, setSearchTerm] = useState('')
   const [isPaused, setIsPaused] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [pauseSnapshot, setPauseSnapshot] = useState(0)
 
-  const terminalRef = useRef<TerminalLogRef>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const xtermRef = useRef<XTermLogViewerRef>(null)
 
-  // Auto-scroll when new logs arrive
+  // Capture log count when pausing
   useEffect(() => {
-    if (autoScroll && !isPaused) {
-      terminalRef.current?.scrollToBottom()
+    if (isPaused) {
+      setPauseSnapshot(logs.length)
     }
-  }, [logs, autoScroll, isPaused])
+  }, [isPaused]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute filtered + formatted lines
+  const formattedLines = useMemo(() => {
+    const source = isPaused ? logs.slice(0, pauseSnapshot) : logs
+    return source
+      .filter((log) => {
+        if (streamFilter !== 'all' && log.stream !== streamFilter) return false
+        if (searchTerm && !log.message.toLowerCase().includes(searchTerm.toLowerCase())) return false
+        return true
+      })
+      .map(formatContainerLogLine)
+  }, [logs, isPaused, pauseSnapshot, streamFilter, searchTerm])
 
   // Track scroll position to show/hide floating button
   useEffect(() => {
@@ -73,7 +85,6 @@ export function LogViewer({
     return () => mainContent.removeEventListener('scroll', handleMainScroll)
   }, [])
 
-  // Handle scroll to top - also disables auto-scroll
   const handleScrollToTop = () => {
     const mainContent = document.getElementById('main-content')
     if (mainContent) {
@@ -82,23 +93,9 @@ export function LogViewer({
     setAutoScroll(false)
   }
 
-  // Convert to LogLine format and filter
-  const filteredLogs: LogLine[] = logs
-    .filter((log) => {
-      if (streamFilter !== 'all' && log.stream !== streamFilter) return false
-      if (searchTerm && !log.message.toLowerCase().includes(searchTerm.toLowerCase())) return false
-      return true
-    })
-    .map((log) => ({
-      timestamp: log.timestamp,
-      message: log.message,
-      stream: log.stream as 'stdout' | 'stderr',
-    }))
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
-    setAutoScroll(isAtBottom)
+  const handleClear = () => {
+    clearLogs()
+    xtermRef.current?.clear()
   }
 
   return (
@@ -177,7 +174,7 @@ export function LogViewer({
             variant={autoScroll ? 'secondary' : 'outline'}
             onClick={() => {
               setAutoScroll(true)
-              terminalRef.current?.scrollToBottom()
+              xtermRef.current?.scrollToBottom()
             }}
             className="h-8 gap-1.5"
             disabled={autoScroll}
@@ -190,7 +187,7 @@ export function LogViewer({
           <Button
             size="sm"
             variant="ghost"
-            onClick={clearLogs}
+            onClick={handleClear}
             className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -198,27 +195,22 @@ export function LogViewer({
           </Button>
 
           {/* Line count */}
-          <TerminalLineCount filtered={filteredLogs.length} total={logs.length} />
+          <TerminalLineCount filtered={formattedLines.length} total={logs.length} />
         </div>
       </div>
 
       {/* Terminal */}
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
+      <XTermLogViewer
+        ref={xtermRef}
+        lines={formattedLines}
+        follow={autoScroll}
+        onFollowChange={setAutoScroll}
+        searchTerm={searchTerm}
+        emptyMessage={logs.length === 0 ? 'Waiting for container output...' : 'No logs match filters'}
         className="flex-1 min-h-0"
-      >
-        <TerminalLog
-          ref={terminalRef}
-          logs={filteredLogs}
-          showStream={true}
-          showLevel={false}
-          emptyMessage={logs.length === 0 ? 'Waiting for container output...' : 'No logs match filters'}
-          className="h-full"
-        />
-      </div>
+      />
 
-      {/* Floating scroll-to-top button - shows when scrolled down */}
+      {/* Floating scroll-to-top button */}
       {showScrollTop && (
         <button
           onClick={handleScrollToTop}

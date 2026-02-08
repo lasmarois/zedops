@@ -3,13 +3,12 @@
  *
  * Streams real-time logs from the ZedOps agent with filtering,
  * search, and auto-scroll capabilities. Shows cached logs when
- * agent is offline.
- *
- * M9.8.33: Real-time agent logs
+ * agent is offline. Uses xterm.js for canvas-based terminal rendering.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAgentLogStream } from '../hooks/useAgentLogStream'
+import { formatAgentLogLine } from '../lib/ansi-format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -21,12 +20,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  TerminalLog,
   TerminalStatus,
   TerminalLineCount,
-  type LogLine,
-  type TerminalLogRef,
 } from '@/components/ui/terminal-log'
+import { XTermLogViewer, type XTermLogViewerRef } from '@/components/ui/xterm-log-viewer'
 import { Pause, Play, ArrowDownToLine, Trash2, Search, CloudOff, ChevronUp } from 'lucide-react'
 
 interface AgentLogViewerProps {
@@ -44,24 +41,35 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
   const [searchTerm, setSearchTerm] = useState('')
   const [isPaused, setIsPaused] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [pauseSnapshot, setPauseSnapshot] = useState(0)
 
-  const terminalRef = useRef<TerminalLogRef>(null)
+  const xtermRef = useRef<XTermLogViewerRef>(null)
 
-  // Auto-scroll when new logs arrive
+  // Capture log count when pausing
   useEffect(() => {
-    if (autoScroll && !isPaused) {
-      terminalRef.current?.scrollToBottom()
+    if (isPaused) {
+      setPauseSnapshot(logs.length)
     }
-  }, [logs, autoScroll, isPaused])
+  }, [isPaused]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute filtered + formatted lines
+  const formattedLines = useMemo(() => {
+    const source = isPaused ? logs.slice(0, pauseSnapshot) : logs
+    return source
+      .filter((log) => {
+        if (levelFilter !== 'all' && log.level !== levelFilter) return false
+        if (searchTerm && !log.message.toLowerCase().includes(searchTerm.toLowerCase())) return false
+        return true
+      })
+      .map(formatAgentLogLine)
+  }, [logs, isPaused, pauseSnapshot, levelFilter, searchTerm])
 
   // Track scroll position to show/hide floating button
-  // Note: Main content scrolls inside #main-content, not window
   useEffect(() => {
     const mainContent = document.getElementById('main-content')
     if (!mainContent) return
 
     const handleScroll = () => {
-      // Show button when scrolled down more than 300px
       setShowScrollTop(mainContent.scrollTop > 300)
     }
 
@@ -69,27 +77,18 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
     return () => mainContent.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Handle scroll to top - also disables auto-scroll
   const handleScrollToTop = () => {
     const mainContent = document.getElementById('main-content')
     if (mainContent) {
       mainContent.scrollTo({ top: 0, behavior: 'smooth' })
     }
-    setAutoScroll(false) // Disable auto-scroll so user stays at top
+    setAutoScroll(false)
   }
 
-  // Convert and filter logs
-  const filteredLogs: LogLine[] = logs
-    .filter((log) => {
-      if (levelFilter !== 'all' && log.level !== levelFilter) return false
-      if (searchTerm && !log.message.toLowerCase().includes(searchTerm.toLowerCase())) return false
-      return true
-    })
-    .map((log) => ({
-      timestamp: log.timestamp,
-      message: log.message,
-      level: log.level as LogLine['level'],
-    }))
+  const handleClear = () => {
+    clearLogs()
+    xtermRef.current?.clear()
+  }
 
   // Determine status
   const getStatus = (): 'streaming' | 'paused' | 'offline' | 'disconnected' => {
@@ -188,7 +187,7 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
             variant={autoScroll ? 'secondary' : 'outline'}
             onClick={() => {
               setAutoScroll(true)
-              terminalRef.current?.scrollToBottom()
+              xtermRef.current?.scrollToBottom()
             }}
             className="h-8 gap-1.5"
             disabled={autoScroll}
@@ -201,7 +200,7 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
           <Button
             size="sm"
             variant="ghost"
-            onClick={clearLogs}
+            onClick={handleClear}
             className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -209,29 +208,28 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
           </Button>
 
           {/* Line count */}
-          <TerminalLineCount filtered={filteredLogs.length} total={logs.length} />
+          <TerminalLineCount filtered={formattedLines.length} total={logs.length} />
         </div>
       </div>
 
       {/* Terminal */}
-      <div className="flex-1 min-h-0">
-        <TerminalLog
-          ref={terminalRef}
-          logs={filteredLogs}
-          showLevel={true}
-          showStream={false}
-          emptyMessage={
-            logs.length === 0
-              ? isAgentOnline === false
-                ? 'No cached logs available'
-                : 'Waiting for agent output...'
-              : 'No logs match filters'
-          }
-          className="h-full"
-        />
-      </div>
+      <XTermLogViewer
+        ref={xtermRef}
+        lines={formattedLines}
+        follow={autoScroll}
+        onFollowChange={setAutoScroll}
+        searchTerm={searchTerm}
+        emptyMessage={
+          logs.length === 0
+            ? isAgentOnline === false
+              ? 'No cached logs available'
+              : 'Waiting for agent output...'
+            : 'No logs match filters'
+        }
+        className="flex-1 min-h-0"
+      />
 
-      {/* Floating scroll-to-top button - shows when scrolled down */}
+      {/* Floating scroll-to-top button */}
       {showScrollTop && (
         <button
           onClick={handleScrollToTop}
