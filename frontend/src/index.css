@@ -3,59 +3,59 @@
 @tailwind utilities;
 
 :root {
-  /* Midnight Blue Theme - Dark Only */
-  /* Base Colors - Pronounced midnight blue, not black */
-  --background: 220 45% 12%;        /* #0C1628 - Main app background */
-  --foreground: 210 40% 98%;        /* #F8FAFC - Primary text */
+  /* Amber Forge Theme */
+  /* Base Colors - Warm charcoal */
+  --background: 25 30% 9%;           /* Warm near-black charcoal */
+  --foreground: 35 30% 93%;          /* Warm cream white */
 
   /* Card */
-  --card: 220 40% 16%;              /* #151F33 - Card/panel backgrounds */
-  --card-foreground: 210 40% 98%;
+  --card: 25 25% 13%;                /* Dark warm brown */
+  --card-foreground: 35 30% 93%;
 
   /* Popover */
-  --popover: 220 40% 16%;           /* #151F33 - Dropdown/modal backgrounds */
-  --popover-foreground: 210 40% 98%;
+  --popover: 25 25% 13%;
+  --popover-foreground: 35 30% 93%;
 
-  /* Primary Accent - Bright blue for actions */
-  --primary: 217 91% 60%;           /* #3B82F6 - Buttons, links, focus */
-  --primary-foreground: 220 45% 12%; /* Dark text on bright buttons */
+  /* Primary Accent - Warm amber/gold */
+  --primary: 38 92% 55%;             /* Rich amber gold */
+  --primary-foreground: 25 30% 9%;
 
-  /* Secondary - Subtle backgrounds */
-  --secondary: 217 32% 20%;         /* #1F2937 - Hover states, secondary buttons */
-  --secondary-foreground: 210 40% 98%;
+  /* Secondary */
+  --secondary: 30 22% 18%;           /* Warm dark brown */
+  --secondary-foreground: 35 30% 93%;
 
-  /* Muted - Very subtle elements */
-  --muted: 217 32% 18%;             /* #1A2332 - Disabled backgrounds */
-  --muted-foreground: 215 20% 70%;  /* #9CA3AF - Subtle text */
+  /* Muted */
+  --muted: 28 20% 15%;               /* Muted warm brown */
+  --muted-foreground: 30 15% 60%;    /* Warm grey text */
 
-  /* Accent - Special highlights */
-  --accent: 217 32% 20%;            /* #1F2937 - Accent areas */
-  --accent-foreground: 210 40% 98%;
+  /* Accent */
+  --accent: 30 22% 18%;
+  --accent-foreground: 35 30% 93%;
 
-  /* Destructive - Danger actions */
-  --destructive: 0 84% 60%;         /* #DC2626 - Delete/danger buttons */
-  --destructive-foreground: 210 40% 98%;
+  /* Destructive */
+  --destructive: 0 75% 55%;          /* Warm red */
+  --destructive-foreground: 35 30% 93%;
 
-  /* Semantic Status Colors (Polished/Vibrant) */
-  --success: 142 71% 65%;           /* #3DDC97 - Vibrant emerald green */
-  --warning: 38 95% 65%;            /* #FFC952 - Polished gold/amber */
-  --error: 0 88% 68%;               /* #F75555 - Vibrant red */
-  --info: 199 92% 65%;              /* #33E1FF - Electric cyan */
+  /* Semantic Status Colors */
+  --success: 150 65% 50%;            /* Warm green */
+  --warning: 30 95% 60%;             /* Deep orange (shifted from amber) */
+  --error: 5 80% 58%;                /* Ember red */
+  --info: 200 70% 58%;               /* Steel blue */
 
   /* Borders & Inputs */
-  --border: 217 32% 30%;            /* #374151 - Visible borders */
-  --input: 217 32% 30%;             /* Input borders */
-  --ring: 217 91% 60%;              /* Focus ring (matches primary) */
+  --border: 30 20% 26%;              /* Warm brown borders */
+  --input: 30 20% 26%;
+  --ring: 38 92% 55%;                /* Amber ring */
 
-  /* Chart/Graph Colors (Future) */
-  --chart-1: 217 91% 60%;           /* Blue */
-  --chart-2: 142 76% 60%;           /* Green */
-  --chart-3: 38 92% 60%;            /* Amber */
-  --chart-4: 280 87% 65%;           /* Purple */
-  --chart-5: 340 82% 60%;           /* Pink */
+  /* Chart Colors */
+  --chart-1: 38 92% 55%;             /* Amber */
+  --chart-2: 20 85% 55%;             /* Burnt orange */
+  --chart-3: 150 65% 50%;            /* Warm green */
+  --chart-4: 200 70% 58%;            /* Steel blue */
+  --chart-5: 350 70% 55%;            /* Rose */
 
   /* Border radius */
-  --radius: 0.5rem;                 /* 8px - default for cards, inputs, buttons */
+  --radius: 0.5rem;
 }
 
 * {
