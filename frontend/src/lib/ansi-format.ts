@@ -52,5 +52,5 @@ export function formatContainerLogLine(log: ContainerLogLine): string {
   if (log.stream === 'stderr') {
     return `${ts} ${RED}@@STREAM:stderr@@ ${log.message}${RESET}`
   }
-  return `${ts} @@STREAM:stdout@@ ${log.message}`
+  return `${ts} ${DIM_GRAY}@@STREAM:stdout@@${RESET} ${log.message}`
 }

@@ -71,12 +71,14 @@ function formatPart(text: string): React.ReactNode {
     }
   }
 
-  // Check for stream marker: @@STREAM:stderr@@
+  // Check for stream marker: @@STREAM:stderr@@ or @@STREAM:stdout@@
   const streamMatch = text.match(/@@STREAM:(\w+)@@/)
   if (streamMatch) {
     const stream = streamMatch[1]
     const config = STREAM_ICONS[stream]
     if (config) {
+      // stdout: icon only (common case, keep it subtle)
+      // stderr: icon + label (exceptional, call it out)
       return createElement('span', {
         style: { display: 'inline-flex', alignItems: 'center', gap: '3px', verticalAlign: 'middle' },
       },
@@ -85,7 +87,7 @@ function formatPart(text: string): React.ReactNode {
           style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle' },
           strokeWidth: 2.5,
         }),
-        createElement('span', null, stream),
+        stream !== 'stdout' ? createElement('span', null, stream) : null,
       )
     }
   }
