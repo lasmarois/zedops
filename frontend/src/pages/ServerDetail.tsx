@@ -512,25 +512,21 @@ function ServerDetailContent() {
 
         {/* Logs Tab */}
         <TabsContent value="logs" className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Server Logs: {serverName}</h2>
-            {agentId && containerID ? (
-              <LogViewer
-                agentId={agentId}
-                containerId={containerID}
-                containerName={serverName}
-                onBack={() => {}} // Not used in tab context
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">
-                    Server must be running to view logs
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {agentId && containerID ? (
+            <LogViewer
+              agentId={agentId}
+              containerId={containerID}
+              containerName={serverName}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">
+                  Server must be running to view logs
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* RCON Tab */}
