@@ -25,7 +25,8 @@ export function InstallAgentDialog({ open, onOpenChange }: InstallAgentDialogPro
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const managerUrl = "wss://zedops.mail-bcf.workers.dev/ws"
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws"
+  const managerUrl = `${wsProtocol}://${window.location.host}/ws`
 
   const handleGenerateToken = async () => {
     if (!agentName.trim()) {
