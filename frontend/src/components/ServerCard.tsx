@@ -53,16 +53,19 @@ function formatBytes(bytes: number): string {
 }
 
 // Format uptime from container status or created_at
-function formatUptime(server: Server, container?: Container): string {
+function formatUptime(server: Server, container?: Container): string | null {
   if (container?.status) {
     // Extract uptime from container status like "Up 2 hours"
     const match = container.status.match(/Up\s+(.+)/i);
     if (match) return match[1];
   }
-  // Fallback: calculate from created_at
-  const now = Date.now() / 1000;
+  // No meaningful uptime if container isn't running
+  if (server.status !== 'running' && server.status !== 'starting') return null;
+  // Fallback: calculate from created_at (stored as milliseconds)
+  const now = Date.now();
   const created = server.created_at;
-  const seconds = Math.floor(now - created);
+  const seconds = Math.floor((now - created) / 1000);
+  if (seconds < 0) return null;
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
@@ -394,7 +397,7 @@ export function ServerCard({
                 </div>
                 <div className="text-sm text-muted-foreground truncate">
                   {showAgent && <span>{server.agent_name} • </span>}
-                  {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                  {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'}{uptime ? ` • ${uptime}` : ''}
                   {server.player_count !== null && server.player_count !== undefined && (
                     <span className="text-info"> • {server.player_count}/{server.max_players || 32} players</span>
                   )}
@@ -457,7 +460,7 @@ export function ServerCard({
                   )}
                   <span className="text-sm text-muted-foreground truncate hidden sm:inline">
                     {showAgent && <span>{server.agent_name} • </span>}
-                    {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'} • {uptime}
+                    {displayVersion} • {storage ? formatBytes(storage.totalBytes) : '...'}{uptime ? ` • ${uptime}` : ''}
                     {server.player_count !== null && server.player_count !== undefined && (
                       <span className="text-info"> • {server.player_count}/{server.max_players || 32}</span>
                     )}
