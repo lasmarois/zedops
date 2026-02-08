@@ -25,20 +25,22 @@ export interface AgentLogLine {
 
 /**
  * Log subscriber (UI client) - for container logs
+ * Note: With Hibernatable WebSocket API, subscribers are tracked via
+ * ctx.storage keys (sub:<id> -> containerId) and WebSocket tags, not in-memory maps.
  */
 export interface LogSubscriber {
   id: string;            // Unique subscriber ID
-  ws: WebSocket;         // WebSocket connection to UI client
   containerId: string;   // Container being watched
-  userId?: string;       // User ID for audit logging (optional for backward compatibility)
+  userId?: string;       // User ID for audit logging
 }
 
 /**
  * Agent log subscriber (UI client) - for agent's own logs
+ * Note: With Hibernatable WebSocket API, subscribers are tracked via
+ * ctx.storage keys (agentsub:<id> -> true) and WebSocket tags.
  */
 export interface AgentLogSubscriber {
   id: string;            // Unique subscriber ID
-  ws: WebSocket;         // WebSocket connection to UI client
   userId?: string;       // User ID for audit logging
 }
 
