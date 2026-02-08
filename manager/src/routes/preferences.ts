@@ -15,7 +15,7 @@ type Bindings = {
 };
 
 const VALID_THEMES = [
-  'midnight-blue',
+  'solar-flare',
   'cyberpunk-neon',
   'emerald-dark',
   'amber-forge',
@@ -39,7 +39,7 @@ preferences.get('/', async (c) => {
   }
 
   return c.json({
-    theme: row.theme || 'midnight-blue',
+    theme: row.theme || 'solar-flare',
   });
 });
 

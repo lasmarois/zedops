@@ -24,7 +24,7 @@ export interface Theme {
 
 export const THEMES: Theme[] = [
   {
-    id: 'midnight-blue',
+    id: 'solar-flare',
     name: 'Midnight Blue',
     description: 'Professional blue tones',
     preview: {
@@ -283,7 +283,7 @@ function setThemeVars(theme: Theme) {
 
 /** Get current theme ID from localStorage */
 export function getTheme(): string {
-  return localStorage.getItem(STORAGE_KEY) || 'midnight-blue';
+  return localStorage.getItem(STORAGE_KEY) || 'solar-flare';
 }
 
 /** Apply a theme by ID — updates CSS vars, saves to localStorage, and persists to backend */
@@ -317,7 +317,7 @@ export function applyTheme(id: string, persistToBackend = true) {
  */
 export function initTheme() {
   const id = getTheme();
-  if (id !== 'midnight-blue') {
+  if (id !== 'solar-flare') {
     const theme = THEMES.find((t) => t.id === id);
     if (theme) setThemeVars(theme);
   }
@@ -328,7 +328,7 @@ export function initTheme() {
  * If backend has a different theme than localStorage, apply it.
  */
 export function syncThemeFromUser(themeFromBackend: string | null | undefined) {
-  const backendTheme = themeFromBackend || 'midnight-blue';
+  const backendTheme = themeFromBackend || 'solar-flare';
   const localTheme = getTheme();
 
   if (backendTheme !== localTheme) {

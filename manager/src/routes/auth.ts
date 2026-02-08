@@ -96,7 +96,7 @@ auth.post('/login', async (c) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        theme: user.theme || 'midnight-blue',
+        theme: user.theme || 'solar-flare',
       },
     });
   } catch (error) {
