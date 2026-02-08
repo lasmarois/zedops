@@ -264,7 +264,7 @@
 
 ---
 
-## Milestone 7: RBAC & Audit Logs 🚧 In Progress
+## Milestone 7: RBAC & Audit Logs ✅ Complete
 
 **Goal:** Role-based access control and audit logging
 
@@ -919,6 +919,46 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 
 ---
 
+## Milestone 15: User Management, RBAC & Permissions Review ✅ Complete
+
+**Goal:** Audit and fix all auth/permission issues accumulated since M7 (8+ milestones ago)
+
+**Duration:** ~3 hours (2026-02-07)
+
+**Deliverables:**
+
+### Phase 1: Critical Bug Fix & Security ✅
+- ✅ **P0 Fix**: Metrics history endpoint queried non-existent `user_server_permissions` table — replaced with `canViewServer()` from RBAC permissions lib
+- ✅ Removed unprotected `/api/audit/ping` endpoint
+- ✅ Added `requireAuth()` + admin check to `/api/audit/test`
+- ✅ Documented Worker→DO `X-User-Id` trust boundary
+
+### Phase 2: Frontend UX ✅
+- ✅ Sidebar Management section gated on admin role
+- ✅ Removed `/permissions` placeholder route and sidebar entry
+- ✅ Invitation form offers 4 RBAC roles (viewer, operator, agent-admin, admin)
+- ✅ User role display shows "Admin" or "Member" (not "user")
+- ✅ Self-service password change (`PATCH /api/auth/password` + ChangePasswordDialog)
+
+### Phase 3: Legacy Cleanup ✅
+- ✅ Removed dead `fetchUserPermissions/grantPermission/revokePermission` from api.ts
+- ✅ Removed dead `useUserPermissions/useGrantPermission/useRevokePermission` hooks
+- ✅ Updated `UserAccount.role` type to `'admin' | null`
+
+### Phase 4: Documentation & Audit Retention ✅
+- ✅ Rewrote SECURITY.md (removed MVP language, documented 4-role RBAC)
+- ✅ Added `POST /api/audit/cleanup` endpoint (90-day default retention)
+
+**Files Changed:** 11 modified + 1 new (ChangePasswordDialog.tsx)
+
+**Dependencies:** Milestone 7 (RBAC & Audit Logs)
+
+**Planning:** [.planning/history/goal-10-m15-rbac-review/](.planning/history/goal-10-m15-rbac-review/) *(no planning files — single-session goal)*
+
+**Completed:** 2026-02-07
+
+---
+
 ## Future Milestones (Ideas)
 
 ### Mod Management UI
@@ -964,8 +1004,9 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
 | M12: Backup & Restore | 1-2 weeks | ~6 hours | ✅ Complete |
 | M13: Backup Transfer & Migration | 1-2 weeks | TBD | ⏳ Planned |
 | M14: Docker Image Improvements | 1-2 weeks | TBD | 🚧 In Progress |
+| M15: RBAC & Permissions Review | 1-2 days | ~3 hours | ✅ Complete |
 
-**Progress:** 16/19 milestones complete (84%)
+**Progress:** 17/20 milestones complete (85%)
 
 **Active Milestone:** M14 - Docker Image Improvements
 
@@ -1025,6 +1066,12 @@ After completing all implementation (M1-M9), conduct thorough testing to ensure 
   - Manual backup (tar.gz), restore with rollback, delete, retention
   - RCON pre-save, D1 metadata, WebSocket progress
   - `--no-update` agent flag for dev testing
+
+- ✅ **Milestone 15 - RBAC & Permissions Review** (2026-02-07)
+  - P0 fix: metrics history broken for non-admins
+  - Security: audit endpoints, sidebar gating, legacy cleanup
+  - UX: invitation roles, role display, self-service password change
+  - Docs: SECURITY.md rewrite, audit log retention endpoint
 
 **Planned:**
 - **Milestone 11** - Testing & Verification
