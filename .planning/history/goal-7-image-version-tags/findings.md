@@ -1,16 +1,16 @@
 # Goal #7 Findings
 
-## Container Image Version
-- OCI label: `org.opencontainers.image.version` — standard label for image version
-- Container labels accessible via `c.Labels` in Docker SDK's `ContainerList`
-- `ContainerInfo` already has `Labels map[string]string` field
+## Registry field gap
+- ConfigurationEdit already has registry field (`image` state, Input with agent default placeholder)
+- ServerForm is MISSING the registry field — only sends `imageTag`, not `image`
+- CreateServerRequest type already has `image?: string` field — just need to wire it up
 
-## Registry Tags
-- `go-containerregistry/crane` provides `crane.ListTags()` — reads Docker credentials automatically
-- Alternative: raw HTTP v2 registry API (more complex, requires auth token dance)
-- Choosing crane for simplicity
+## Tag refetch on registry change
+- ConfigurationEdit already does this: `queryKey: ['registryTags', server.agent_id, image || server.steam_zomboid_registry]`
+- fetchRegistryTags accepts optional `registry` param
+- ServerForm should do the same: when custom registry is entered, refetch tags
 
-## Frontend Image Tag Dropdown
-- ServerForm currently hardcodes: latest, 2.1.0, 2.1, 2.0.1, 2.0.0 (lines 289-295)
-- ConfigurationEdit uses free-text `<Input>` for imageTag (lines 408-414)
-- Both need dynamic dropdown with fetched tags
+## Version display current state
+- ServerInfoCard shows: imageVersion if available, else falls back to imageTag or "latest"
+- No existing images have the OCI label yet — so all servers show imageTag fallback
+- This is correct behavior until steam-zomboid images are rebuilt with ARG IMAGE_VERSION
