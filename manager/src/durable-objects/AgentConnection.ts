@@ -177,7 +177,7 @@ export class AgentConnection extends DurableObject {
     }
 
     // Internal endpoint: Check data existence for a single server
-    if (url.pathname === "/internal/check-data" && request.method === "POST") {
+    if (url.pathname === "/check-data" && request.method === "POST") {
       return this.handleCheckDataRequest(request);
     }
 
