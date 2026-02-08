@@ -49,13 +49,14 @@ const STREAM_ICONS: Record<string, { icon: typeof AlertOctagon; className: strin
 
 /**
  * formatPart callback for LazyLog — intercepts marker tokens
- * like @@LEVEL:INFO@@ and replaces them with inline Lucide icons + text.
+ * like @@LEVEL:INFO@@ and replaces them with inline Lucide icons + remaining text.
  */
 function formatPart(text: string): React.ReactNode {
   // Check for level marker: @@LEVEL:INFO@@
-  const levelMatch = text.match(/@@LEVEL:(\w+)@@/)
+  const levelMatch = text.match(/@@LEVEL:(\w+)@@(.*)/)
   if (levelMatch) {
     const level = levelMatch[1]
+    const rest = levelMatch[2] || ''
     const config = LEVEL_ICONS[level]
     if (config) {
       return createElement('span', {
@@ -63,31 +64,32 @@ function formatPart(text: string): React.ReactNode {
       },
         createElement(config.icon, {
           className: config.className,
-          style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle' },
+          style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 },
           strokeWidth: 2.5,
         }),
-        createElement('span', null, level),
+        createElement('span', null, level + rest),
       )
     }
   }
 
   // Check for stream marker: @@STREAM:stderr@@ or @@STREAM:stdout@@
-  const streamMatch = text.match(/@@STREAM:(\w+)@@/)
+  const streamMatch = text.match(/@@STREAM:(\w+)@@(.*)/)
   if (streamMatch) {
     const stream = streamMatch[1]
+    const rest = streamMatch[2] || ''
     const config = STREAM_ICONS[stream]
     if (config) {
-      // stdout: icon only (common case, keep it subtle)
-      // stderr: icon + label (exceptional, call it out)
       return createElement('span', {
         style: { display: 'inline-flex', alignItems: 'center', gap: '3px', verticalAlign: 'middle' },
       },
         createElement(config.icon, {
           className: config.className,
-          style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle' },
+          style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 },
           strokeWidth: 2.5,
         }),
-        stream !== 'stdout' ? createElement('span', null, stream) : null,
+        // stdout: just the remaining text (icon-only badge)
+        // stderr: "stderr" label + remaining text
+        createElement('span', null, stream !== 'stdout' ? stream + rest : rest),
       )
     }
   }
@@ -158,7 +160,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
     return (
       <div
         ref={containerRef}
-        className={cn('rounded-lg overflow-hidden border border-border/40', className)}
+        className={cn('rounded-md overflow-hidden border border-border', className)}
         style={{ backgroundColor: '#1e1e1e' }}
       >
         {showEmpty ? (
