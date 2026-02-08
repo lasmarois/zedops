@@ -3032,7 +3032,7 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
         }
 
         // Try to create a new container
-        response = await agentStub.fetch(`http://do/servers/${serverId}/create`, {
+        response = await agentStub.fetch(`http://do/servers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
