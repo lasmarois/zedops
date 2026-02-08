@@ -41,6 +41,7 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
   const editConfig = editServer ? (JSON.parse(editServer.config) as ServerConfig) : null;
 
   const [serverName, setServerName] = useState(editServer?.name || '');
+  const [image, setImage] = useState(editServer?.image || ''); // Custom registry override
   const [imageTag, setImageTag] = useState(editServer?.image_tag || 'latest');
   const [betaBranch, setBetaBranch] = useState(editConfig?.BETABRANCH || 'none');
   const [serverPublicName, setServerPublicName] = useState(editConfig?.SERVER_PUBLIC_NAME || '');
@@ -87,10 +88,10 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
     enabled: !!agentId,
   });
 
-  // Fetch available image tags from registry
+  // Fetch available image tags from registry (re-fetches when custom registry changes)
   const { data: registryTags, isLoading: tagsLoading } = useQuery({
-    queryKey: ['registryTags', agentId],
-    queryFn: () => fetchRegistryTags(agentId),
+    queryKey: ['registryTags', agentId, image || agentConfig?.steam_zomboid_registry],
+    queryFn: () => fetchRegistryTags(agentId, image || undefined),
     enabled: !!agentId,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
@@ -192,6 +193,11 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
       config,
     };
 
+    // Add custom registry if specified
+    if (image.trim()) {
+      request.image = image.trim();
+    }
+
     // Add custom ports if specified
     if (useCustomPorts && customGamePort && customUdpPort && customRconPort) {
       request.gamePort = parseInt(customGamePort);
@@ -284,6 +290,25 @@ export function ServerForm({ agentId, onSubmit, onCancel, isSubmitting, editServ
             )}
             <p className="text-xs text-muted-foreground">
               Used for container name and data directories
+            </p>
+          </div>
+
+          {/* Image Registry (optional override) */}
+          <div className="space-y-2">
+            <Label htmlFor="image">Image Registry <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+            <Input
+              id="image"
+              type="text"
+              value={image}
+              onChange={(e) => setImage(e.target.value)}
+              placeholder={agentConfig?.steam_zomboid_registry || 'registry.example.com/steam-zomboid'}
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-muted-foreground">
+              {agentConfig?.steam_zomboid_registry
+                ? `Default: ${agentConfig.steam_zomboid_registry}`
+                : 'No default registry configured'}
+              {image ? ' — using custom override' : ''}
             </p>
           </div>
 
