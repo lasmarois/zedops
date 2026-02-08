@@ -87,9 +87,7 @@ function formatPart(text: string): React.ReactNode {
           style: { width: 13, height: 13, display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 },
           strokeWidth: 2.5,
         }),
-        // stdout: just the remaining text (icon-only badge)
-        // stderr: "stderr" label + remaining text
-        createElement('span', null, stream !== 'stdout' ? stream + rest : rest),
+        rest ? createElement('span', null, rest) : null,
       )
     }
   }
@@ -160,7 +158,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
     return (
       <div
         ref={containerRef}
-        className={cn('rounded-md overflow-hidden border border-border', className)}
+        className={cn('rounded-md overflow-hidden ring-1 ring-white/10', className)}
         style={{ backgroundColor: '#1e1e1e' }}
       >
         {showEmpty ? (
