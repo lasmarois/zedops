@@ -60,7 +60,7 @@ function formatUptime(server: Server, container?: Container): string | null {
     if (match) return match[1];
   }
   // No meaningful uptime if container isn't running
-  if (server.status !== 'running' && server.status !== 'starting') return null;
+  if (server.status !== 'running') return null;
   // Fallback: calculate from created_at (stored as milliseconds)
   const now = Date.now();
   const created = server.created_at;
