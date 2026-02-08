@@ -25,7 +25,7 @@ None
 | 9 | Fix Missing DO Route for checkdata in Apply-Config | Bugfix | Complete | 2026-02-07 | 2026-02-07 |
 | 10 | M15 - User Management, RBAC & Permissions Review | M15 | Complete | 2026-02-07 | 2026-02-07 |
 | 11 | RBAC UX Polish & Remaining Gaps | M15 | Complete | 2026-02-07 | 2026-02-07 |
-| 12 | Theming Showcase — 5 Theme Branches | M16 | Iced | 2026-02-07 | |
+| 12 | Settings Page + Theme Switcher (6 themes, per-user) | M16 | Complete | 2026-02-07 | 2026-02-08 |
 | 13 | Cloudflare Free Tier — Hibernatable WebSocket Migration | Infra | Complete | 2026-02-08 | 2026-02-08 |
 | 14 | Log Viewer Revamp — xterm.js Terminal-Style Logs | UX | Complete | 2026-02-08 | 2026-02-08 |
 
