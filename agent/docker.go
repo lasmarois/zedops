@@ -717,9 +717,18 @@ func ListRegistryTags(registry string) ([]string, error) {
 
 	log.Printf("Fetching tags from registry: %s", registry)
 
-	tags, err := crane.ListTags(registry)
+	rawTags, err := crane.ListTags(registry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tags from %s: %w", registry, err)
+	}
+
+	// Filter out non-image tags (e.g., BuildKit cache manifests)
+	tags := make([]string, 0, len(rawTags))
+	for _, tag := range rawTags {
+		if tag == "buildcache" || strings.HasPrefix(tag, "buildcache-") {
+			continue
+		}
+		tags = append(tags, tag)
 	}
 
 	// Sort: "latest" first, then semver descending
