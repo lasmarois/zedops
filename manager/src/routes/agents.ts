@@ -2987,33 +2987,33 @@ agents.post('/:id/servers/:serverId/apply-config', async (c) => {
         // Check if data exists on disk to determine the correct source path
         let actualDataPath = dataPath;
         try {
-          const checkDataResponse = await agentStub.fetch(`http://do/servers/checkdata`, {
+          const checkDataResponse = await agentStub.fetch(`http://internal/check-data`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              servers: [server.name],
+              serverName: server.name,
               dataPath: dataPath,
             }),
           });
 
           if (checkDataResponse.ok) {
-            const checkResult = await checkDataResponse.json() as { success: boolean; statuses?: Array<{ dataExists: boolean }> };
-            if (checkResult.success && checkResult.statuses?.[0]?.dataExists) {
+            const checkResult = await checkDataResponse.json() as { dataExists: boolean };
+            if (checkResult.dataExists) {
               console.log(`[Agents API] Data exists at target path: ${dataPath}`);
             } else if (oldDataPath) {
               // Check if data exists at old path
-              const checkOldResponse = await agentStub.fetch(`http://do/servers/checkdata`, {
+              const checkOldResponse = await agentStub.fetch(`http://internal/check-data`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  servers: [server.name],
+                  serverName: server.name,
                   dataPath: oldDataPath,
                 }),
               });
 
               if (checkOldResponse.ok) {
-                const checkOldResult = await checkOldResponse.json() as { success: boolean; statuses?: Array<{ dataExists: boolean }> };
-                if (checkOldResult.success && checkOldResult.statuses?.[0]?.dataExists) {
+                const checkOldResult = await checkOldResponse.json() as { dataExists: boolean };
+                if (checkOldResult.dataExists) {
                   console.log(`[Agents API] Data exists at old path: ${oldDataPath}, using that for container`);
                   actualDataPath = oldDataPath;
 

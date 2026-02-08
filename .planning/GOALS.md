@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-None
+**Goal #9**: Fix Missing DO Route for checkdata in Apply-Config Auto-Recovery
 
 ---
 
@@ -22,6 +22,7 @@ None
 | 6 | Fix Health Check: Healthy Only When Game Ready | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 7 | Show Image Version & Dynamic Tag Selection | M14 | Complete | 2026-02-07 | 2026-02-07 |
 | 8 | Server Recreate — Recover Missing/Deleted Servers | M14 | Complete | 2026-02-07 | 2026-02-07 |
+| 9 | Fix Missing DO Route for checkdata in Apply-Config | Bugfix | In Progress | 2026-02-07 | |
 
 ---
 
