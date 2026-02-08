@@ -207,7 +207,7 @@ export function LogViewer({
         onFollowChange={setAutoScroll}
         searchTerm={searchTerm}
         emptyMessage={logs.length === 0 ? 'Waiting for container output...' : 'No logs match filters'}
-        className="flex-1 min-h-0"
+        className="flex-1 min-h-[50vh]"
       />
 
       {/* Floating scroll-to-top button */}

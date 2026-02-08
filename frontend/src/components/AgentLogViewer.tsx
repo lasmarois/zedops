@@ -226,7 +226,7 @@ export function AgentLogViewer({ agentId, agentName: _agentName }: AgentLogViewe
               : 'Waiting for agent output...'
             : 'No logs match filters'
         }
-        className="flex-1 min-h-0"
+        className="flex-1 min-h-[50vh]"
       />
 
       {/* Floating scroll-to-top button */}

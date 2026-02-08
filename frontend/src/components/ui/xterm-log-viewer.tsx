@@ -240,7 +240,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
     const showEmpty = lines.length === 0
 
     return (
-      <div className={cn('relative rounded-lg overflow-hidden', className)} style={{ minHeight: 200 }}>
+      <div className={cn('relative rounded-lg overflow-hidden min-h-[200px]', className)}>
         {/* Terminal container */}
         <div
           ref={containerRef}
