@@ -24,20 +24,18 @@ import {
   TerminalLineCount,
 } from '@/components/ui/terminal-log'
 import { XTermLogViewer, type XTermLogViewerRef } from '@/components/ui/xterm-log-viewer'
-import { ArrowLeft, Pause, Play, ArrowDownToLine, Trash2, Search, ChevronUp } from 'lucide-react'
+import { Pause, Play, ArrowDownToLine, Trash2, Search, ChevronUp } from 'lucide-react'
 
 interface LogViewerProps {
   agentId: string
   containerId: string
   containerName: string
-  onBack: () => void
 }
 
 export function LogViewer({
   agentId,
   containerId,
-  containerName,
-  onBack,
+  containerName: _containerName,
 }: LogViewerProps) {
   const { logs, isConnected, error, clearLogs } = useLogStream({
     agentId,
@@ -99,22 +97,7 @@ export function LogViewer({
   }
 
   return (
-    <div className="h-full flex flex-col gap-4 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <div className="h-6 w-px bg-border" />
-          <h2 className="text-lg font-semibold truncate max-w-md" title={containerName}>
-            {containerName}
-          </h2>
-          <TerminalStatus status={isConnected ? 'streaming' : 'disconnected'} />
-        </div>
-      </div>
-
+    <div className="h-full flex flex-col gap-4">
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -123,6 +106,9 @@ export function LogViewer({
 
       {/* Controls Bar */}
       <div className="flex items-center gap-3 flex-wrap">
+        <TerminalStatus status={isConnected ? 'streaming' : 'disconnected'} />
+        <div className="h-4 w-px bg-border/50" />
+
         {/* Stream filter */}
         <Select value={streamFilter} onValueChange={(val) => setStreamFilter(val as typeof streamFilter)}>
           <SelectTrigger className="w-28 h-8 text-xs">

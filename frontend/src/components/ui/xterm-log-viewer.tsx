@@ -9,7 +9,7 @@
 import { useMemo, useCallback, forwardRef, useImperativeHandle, useRef, useState, useEffect, createElement } from 'react'
 import { LazyLog } from '@melloware/react-logviewer'
 import { cn } from '@/lib/utils'
-import { Info, AlertTriangle, XCircle, Bug, AlertOctagon } from 'lucide-react'
+import { Info, AlertTriangle, XCircle, Bug, AlertOctagon, Terminal } from 'lucide-react'
 
 export interface XTermLogViewerProps {
   /** Pre-formatted ANSI strings to display */
@@ -43,6 +43,7 @@ const LEVEL_ICONS: Record<string, { icon: typeof Info; className: string }> = {
 }
 
 const STREAM_ICONS: Record<string, { icon: typeof AlertOctagon; className: string }> = {
+  stdout: { icon: Terminal,     className: 'text-slate-400/60' },
   stderr: { icon: AlertOctagon, className: 'text-red-400/80' },
 }
 
@@ -155,7 +156,7 @@ export const XTermLogViewer = forwardRef<XTermLogViewerRef, XTermLogViewerProps>
     return (
       <div
         ref={containerRef}
-        className={cn('rounded-lg overflow-hidden', className)}
+        className={cn('rounded-lg overflow-hidden border border-border/40', className)}
         style={{ backgroundColor: '#1e1e1e' }}
       >
         {showEmpty ? (
