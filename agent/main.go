@@ -203,12 +203,16 @@ func (a *Agent) register() error {
 	})
 
 	if err := a.sendMessage(regMsg); err != nil {
-		return fmt.Errorf("failed to send registration: %w", err)
+		return fmt.Errorf("%w: failed to send registration: %v", ErrTransientAuth, err)
 	}
 
 	// Wait for registration response (with timeout)
 	timeout := time.After(10 * time.Second)
-	responseCh := make(chan Message, 1)
+	type authResult struct {
+		msg *Message
+		err error
+	}
+	responseCh := make(chan authResult, 1)
 
 	// Temporarily read messages to get registration response
 	go func() {
@@ -216,28 +220,33 @@ func (a *Agent) register() error {
 			var msg Message
 			err := a.conn.ReadJSON(&msg)
 			if err != nil {
-				log.Println("Error reading registration response:", err)
+				responseCh <- authResult{err: err}
 				return
 			}
 			if msg.Subject == "agent.register.success" || msg.Subject == "error" {
-				responseCh <- msg
+				responseCh <- authResult{msg: &msg}
 				return
 			}
 		}
 	}()
 
 	select {
-	case msg := <-responseCh:
-		if msg.Subject == "error" {
+	case result := <-responseCh:
+		if result.err != nil {
+			// Connection dropped during auth — transient
+			return fmt.Errorf("%w: connection lost during registration: %v", ErrTransientAuth, result.err)
+		}
+		if result.msg.Subject == "error" {
 			var errResp ErrorResponse
-			data, _ := json.Marshal(msg.Data)
+			data, _ := json.Marshal(result.msg.Data)
 			json.Unmarshal(data, &errResp)
-			return fmt.Errorf("registration failed: %s", errResp.Message)
+			// Server explicitly rejected — permanent
+			return fmt.Errorf("%w: registration rejected: %s", ErrAuthFailure, errResp.Message)
 		}
 
 		// Parse registration response
 		var resp RegisterResponse
-		data, _ := json.Marshal(msg.Data)
+		data, _ := json.Marshal(result.msg.Data)
 		if err := json.Unmarshal(data, &resp); err != nil {
 			return fmt.Errorf("failed to parse registration response: %w", err)
 		}
@@ -255,7 +264,8 @@ func (a *Agent) register() error {
 		return nil
 
 	case <-timeout:
-		return fmt.Errorf("registration timeout")
+		// Timeout — likely connection dropped silently during deploy
+		return fmt.Errorf("%w: registration timeout (no response in 10s)", ErrTransientAuth)
 	}
 }
 
@@ -268,12 +278,16 @@ func (a *Agent) authenticate() error {
 	})
 
 	if err := a.sendMessage(authMsg); err != nil {
-		return fmt.Errorf("failed to send authentication: %w", err)
+		return fmt.Errorf("%w: failed to send authentication: %v", ErrTransientAuth, err)
 	}
 
 	// Wait for authentication response (with timeout)
 	timeout := time.After(10 * time.Second)
-	responseCh := make(chan Message, 1)
+	type authResult struct {
+		msg *Message
+		err error
+	}
+	responseCh := make(chan authResult, 1)
 
 	// Temporarily read messages to get authentication response
 	go func() {
@@ -281,23 +295,28 @@ func (a *Agent) authenticate() error {
 			var msg Message
 			err := a.conn.ReadJSON(&msg)
 			if err != nil {
-				log.Println("Error reading authentication response:", err)
+				responseCh <- authResult{err: err}
 				return
 			}
 			if msg.Subject == "agent.auth.success" || msg.Subject == "error" {
-				responseCh <- msg
+				responseCh <- authResult{msg: &msg}
 				return
 			}
 		}
 	}()
 
 	select {
-	case msg := <-responseCh:
-		if msg.Subject == "error" {
+	case result := <-responseCh:
+		if result.err != nil {
+			// Connection dropped during auth — transient
+			return fmt.Errorf("%w: connection lost during authentication: %v", ErrTransientAuth, result.err)
+		}
+		if result.msg.Subject == "error" {
 			var errResp ErrorResponse
-			data, _ := json.Marshal(msg.Data)
+			data, _ := json.Marshal(result.msg.Data)
 			json.Unmarshal(data, &errResp)
-			return fmt.Errorf("authentication failed: %s", errResp.Message)
+			// Server explicitly rejected — permanent
+			return fmt.Errorf("%w: %s", ErrAuthFailure, errResp.Message)
 		}
 
 		// Parse authentication response
@@ -306,7 +325,7 @@ func (a *Agent) authenticate() error {
 			AgentName string `json:"agentName"`
 			Message   string `json:"message"`
 		}
-		data, _ := json.Marshal(msg.Data)
+		data, _ := json.Marshal(result.msg.Data)
 		if err := json.Unmarshal(data, &resp); err != nil {
 			return fmt.Errorf("failed to parse authentication response: %w", err)
 		}
@@ -316,7 +335,8 @@ func (a *Agent) authenticate() error {
 		return nil
 
 	case <-timeout:
-		return fmt.Errorf("authentication timeout")
+		// Timeout — likely connection dropped silently during deploy
+		return fmt.Errorf("%w: authentication timeout (no response in 10s)", ErrTransientAuth)
 	}
 }
 

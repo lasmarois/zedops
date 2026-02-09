@@ -21,6 +21,16 @@ const (
 // This error should cause the agent to exit without retry.
 var ErrAuthFailure = errors.New("authentication failure")
 
+// ErrTransientAuth indicates a transient authentication failure (connection dropped during auth,
+// timeout due to Worker redeployment, etc.). These are retryable with bounded retries.
+var ErrTransientAuth = errors.New("transient auth failure")
+
+const (
+	// maxTransientAuthRetries is the maximum number of consecutive transient auth failures
+	// before giving up. 5 retries with exponential backoff = ~30s total, ~10 requests — safe for free tier.
+	maxTransientAuthRetries = 5
+)
+
 // ConnectWithRetry attempts to connect to the manager with exponential backoff
 func (a *Agent) ConnectWithRetry(ctx context.Context) error {
 	backoff := initialBackoff
@@ -78,6 +88,9 @@ func (a *Agent) ConnectWithRetry(ctx context.Context) error {
 
 // RunWithReconnect runs the agent with automatic reconnection
 func (a *Agent) RunWithReconnect(ctx context.Context) error {
+	transientRetries := 0
+	authBackoff := initialBackoff
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -94,10 +107,42 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			continue
 		}
 
-		// Register or authenticate - this is FATAL if it fails
-		// Invalid token or missing agent means configuration is wrong, retrying won't help
+		// Register or authenticate
 		if err := a.register(); err != nil {
 			a.conn.Close()
+
+			if errors.Is(err, ErrTransientAuth) {
+				// Transient failure — connection dropped during auth (likely Worker redeploy)
+				transientRetries++
+				if transientRetries >= maxTransientAuthRetries {
+					log.Println("")
+					log.Println("========================================")
+					log.Printf("AUTH FAILED after %d transient retries — giving up", transientRetries)
+					log.Println("========================================")
+					log.Printf("Error: %v", err)
+					log.Println("")
+					log.Println("The manager may be experiencing extended downtime.")
+					log.Println("The agent will NOT restart automatically.")
+					log.Println("Restart manually once the manager is available:")
+					log.Println("  sudo systemctl start zedops-agent")
+					log.Println("========================================")
+					return fmt.Errorf("%w: exhausted %d transient retries: %v", ErrAuthFailure, maxTransientAuthRetries, err)
+				}
+				log.Printf("Auth failed (transient: connection dropped during deploy?), retrying (%d/%d) in %v...",
+					transientRetries, maxTransientAuthRetries, authBackoff)
+				select {
+				case <-time.After(authBackoff):
+					authBackoff = time.Duration(float64(authBackoff) * backoffFactor)
+					if authBackoff > maxBackoff {
+						authBackoff = maxBackoff
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				continue
+			}
+
+			// Permanent failure — server explicitly rejected us
 			log.Println("")
 			log.Println("========================================")
 			log.Println("AUTHENTICATION FAILED - AGENT STOPPING")
@@ -117,6 +162,10 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			log.Println("========================================")
 			return fmt.Errorf("%w: %v", ErrAuthFailure, err)
 		}
+
+		// Auth succeeded — reset transient retry state
+		transientRetries = 0
+		authBackoff = initialBackoff
 
 		// Mark as authenticated
 		a.setAuthenticated(true)
