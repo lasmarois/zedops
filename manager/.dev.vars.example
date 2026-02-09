@@ -11,3 +11,4 @@ ADMIN_PASSWORD=admin
 # Resend API key for sending invitation emails (optional)
 # Get one at https://resend.com — 3,000 emails/month free
 # RESEND_API_KEY=re_xxxxxxxxx
+# RESEND_FROM_EMAIL=noreply@yourdomain.com

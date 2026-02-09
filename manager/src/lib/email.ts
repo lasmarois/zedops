@@ -6,7 +6,7 @@
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const DEFAULT_FROM = 'ZedOps <noreply@zedops.com>';
+const DEFAULT_FROM = 'ZedOps <noreply@example.com>';
 
 interface SendEmailOptions {
   to: string;

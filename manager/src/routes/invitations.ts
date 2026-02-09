@@ -20,6 +20,7 @@ type Bindings = {
   TOKEN_SECRET: string;
   ADMIN_PASSWORD: string;
   RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
 };
 
 const invitations = new Hono<{ Bindings: Bindings }>();
@@ -104,10 +105,14 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
 
     if (c.env.RESEND_API_KEY) {
       const html = buildInvitationEmailHtml(invitationUrl, role);
+      const from = c.env.RESEND_FROM_EMAIL
+        ? `ZedOps <${c.env.RESEND_FROM_EMAIL}>`
+        : undefined;
       const result = await sendEmail(c.env.RESEND_API_KEY, {
         to: email,
         subject: 'You\'ve been invited to ZedOps',
         html,
+        from,
       });
       emailSent = result.success;
       if (!result.success) {
