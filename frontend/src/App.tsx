@@ -49,6 +49,7 @@ function AppContent() {
 
   return (
     <Routes>
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={<MainLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
