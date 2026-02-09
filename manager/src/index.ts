@@ -1,5 +1,5 @@
 /**
- * ZedOps Manager - Cloudflare Worker
+ * ZedOps Manager - Cloudflare Worker (v0.19.0)
  *
  * Full-stack deployment:
  * - Static assets (React frontend) served from ../frontend/dist
