@@ -11,10 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAgents } from "@/hooks/useAgents"
-import { HardDrive, Cpu, MemoryStick, Loader2 } from "lucide-react"
+import { HardDrive, Cpu, MemoryStick, Loader2, Trash2 } from "lucide-react"
 import { AgentServerList } from "@/components/AgentServerList"
 import { AgentLogViewer } from "@/components/AgentLogViewer"
-import { fetchAgentConfig, updateAgentConfig, type AgentConfig } from "@/lib/api"
+import { fetchAgentConfig, updateAgentConfig, deleteAgent, type AgentConfig } from "@/lib/api"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // Helper to get color based on percentage
 function getMetricColor(value: number): string {
@@ -53,6 +54,17 @@ export function AgentDetail() {
       // Invalidate queries to refetch data
       queryClient.invalidateQueries({ queryKey: ['agentConfig', id] })
       queryClient.invalidateQueries({ queryKey: ['agents'] })
+    },
+  })
+
+  // Remove agent state
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+
+  const removeAgentMutation = useMutation({
+    mutationFn: () => deleteAgent(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      navigate('/agents')
     },
   })
 
@@ -204,11 +216,16 @@ export function AgentDetail() {
 
         <Button
           variant="glass-destructive"
-          disabled
-          title="Not yet implemented - Planned for future release"
+          onClick={() => setShowRemoveConfirm(true)}
+          disabled={removeAgentMutation.isPending}
           className="self-start"
         >
-          Disconnect
+          {removeAgentMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <Trash2 className="h-4 w-4 mr-2" />
+          )}
+          Remove Agent
         </Button>
       </div>
 
@@ -531,6 +548,15 @@ export function AgentDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+      <ConfirmDialog
+        open={showRemoveConfirm}
+        onOpenChange={setShowRemoveConfirm}
+        title="Remove Agent"
+        description={`Are you sure you want to remove "${agent.name}"? This will permanently delete the agent and all associated servers and backups. This action cannot be undone.`}
+        confirmText="Remove Agent"
+        variant="destructive"
+        onConfirm={() => removeAgentMutation.mutate()}
+      />
     </div>
   )
 }

@@ -109,6 +109,24 @@ export async function fetchAgent(id: string): Promise<Agent> {
 }
 
 /**
+ * Delete an agent and all associated data
+ */
+export async function deleteAgent(id: string): Promise<{ success: boolean; agent: { id: string; name: string }; deleted: { servers: number; backups: number } }> {
+  const response = await fetch(`${API_BASE}/api/agents/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json().catch(() => ({}));
+    throw new Error((data as any).error || 'Failed to delete agent');
+  }
+
+  return response.json();
+}
+
+/**
  * Fetch agent configuration
  */
 export interface AgentConfig {

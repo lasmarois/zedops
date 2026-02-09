@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono';
 import { CreateServerRequest, DeleteServerRequest } from '../types/Server';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireRole } from '../middleware/auth';
 import {
   canViewServer,
   canControlServer,
@@ -18,7 +18,7 @@ import {
   getUserRoleAssignments,
   getEffectiveRoleForAgent,
 } from '../lib/permissions';
-import { logServerCreated, logServerOperation, logRconCommand } from '../lib/audit';
+import { logServerCreated, logServerOperation, logRconCommand, logAudit } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -213,6 +213,88 @@ agents.get('/:id', async (c) => {
   } catch (error) {
     console.error('[Agents API] Error querying agent:', error);
     return c.json({ error: 'Failed to query agent' }, 500);
+  }
+});
+
+/**
+ * DELETE /api/agents/:id
+ * Remove an agent and all associated data (servers, backups)
+ *
+ * If the agent is online, force-disconnects via Durable Object first.
+ * D1 CASCADE handles server and backup cleanup.
+ *
+ * Returns: { success: true, agent: { id, name }, deleted: { servers, backups } }
+ * Permission: Admin only
+ */
+agents.delete('/:id', requireRole('admin'), async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+
+  try {
+    // Fetch agent details
+    const agent = await c.env.DB.prepare(
+      'SELECT id, name, status FROM agents WHERE id = ?'
+    ).bind(agentId).first<{ id: string; name: string; status: string }>();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Count associated data before deletion (for response)
+    const serverCount = await c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM servers WHERE agent_id = ? AND (status != 'deleted' OR status IS NULL)"
+    ).bind(agentId).first<{ count: number }>();
+
+    const backupCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM backups WHERE agent_id = ?'
+    ).bind(agentId).first<{ count: number }>();
+
+    // If agent is online, force-disconnect via Durable Object
+    if (agent.status === 'online') {
+      try {
+        const doId = c.env.AGENT_CONNECTION.idFromName(agent.name);
+        const stub = c.env.AGENT_CONNECTION.get(doId);
+        await stub.fetch(new Request('http://internal/force-disconnect', {
+          method: 'POST',
+        }));
+      } catch (error) {
+        console.error('[Agents API] Failed to force-disconnect agent:', error);
+        // Continue with deletion even if force-disconnect fails
+      }
+    }
+
+    // Delete from D1 (CASCADE handles servers and backups)
+    await c.env.DB.prepare('DELETE FROM agents WHERE id = ?').bind(agentId).run();
+
+    // Also clean up any role assignments scoped to this agent
+    await c.env.DB.prepare(
+      "DELETE FROM role_assignments WHERE scope = 'agent' AND resource_id = ?"
+    ).bind(agentId).run();
+
+    // Audit log
+    await logAudit(c.env.DB, c, {
+      userId: user.id,
+      action: 'agent.deleted',
+      resourceType: 'agent',
+      resourceId: agentId,
+      details: {
+        agentName: agent.name,
+        serversDeleted: serverCount?.count || 0,
+        backupsDeleted: backupCount?.count || 0,
+      },
+    });
+
+    return c.json({
+      success: true,
+      agent: { id: agent.id, name: agent.name },
+      deleted: {
+        servers: serverCount?.count || 0,
+        backups: backupCount?.count || 0,
+      },
+    });
+  } catch (error) {
+    console.error('[Agents API] Error deleting agent:', error);
+    return c.json({ error: 'Failed to delete agent' }, 500);
   }
 });
 

@@ -439,6 +439,43 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Force disconnect agent (called during agent removal)
+    if (url.pathname === "/force-disconnect" && request.method === "POST") {
+      const agentSocket = this.getAgentWebSocket();
+      if (agentSocket) {
+        try {
+          agentSocket.close(1000, "Agent removed by admin");
+        } catch (e) {
+          console.error("[AgentConnection] Error closing agent socket:", e);
+        }
+      }
+
+      // Close all UI WebSockets too
+      const uiSockets = this.ctx.getWebSockets("ui");
+      for (const ws of uiSockets) {
+        try {
+          ws.close(1000, "Agent removed");
+        } catch (e) {
+          // Ignore close errors
+        }
+      }
+
+      // Clear all persistent storage
+      await this.ctx.storage.deleteAll();
+
+      this.agentId = null;
+      this.agentName = null;
+      this.isRegistered = false;
+      this.clientIp = null;
+      this.isAgentLogStreaming = false;
+      this.containerSubCache = null;
+      this.agentSubCache = null;
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return new Response("Not Found", { status: 404 });
   }
 

@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-None
+**Goal #17**: Remove Agent from Manager
 
 ---
 
@@ -30,6 +30,7 @@ None
 | 14 | Log Viewer Revamp — xterm.js Terminal-Style Logs | UX | Complete | 2026-02-08 | 2026-02-08 |
 | 15 | Button Polish + Solar Flare Color Fix | UX | Complete | 2026-02-08 | 2026-02-08 |
 | 16 | Mobile-Friendly UI/UX | M16 | Complete | 2026-02-08 | 2026-02-08 |
+| 17 | Remove Agent from Manager | M14 | In Progress | 2026-02-09 | - |
 
 ---
 
