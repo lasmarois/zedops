@@ -13,11 +13,13 @@ import * as jose from 'jose';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength, hashToken } from '../lib/auth';
 import { logInvitationCreated, logInvitationAccepted } from '../lib/audit';
+import { sendEmail, buildInvitationEmailHtml } from '../lib/email';
 
 type Bindings = {
   DB: D1Database;
   TOKEN_SECRET: string;
   ADMIN_PASSWORD: string;
+  RESEND_API_KEY?: string;
 };
 
 const invitations = new Hono<{ Bindings: Bindings }>();
@@ -96,10 +98,29 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
     const baseUrl = new URL(c.req.url).origin;
     const invitationUrl = `${baseUrl}/register?token=${token}`;
 
+    // Send invitation email (best-effort — invite succeeds regardless)
+    let emailSent = false;
+    let emailError: string | undefined;
+
+    if (c.env.RESEND_API_KEY) {
+      const html = buildInvitationEmailHtml(invitationUrl, role);
+      const result = await sendEmail(c.env.RESEND_API_KEY, {
+        to: email,
+        subject: 'You\'ve been invited to ZedOps',
+        html,
+      });
+      emailSent = result.success;
+      if (!result.success) {
+        emailError = result.error;
+      }
+    }
+
     return c.json(
       {
         success: true,
-        message: 'Invitation created successfully',
+        message: emailSent
+          ? 'Invitation created and email sent'
+          : 'Invitation created successfully',
         invitation: {
           id: invitationId,
           email,
@@ -108,6 +129,8 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
           expiresAt,
         },
         invitationUrl,
+        emailSent,
+        emailError,
         instructions: [
           'Share this invitation URL with the user:',
           invitationUrl,

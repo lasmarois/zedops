@@ -1110,6 +1110,8 @@ export interface InviteUserResponse {
     token: string;
     expiresAt: number;
   };
+  emailSent?: boolean;
+  emailError?: string;
   error?: string;
 }
 

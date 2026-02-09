@@ -32,6 +32,7 @@ type Bindings = {
   TOKEN_SECRET: string;
   ADMIN_PASSWORD: string;
   BROADCAST_WEBHOOK_SECRET?: string;
+  RESEND_API_KEY?: string;
 };
 
 // Create Hono app with bindings

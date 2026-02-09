@@ -45,6 +45,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'agent-admin' | 'operator' | 'viewer'>('viewer');
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{ sent: boolean; error?: string } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ userId: string; userEmail: string } | null>(null);
 
@@ -61,9 +62,16 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
       if (result.success && result.invitation) {
         const inviteUrl = `${window.location.origin}/register?token=${result.invitation.token}`;
         setInviteToken(inviteUrl);
+        setEmailStatus(
+          result.emailSent !== undefined
+            ? { sent: result.emailSent, error: result.emailError }
+            : null
+        );
         setMessage({
           type: 'success',
-          text: 'User invited successfully! Share the invitation link below.',
+          text: result.emailSent
+            ? 'Invitation created and email sent!'
+            : 'User invited successfully! Share the invitation link below.',
         });
         setInviteEmail('');
       }
@@ -171,6 +179,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
             onClick={() => {
               setShowInviteForm(!showInviteForm);
               setInviteToken(null);
+              setEmailStatus(null);
               setMessage(null);
             }}
             className="self-start sm:self-auto"
@@ -230,8 +239,22 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
           </form>
 
           {inviteToken && (
-            <div className="mt-4 p-4 bg-[#1a1a1a] rounded-md">
-              <p className="text-gray-300 mb-2">Invitation Link:</p>
+            <div className="mt-4 p-4 bg-[#1a1a1a] rounded-md space-y-3">
+              {emailStatus?.sent && (
+                <div className="flex items-center gap-2 text-green-400 text-sm">
+                  <span>&#10003;</span>
+                  <span>Invitation email sent successfully</span>
+                </div>
+              )}
+              {emailStatus && !emailStatus.sent && emailStatus.error && (
+                <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                  <span>&#9888;</span>
+                  <span>Email could not be sent: {emailStatus.error}</span>
+                </div>
+              )}
+              <p className="text-gray-300 text-sm">
+                {emailStatus?.sent ? 'Or share the link manually:' : 'Invitation Link:'}
+              </p>
               <code className="block p-2 bg-black text-success rounded-md overflow-x-auto text-sm">
                 {inviteToken}
               </code>
@@ -242,7 +265,6 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
                   navigator.clipboard.writeText(inviteToken);
                   setMessage({ type: 'success', text: 'Link copied to clipboard!' });
                 }}
-                className="mt-2"
               >
                 Copy Link
               </Button>

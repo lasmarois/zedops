@@ -7,3 +7,7 @@ TOKEN_SECRET=dev-secret-change-me
 
 # Admin password for API access
 ADMIN_PASSWORD=admin
+
+# Resend API key for sending invitation emails (optional)
+# Get one at https://resend.com — 3,000 emails/month free
+# RESEND_API_KEY=re_xxxxxxxxx
