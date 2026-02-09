@@ -1168,16 +1168,17 @@ agents.post('/:id/servers', async (c) => {
     }
 
     // Check for port conflicts (DB + host-level)
+    // Only check game_port and udp_port — rcon_port is internal to Docker network, never host-bound
     // 1. Database check
     const dbConflict = await c.env.DB.prepare(
-      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ? OR rcon_port = ?)`
+      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ?)`
     )
-      .bind(agentId, gamePort, udpPort, rconPort)
+      .bind(agentId, gamePort, udpPort)
       .first();
 
     if (dbConflict) {
       return c.json({
-        error: `Port conflict in database: One or more ports (${gamePort}, ${udpPort}, ${rconPort}) already allocated to server '${dbConflict.name}'`,
+        error: `Port conflict in database: One or more ports (${gamePort}, ${udpPort}) already allocated to server '${dbConflict.name}'`,
       }, 409);
     }
 
@@ -1188,7 +1189,7 @@ agents.post('/:id/servers', async (c) => {
     const hostCheckResponse = await agentStub.fetch(`http://do/ports/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ports: [gamePort, udpPort, rconPort] }),
+      body: JSON.stringify({ ports: [gamePort, udpPort] }),
     });
 
     if (!hostCheckResponse.ok) {
@@ -1457,13 +1458,14 @@ agents.post('/:id/servers/adopt', async (c) => {
     const dataPath = body.server_data_path || agent.server_data_path;
 
     // Check for port conflicts in DB
+    // Only check game_port and udp_port — rcon_port is internal to Docker network, never host-bound
     const dbConflict = await c.env.DB.prepare(
-      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ? OR rcon_port = ?)`
-    ).bind(agentId, gamePort, udpPort, rconPort).first();
+      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ?)`
+    ).bind(agentId, gamePort, udpPort).first();
 
     if (dbConflict) {
       return c.json({
-        error: `Port conflict: One or more ports (${gamePort}, ${udpPort}, ${rconPort}) already allocated to server '${dbConflict.name}'`,
+        error: `Port conflict: One or more ports (${gamePort}, ${udpPort}) already allocated to server '${dbConflict.name}'`,
       }, 409);
     }
 
