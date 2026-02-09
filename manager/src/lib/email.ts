@@ -59,32 +59,35 @@ export function buildInvitationEmailHtml(invitationUrl: string, role: string): s
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+<body style="margin:0;padding:0;background-color:#080604;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8e0d6;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#080604" style="background-color:#080604;padding:40px 20px;">
     <tr>
-      <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background-color:#1a1a1a;border-radius:12px;border:1px solid #2d2d2d;">
+      <td align="center" bgcolor="#080604">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#121010" style="max-width:520px;background-color:#121010;border-radius:12px;border:1px solid #2a1f17;">
           <!-- Header -->
           <tr>
-            <td style="padding:32px 32px 16px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">ZedOps</h1>
+            <td bgcolor="#121010" style="padding:32px 32px 16px;text-align:center;border-bottom:1px solid #2a1f17;">
+              <h1 style="margin:0;font-size:26px;font-weight:700;color:#f58b07;letter-spacing:-0.5px;">ZedOps</h1>
+              <p style="margin:6px 0 0;font-size:12px;color:#6b5d52;letter-spacing:1px;text-transform:uppercase;">Infrastructure Manager</p>
             </td>
           </tr>
           <!-- Body -->
           <tr>
-            <td style="padding:8px 32px 24px;">
-              <p style="margin:0 0 16px;font-size:16px;color:#e0e0e0;line-height:1.5;">
-                You've been invited to join ZedOps as <strong style="color:#ffffff;">${role}</strong>.
+            <td bgcolor="#121010" style="padding:24px 32px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#e8e0d6;line-height:1.5;">
+                You've been invited to join ZedOps as <strong style="color:#f58b07;">${role}</strong>.
               </p>
-              <p style="margin:0 0 24px;font-size:14px;color:#999999;line-height:1.5;">
+              <p style="margin:0 0 28px;font-size:14px;color:#6b5d52;line-height:1.5;">
                 Click the button below to create your account. This invitation expires in 24 hours.
               </p>
               <!-- Button -->
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${invitationUrl}" style="display:inline-block;padding:12px 32px;background-color:#3b82f6;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+                    <a href="${invitationUrl}" style="display:inline-block;padding:14px 36px;background-color:#f58b07;color:#080604;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">
                       Accept Invitation
                     </a>
                   </td>
@@ -94,19 +97,19 @@ export function buildInvitationEmailHtml(invitationUrl: string, role: string): s
           </tr>
           <!-- URL fallback -->
           <tr>
-            <td style="padding:0 32px 24px;">
-              <p style="margin:0 0 8px;font-size:12px;color:#666666;">
+            <td bgcolor="#121010" style="padding:0 32px 24px;">
+              <p style="margin:0 0 8px;font-size:12px;color:#6b5d52;">
                 Or copy this link:
               </p>
-              <p style="margin:0;font-size:12px;color:#3b82f6;word-break:break-all;">
+              <p style="margin:0;font-size:12px;color:#f58b07;word-break:break-all;">
                 ${invitationUrl}
               </p>
             </td>
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:16px 32px;border-top:1px solid #2d2d2d;">
-              <p style="margin:0;font-size:12px;color:#555555;text-align:center;">
+            <td bgcolor="#121010" style="padding:16px 32px;border-top:1px solid #2a1f17;">
+              <p style="margin:0;font-size:12px;color:#6b5d52;text-align:center;">
                 If you didn't expect this invitation, you can ignore this email.
               </p>
             </td>
