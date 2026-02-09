@@ -447,7 +447,7 @@ function ServerDetailContent() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div className="relative">
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 md:hidden" />
-          <TabsList className="overflow-x-auto scrollbar-hide w-full justify-start md:justify-center">
+          <TabsList className="overflow-x-auto scrollbar-hide w-full justify-start">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="config">Configuration</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
