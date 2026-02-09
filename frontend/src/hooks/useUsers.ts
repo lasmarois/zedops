@@ -7,6 +7,9 @@ import {
   fetchUsers,
   inviteUser,
   deleteUser,
+  fetchInvitations,
+  resendInvitation,
+  cancelInvitation,
   fetchUserRoleAssignments,
   grantRoleAssignment,
   revokeRoleAssignment,
@@ -37,6 +40,50 @@ export function useInviteUser() {
     mutationFn: (request: InviteUserRequest) => inviteUser(request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
+    },
+  });
+}
+
+/**
+ * Hook to fetch all invitations
+ */
+export function useInvitations() {
+  const { isAuthenticated, user } = useUser();
+
+  return useQuery({
+    queryKey: ['invitations'],
+    queryFn: () => fetchInvitations(),
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
+}
+
+/**
+ * Hook to resend an invitation
+ */
+export function useResendInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (invitationId: string) => resendInvitation(invitationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
+    },
+  });
+}
+
+/**
+ * Hook to cancel an invitation
+ */
+export function useCancelInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (invitationId: string) => cancelInvitation(invitationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] });
       queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });

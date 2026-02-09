@@ -1116,6 +1116,73 @@ export interface InviteUserResponse {
 }
 
 
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  created_at: number;
+  expires_at: number;
+  used_at: number | null;
+  invited_by_email: string;
+  status: 'pending' | 'expired' | 'accepted';
+}
+
+export interface InvitationsResponse {
+  invitations: Invitation[];
+}
+
+/**
+ * Fetch all invitations
+ */
+export async function fetchInvitations(): Promise<InvitationsResponse> {
+  const response = await fetch(`${API_BASE}/api/users/invite`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch invitations');
+  }
+
+  return response.json();
+}
+
+/**
+ * Resend an invitation
+ */
+export async function resendInvitation(invitationId: string): Promise<InviteUserResponse> {
+  const response = await fetch(`${API_BASE}/api/users/invite/${invitationId}/resend`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to resend invitation');
+  }
+
+  return response.json();
+}
+
+/**
+ * Cancel an invitation
+ */
+export async function cancelInvitation(invitationId: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/api/users/invite/${invitationId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to cancel invitation');
+  }
+
+  return response.json();
+}
+
 /**
  * Fetch all users
  */

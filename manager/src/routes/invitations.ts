@@ -232,6 +232,116 @@ invitations.delete('/:id', requireAuth(), requireRole('admin'), async (c) => {
 });
 
 // ============================================================================
+// POST /api/users/invitations/:id/resend
+// Resend an invitation with a fresh 24h token (admin only)
+// ============================================================================
+
+invitations.post('/:id/resend', requireAuth(), requireRole('admin'), async (c) => {
+  try {
+    const invitationId = c.req.param('id');
+    const currentUser = c.get('user');
+
+    // Find the invitation
+    const invitation = await c.env.DB.prepare(
+      'SELECT id, email, role, used_at FROM invitations WHERE id = ?'
+    )
+      .bind(invitationId)
+      .first();
+
+    if (!invitation) {
+      return c.json({ error: 'Invitation not found' }, 404);
+    }
+
+    if (invitation.used_at) {
+      return c.json({ error: 'Cannot resend an already-accepted invitation' }, 400);
+    }
+
+    // Check if user already exists (may have registered via another path)
+    const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+      .bind(invitation.email)
+      .first();
+
+    if (existingUser) {
+      return c.json({ error: 'User with this email already exists' }, 409);
+    }
+
+    // Generate a fresh token (24h expiry)
+    const encoder = new TextEncoder();
+    const secretKey = encoder.encode(c.env.TOKEN_SECRET);
+    const email = invitation.email as string;
+    const role = invitation.role as string;
+
+    const token = await new jose.SignJWT({
+      type: 'user_invitation',
+      email,
+      role,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('24h')
+      .sign(secretKey);
+
+    // Update invitation with new token and expiry
+    const tokenHash = await hashToken(token);
+    const now = Date.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000;
+
+    await c.env.DB.prepare(
+      'UPDATE invitations SET token_hash = ?, expires_at = ?, invited_by = ? WHERE id = ?'
+    )
+      .bind(tokenHash, expiresAt, currentUser.id, invitationId)
+      .run();
+
+    // Generate invitation URL and send email
+    const baseUrl = new URL(c.req.url).origin;
+    const invitationUrl = `${baseUrl}/register?token=${token}`;
+
+    let emailSent = false;
+    let emailError: string | undefined;
+
+    if (c.env.RESEND_API_KEY) {
+      const html = buildInvitationEmailHtml(invitationUrl, role);
+      const from = c.env.RESEND_FROM_EMAIL
+        ? `ZedOps <${c.env.RESEND_FROM_EMAIL}>`
+        : undefined;
+      const result = await sendEmail(c.env.RESEND_API_KEY, {
+        to: email,
+        subject: 'You\'ve been invited to ZedOps',
+        html,
+        from,
+      });
+      emailSent = result.success;
+      if (!result.success) {
+        emailError = result.error;
+      }
+    }
+
+    // Log resend
+    await logInvitationCreated(c.env.DB, c, currentUser.id, invitationId, email, role);
+
+    return c.json({
+      success: true,
+      message: emailSent
+        ? 'Invitation resent and email sent'
+        : 'Invitation resent successfully',
+      invitation: {
+        id: invitationId,
+        email,
+        role,
+        token,
+        expiresAt,
+      },
+      invitationUrl,
+      emailSent,
+      emailError,
+    });
+  } catch (error) {
+    console.error('Resend invitation error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
 // GET /api/invite/:token
 // Verify invitation token (public endpoint)
 // ============================================================================

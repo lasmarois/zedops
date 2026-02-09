@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { useUsers, useDeleteUser, useInviteUser } from '../hooks/useUsers';
+import { useUsers, useDeleteUser, useInviteUser, useInvitations, useResendInvitation, useCancelInvitation } from '../hooks/useUsers';
 import { useUser } from '../contexts/UserContext';
 import type { UserAccount } from '../lib/api';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,9 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   const { user: currentUser } = useUser();
   const deleteUserMutation = useDeleteUser();
   const inviteUserMutation = useInviteUser();
+  const { data: invitationsData } = useInvitations();
+  const resendMutation = useResendInvitation();
+  const cancelMutation = useCancelInvitation();
 
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -272,6 +275,80 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
           )}
         </div>
       )}
+
+      {/* Pending Invitations */}
+      {isAdmin && invitationsData && (() => {
+        const active = invitationsData.invitations.filter(
+          (inv) => inv.status === 'pending' || inv.status === 'expired'
+        );
+        if (active.length === 0) return null;
+        return (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold mb-3">Pending Invitations</h2>
+            <div className="space-y-2">
+              {active.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#2d2d2d] rounded-lg"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm truncate">{inv.email}</span>
+                    <Badge variant="secondary" className="shrink-0">{inv.role}</Badge>
+                    {inv.status === 'expired' ? (
+                      <Badge variant="destructive" className="shrink-0">Expired</Badge>
+                    ) : (
+                      <Badge variant="default" className="shrink-0">Pending</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="glass-primary"
+                      disabled={resendMutation.isPending}
+                      onClick={async () => {
+                        try {
+                          const result = await resendMutation.mutateAsync(inv.id);
+                          setMessage({
+                            type: 'success',
+                            text: result.emailSent
+                              ? `Invitation resent to ${inv.email}`
+                              : `Invitation renewed for ${inv.email} (email not configured)`,
+                          });
+                        } catch (err) {
+                          setMessage({
+                            type: 'error',
+                            text: err instanceof Error ? err.message : 'Failed to resend',
+                          });
+                        }
+                      }}
+                    >
+                      Resend
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="glass-destructive"
+                      disabled={cancelMutation.isPending}
+                      onClick={async () => {
+                        try {
+                          await cancelMutation.mutateAsync(inv.id);
+                          setMessage({ type: 'success', text: `Invitation for ${inv.email} cancelled` });
+                        } catch (err) {
+                          setMessage({
+                            type: 'error',
+                            text: err instanceof Error ? err.message : 'Failed to cancel',
+                          });
+                        }
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="mb-4">
         <p className="text-muted-foreground">Total users: {data?.users.length || 0}</p>

@@ -41,8 +41,8 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // Mount API routes
 app.route('/api/auth', auth);
-app.route('/api/users', users);
 app.route('/api/users/invite', invitations);
+app.route('/api/users', users);
 app.route('/api/invite', invitations); // Public invitation endpoints
 // app.route('/api/permissions', permissions); // DEPRECATED - Removed (incompatible with role-based system)
 app.route('/api/role-assignments', roleAssignments); // New role-based system
