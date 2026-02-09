@@ -32,6 +32,7 @@ None
 | 16 | Mobile-Friendly UI/UX | M16 | Complete | 2026-02-08 | 2026-02-08 |
 | 17 | Remove Agent from Manager | M14 | Complete | 2026-02-09 | 2026-02-09 |
 | 18 | Adopt Unmanaged Server as Managed | M14 | Complete | 2026-02-09 | 2026-02-09 |
+| 19 | Survive Worker Deploys Without Agent Death | Infra | Complete | 2026-02-09 | 2026-02-09 |
 
 ---
 
