@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-**Goal #20: Email Invites via Resend** (M15)
+None
 
 ---
 
@@ -33,7 +33,7 @@
 | 17 | Remove Agent from Manager | M14 | Complete | 2026-02-09 | 2026-02-09 |
 | 18 | Adopt Unmanaged Server as Managed | M14 | Complete | 2026-02-09 | 2026-02-09 |
 | 19 | Survive Worker Deploys Without Agent Death | Infra | Complete | 2026-02-09 | 2026-02-09 |
-| 20 | Email Invites via Resend | M15 | In Progress | 2026-02-09 | - |
+| 20 | Email Invites via Resend | M15 | Complete | 2026-02-09 | 2026-02-09 |
 
 ---
 
