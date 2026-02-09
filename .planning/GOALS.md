@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-**Goal #18: Adopt Unmanaged Server as Managed** (M14)
+None
 
 ---
 
@@ -31,7 +31,7 @@
 | 15 | Button Polish + Solar Flare Color Fix | UX | Complete | 2026-02-08 | 2026-02-08 |
 | 16 | Mobile-Friendly UI/UX | M16 | Complete | 2026-02-08 | 2026-02-08 |
 | 17 | Remove Agent from Manager | M14 | Complete | 2026-02-09 | 2026-02-09 |
-| 18 | Adopt Unmanaged Server as Managed | M14 | In Progress | 2026-02-09 | - |
+| 18 | Adopt Unmanaged Server as Managed | M14 | Complete | 2026-02-09 | 2026-02-09 |
 
 ---
 
