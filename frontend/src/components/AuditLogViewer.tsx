@@ -73,7 +73,7 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({
       ...prev,
-      [key]: value || undefined,
+      [key]: value === 'all' ? undefined : value || undefined,
     }));
     setPage(1); // Reset to first page when filters change
   };
@@ -234,14 +234,14 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
                 User
               </Label>
               <Select
-                value={filters.userId || ''}
+                value={filters.userId || 'all'}
                 onValueChange={(val) => handleFilterChange('userId', val)}
               >
                 <SelectTrigger id="userId" className="bg-[#1a1a1a] border-[#444] text-white">
                   <SelectValue placeholder="All Users" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Users</SelectItem>
+                  <SelectItem value="all">All Users</SelectItem>
                   {usersData?.users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.email}
@@ -256,14 +256,14 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
                 Action
               </Label>
               <Select
-                value={filters.action || ''}
+                value={filters.action || 'all'}
                 onValueChange={(val) => handleFilterChange('action', val)}
               >
                 <SelectTrigger id="action" className="bg-[#1a1a1a] border-[#444] text-white">
                   <SelectValue placeholder="All Actions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="all">All Actions</SelectItem>
                   <SelectItem value="user_login">User Login</SelectItem>
                   <SelectItem value="user_logout">User Logout</SelectItem>
                   <SelectItem value="user_created">User Created</SelectItem>
@@ -283,14 +283,14 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
                 Target Type
               </Label>
               <Select
-                value={filters.targetType || ''}
+                value={filters.targetType || 'all'}
                 onValueChange={(val) => handleFilterChange('targetType', val)}
               >
                 <SelectTrigger id="targetType" className="bg-[#1a1a1a] border-[#444] text-white">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="user">User</SelectItem>
                   <SelectItem value="server">Server</SelectItem>
                   <SelectItem value="agent">Agent</SelectItem>
