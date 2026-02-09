@@ -49,6 +49,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ServerCard } from '@/components/ServerCard';
 import { ServerCardLayoutToggle } from '@/components/ServerCardLayoutToggle';
 import { useServerCardLayout } from '@/contexts/ServerCardLayoutContext';
+import { AdoptServerDialog } from '@/components/AdoptServerDialog';
 
 interface AgentServerListProps {
   agentId: string;
@@ -93,6 +94,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   const [confirmCleanup, setConfirmCleanup] = useState<number | null>(null); // Number of failed servers to clean
   const [confirmRecover, setConfirmRecover] = useState<{ serverId: string; serverName: string } | null>(null); // Missing server without data
   const [rconServer, setRconServer] = useState<Server | null>(null);
+  const [adoptContainer, setAdoptContainer] = useState<{ id: string; name: string } | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
   const lastSyncRef = useRef<{ [serverId: string]: number }>({});
@@ -961,6 +963,13 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
                                     </>
                                   )}
                                 </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setAdoptContainer({ id: container.id, name: item.name })}
+                                >
+                                  Adopt
+                                </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button size="sm" variant="ghost">
@@ -1229,6 +1238,26 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
           />
         );
       })()}
+
+      {adoptContainer && (
+        <AdoptServerDialog
+          agentId={agentId}
+          containerId={adoptContainer.id}
+          containerName={adoptContainer.name}
+          open={!!adoptContainer}
+          onOpenChange={(open) => {
+            if (!open) setAdoptContainer(null);
+          }}
+          onSuccess={() => {
+            setOperationStatus({
+              containerId: adoptContainer.id,
+              message: `Server "${adoptContainer.name}" adopted successfully`,
+              type: 'success',
+            });
+            setAdoptContainer(null);
+          }}
+        />
+      )}
     </div>
   );
 }

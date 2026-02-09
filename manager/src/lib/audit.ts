@@ -42,6 +42,7 @@ export type AuditAction =
   | 'server.purged'
   | 'server.restored'
   | 'server.rebuilt'
+  | 'server.adopted'
   // Agent operations
   | 'agent.registered'
   | 'agent.deleted'

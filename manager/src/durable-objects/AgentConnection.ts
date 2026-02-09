@@ -323,6 +323,21 @@ export class AgentConnection extends DurableObject {
       return this.handleNotifyUpdate(request);
     }
 
+    // Container inspect endpoint (for adopt flow)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/inspect") && request.method === "GET") {
+      const parts = url.pathname.split("/");
+      // /servers/{containerId}/inspect
+      const containerId = parts[2];
+      if (containerId) {
+        return this.handleServerInspectRequest(containerId);
+      }
+    }
+
+    // Server adopt endpoint
+    if (url.pathname === "/servers/adopt" && request.method === "POST") {
+      return this.handleServerAdoptRequest(request);
+    }
+
     // Server create endpoint
     if (url.pathname === "/servers" && request.method === "POST") {
       return this.handleServerCreateRequest(request);
@@ -2499,6 +2514,114 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Get data path failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  private async handleServerInspectRequest(containerId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server inspect timeout"));
+      }, 30000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "server.inspect",
+      data: { containerId },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server inspect failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  private async handleServerAdoptRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { serverId, name, containerId, registry, imageTag, config, gamePort, udpPort, rconPort, dataPath } = body;
+    if (!serverId || !name || !containerId || !registry || !imageTag || !gamePort || !udpPort || !rconPort || !dataPath) {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const inbox = `_INBOX.${crypto.randomUUID()}`;
+
+    const replyPromise = new Promise<Message>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingReplies.delete(inbox);
+        reject(new Error("Server adopt timeout"));
+      }, 60000);
+
+      this.pendingReplies.set(inbox, (msg: Message) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    this.send({
+      subject: "server.adopt",
+      data: { serverId, name, containerId, registry, imageTag, config: config || {}, gamePort, udpPort, rconPort, dataPath },
+      reply: inbox,
+    });
+
+    try {
+      const reply = await replyPromise;
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Server adopt failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },

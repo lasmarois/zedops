@@ -915,6 +915,329 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return err
 }
 
+// ==================== Server Inspect ====================
+
+// ServerInspectRequest represents a server.inspect message payload
+type ServerInspectRequest struct {
+	ContainerID string `json:"containerId"`
+}
+
+// ServerInspectResponse represents the response to a server.inspect message
+type ServerInspectResponse struct {
+	Success       bool              `json:"success"`
+	ContainerID   string            `json:"containerId,omitempty"`
+	ContainerName string            `json:"containerName,omitempty"`
+	Name          string            `json:"name,omitempty"`     // Extracted server name (sans steam-zomboid- prefix)
+	Image         string            `json:"image,omitempty"`    // Full image reference
+	Registry      string            `json:"registry,omitempty"` // Registry portion (before :tag)
+	ImageTag      string            `json:"imageTag,omitempty"` // Tag portion
+	Config        map[string]string `json:"config,omitempty"`   // ENV variables as key-value map
+	GamePort      int               `json:"gamePort,omitempty"`
+	UDPPort       int               `json:"udpPort,omitempty"`
+	RCONPort      int               `json:"rconPort,omitempty"`
+	Mounts        []MountInfo       `json:"mounts,omitempty"`
+	Networks      []string          `json:"networks,omitempty"`
+	State         string            `json:"state,omitempty"` // running, exited, etc.
+	Labels        map[string]string `json:"labels,omitempty"`
+	Error         string            `json:"error,omitempty"`
+}
+
+// MountInfo represents a container mount
+type MountInfo struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+}
+
+// InspectContainer inspects a container and extracts config for adoption
+func (dc *DockerClient) InspectContainer(ctx context.Context, containerID string) (*ServerInspectResponse, error) {
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Extract container name (strip leading /)
+	containerName := strings.TrimPrefix(inspect.Name, "/")
+
+	// Extract server name: strip "steam-zomboid-" prefix if present
+	name := containerName
+	if strings.HasPrefix(name, "steam-zomboid-") {
+		name = strings.TrimPrefix(name, "steam-zomboid-")
+	}
+
+	// Extract image — split into registry and tag
+	fullImage := inspect.Config.Image
+	registry := fullImage
+	imageTag := "latest"
+	if idx := strings.LastIndex(fullImage, ":"); idx != -1 {
+		registry = fullImage[:idx]
+		imageTag = fullImage[idx+1:]
+	}
+
+	// Parse env vars into map
+	config := make(map[string]string)
+	for _, envStr := range inspect.Config.Env {
+		parts := strings.SplitN(envStr, "=", 2)
+		if len(parts) == 2 {
+			config[parts[0]] = parts[1]
+		}
+	}
+
+	// Extract ports from host config port bindings
+	gamePort := 0
+	udpPort := 0
+	rconPort := 27015 // default
+
+	// Look at UDP port bindings for game/UDP ports
+	if inspect.HostConfig != nil {
+		for portProto, bindings := range inspect.HostConfig.PortBindings {
+			if len(bindings) == 0 {
+				continue
+			}
+			port := 0
+			fmt.Sscanf(string(portProto), "%d/udp", &port)
+			if port == 0 {
+				continue
+			}
+			hostPort := 0
+			fmt.Sscanf(bindings[0].HostPort, "%d", &hostPort)
+			if hostPort == 0 {
+				hostPort = port
+			}
+
+			if gamePort == 0 {
+				gamePort = hostPort
+			} else if udpPort == 0 {
+				udpPort = hostPort
+			}
+		}
+	}
+
+	// Sort ports so gamePort < udpPort
+	if gamePort > 0 && udpPort > 0 && gamePort > udpPort {
+		gamePort, udpPort = udpPort, gamePort
+	}
+
+	// RCON port from env var
+	if rconStr, ok := config["RCON_PORT"]; ok {
+		fmt.Sscanf(rconStr, "%d", &rconPort)
+	}
+
+	// Extract mounts
+	var mounts []MountInfo
+	if inspect.HostConfig != nil {
+		for _, m := range inspect.HostConfig.Mounts {
+			mounts = append(mounts, MountInfo{
+				Source: m.Source,
+				Target: m.Target,
+				Type:   string(m.Type),
+			})
+		}
+	}
+
+	// Extract networks
+	var networks []string
+	if inspect.NetworkSettings != nil {
+		for netName := range inspect.NetworkSettings.Networks {
+			networks = append(networks, netName)
+		}
+	}
+
+	// State
+	state := ""
+	if inspect.State != nil {
+		state = inspect.State.Status
+	}
+
+	return &ServerInspectResponse{
+		Success:       true,
+		ContainerID:   inspect.ID,
+		ContainerName: containerName,
+		Name:          name,
+		Image:         fullImage,
+		Registry:      registry,
+		ImageTag:      imageTag,
+		Config:        config,
+		GamePort:      gamePort,
+		UDPPort:       udpPort,
+		RCONPort:      rconPort,
+		Mounts:        mounts,
+		Networks:      networks,
+		State:         state,
+		Labels:        inspect.Config.Labels,
+	}, nil
+}
+
+// ==================== Server Adopt ====================
+
+// ServerAdoptRequest represents a server.adopt message payload
+type ServerAdoptRequest struct {
+	ContainerID string            `json:"containerId"`
+	ServerID    string            `json:"serverId"`
+	Name        string            `json:"name"`
+	Registry    string            `json:"registry"`
+	ImageTag    string            `json:"imageTag"`
+	Config      map[string]string `json:"config"`
+	GamePort    int               `json:"gamePort"`
+	UDPPort     int               `json:"udpPort"`
+	RCONPort    int               `json:"rconPort"`
+	DataPath    string            `json:"dataPath"`
+}
+
+// AdoptServer adopts an unmanaged container into ZedOps management
+// It stops the old container, removes it, and creates a new one with proper ZedOps labels
+// while preserving existing data (mounts)
+func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest) (string, error) {
+	log.Printf("Adopting container %s as server '%s'", req.ContainerID, req.Name)
+
+	// 1. Inspect existing container to capture state and mounts
+	inspect, err := dc.cli.ContainerInspect(ctx, req.ContainerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	wasRunning := inspect.State != nil && inspect.State.Running
+
+	// 2. Determine mount sources — reuse existing if they match expected targets
+	binSource := ""
+	dataSource := ""
+
+	if inspect.HostConfig != nil {
+		for _, m := range inspect.HostConfig.Mounts {
+			switch m.Target {
+			case "/home/steam/zomboid-dedicated":
+				binSource = m.Source
+			case "/home/steam/Zomboid":
+				dataSource = m.Source
+			}
+		}
+	}
+
+	// If no matching mounts found, create new directories
+	if binSource == "" || dataSource == "" {
+		basePath := filepath.Join(req.DataPath, req.Name)
+		if binSource == "" {
+			binSource = filepath.Join(basePath, "bin")
+			if err := os.MkdirAll(binSource, 0755); err != nil {
+				return "", fmt.Errorf("failed to create bin directory: %w", err)
+			}
+		}
+		if dataSource == "" {
+			dataSource = filepath.Join(basePath, "data")
+			if err := os.MkdirAll(dataSource, 0755); err != nil {
+				return "", fmt.Errorf("failed to create data directory: %w", err)
+			}
+		}
+	}
+
+	log.Printf("Mount sources — bin: %s, data: %s", binSource, dataSource)
+
+	// 3. If running, graceful save then stop
+	if wasRunning {
+		dc.GracefulSave(ctx, req.ContainerID)
+		timeout := GracefulStopTimeout
+		if err := dc.cli.ContainerStop(ctx, req.ContainerID, container.StopOptions{Timeout: &timeout}); err != nil {
+			log.Printf("Warning: failed to stop container: %v", err)
+		}
+	}
+
+	// 4. Remove old container
+	log.Printf("Removing old container: %s", req.ContainerID)
+	if err := dc.cli.ContainerRemove(ctx, req.ContainerID, container.RemoveOptions{
+		Force:         true,
+		RemoveVolumes: false,
+	}); err != nil {
+		return "", fmt.Errorf("failed to remove old container: %w", err)
+	}
+
+	// 5. Build image reference
+	var fullImage string
+	if strings.Contains(req.ImageTag, ":") {
+		fullImage = req.ImageTag
+	} else {
+		fullImage = fmt.Sprintf("%s:%s", req.Registry, req.ImageTag)
+	}
+
+	// 6. Build env array
+	env := make([]string, 0, len(req.Config))
+	for key, value := range req.Config {
+		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	// 7. Port bindings
+	portBindings := nat.PortMap{
+		nat.Port(fmt.Sprintf("%d/udp", req.GamePort)): []nat.PortBinding{
+			{HostPort: fmt.Sprintf("%d", req.GamePort)},
+		},
+		nat.Port(fmt.Sprintf("%d/udp", req.UDPPort)): []nat.PortBinding{
+			{HostPort: fmt.Sprintf("%d", req.UDPPort)},
+		},
+	}
+	exposedPorts := nat.PortSet{
+		nat.Port(fmt.Sprintf("%d/udp", req.GamePort)): struct{}{},
+		nat.Port(fmt.Sprintf("%d/udp", req.UDPPort)):  struct{}{},
+	}
+
+	// 8. Create new container with ZedOps labels
+	containerName := fmt.Sprintf("steam-zomboid-%s", req.Name)
+	containerConfig := &container.Config{
+		Image: fullImage,
+		Env:   env,
+		Labels: map[string]string{
+			"zedops.managed":     "true",
+			"zedops.server.id":   req.ServerID,
+			"zedops.server.name": req.Name,
+			"zedops.type":        "project-zomboid",
+			"pz.rcon.enabled":    "true",
+		},
+		ExposedPorts: exposedPorts,
+	}
+
+	hostConfig := &container.HostConfig{
+		Mounts: []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: binSource,
+				Target: "/home/steam/zomboid-dedicated",
+			},
+			{
+				Type:   mount.TypeBind,
+				Source: dataSource,
+				Target: "/home/steam/Zomboid",
+			},
+		},
+		PortBindings: portBindings,
+		RestartPolicy: container.RestartPolicy{
+			Name: "unless-stopped",
+		},
+	}
+
+	networkConfig := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			"zomboid-servers": {},
+			"zomboid-backend": {},
+		},
+	}
+
+	log.Printf("Creating adopted container: %s (image: %s)", containerName, fullImage)
+	resp, err := dc.cli.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, containerName)
+	if err != nil {
+		return "", fmt.Errorf("failed to create adopted container: %w", err)
+	}
+
+	newContainerID := resp.ID
+	log.Printf("Adopted container created: %s (ID: %s)", containerName, newContainerID)
+
+	// 9. Start container
+	if err := dc.cli.ContainerStart(ctx, newContainerID, container.StartOptions{}); err != nil {
+		dc.cli.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
+		return "", fmt.Errorf("failed to start adopted container: %w", err)
+	}
+
+	log.Printf("Adopted container started: %s", newContainerID)
+	return newContainerID, nil
+}
+
 // ==================== Volume Sizes ====================
 
 // ServerVolumeSizesRequest represents a server.volumesizes message payload

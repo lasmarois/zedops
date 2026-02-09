@@ -391,6 +391,10 @@ func (a *Agent) receiveMessages() {
 			a.handleServerVolumeSizes(msg)
 		case "server.movedata":
 			a.handleServerMoveData(msg)
+		case "server.inspect":
+			a.handleServerInspect(msg)
+		case "server.adopt":
+			a.handleServerAdopt(msg)
 		case "port.check":
 			a.handlePortCheck(msg)
 		case "rcon.connect":
@@ -1811,5 +1815,115 @@ func (a *Agent) cleanupOnDisconnect() {
 		log.Println("Agent logs: Cleaning up stream on disconnect")
 		a.logCapture.Unsubscribe(a.agentLogChan)
 		a.agentLogChan = nil
+	}
+}
+
+// handleServerInspect handles server.inspect messages
+func (a *Agent) handleServerInspect(msg Message) {
+	ctx := context.Background()
+
+	if a.docker == nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerInspectResponse{Success: false, Error: "Docker client not initialized"},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	data, _ := json.Marshal(msg.Data)
+	var req ServerInspectRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerInspectResponse{Success: false, Error: "Invalid request format: " + err.Error()},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	log.Printf("Inspecting container: %s", req.ContainerID)
+
+	resp, err := a.docker.InspectContainer(ctx, req.ContainerID)
+	if err != nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerInspectResponse{Success: false, Error: err.Error()},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	if msg.Reply != "" {
+		a.sendMessage(Message{
+			Subject:   msg.Reply,
+			Data:      resp,
+			Timestamp: time.Now().Unix(),
+		})
+	}
+}
+
+// handleServerAdopt handles server.adopt messages
+func (a *Agent) handleServerAdopt(msg Message) {
+	ctx := context.Background()
+
+	if a.docker == nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerOperationResponse{Success: false, Operation: "adopt", Error: "Docker client not initialized", ErrorCode: "DOCKER_NOT_AVAILABLE"},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	data, _ := json.Marshal(msg.Data)
+	var req ServerAdoptRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerOperationResponse{Success: false, Operation: "adopt", Error: "Invalid request format: " + err.Error(), ErrorCode: "INVALID_REQUEST"},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	log.Printf("Adopting container %s as server '%s'", req.ContainerID, req.Name)
+
+	newContainerID, err := a.docker.AdoptServer(ctx, req)
+	if err != nil {
+		log.Printf("Failed to adopt container %s: %v", req.ContainerID, err)
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerOperationResponse{Success: false, Operation: "adopt", Error: err.Error(), ErrorCode: "ADOPT_FAILED"},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	log.Printf("Container adopted successfully: %s -> %s", req.ContainerID, newContainerID)
+
+	if msg.Reply != "" {
+		a.sendMessage(Message{
+			Subject: msg.Reply,
+			Data: ServerOperationResponse{
+				Success:     true,
+				ServerID:    req.ServerID,
+				ContainerID: newContainerID,
+				Operation:   "adopt",
+			},
+			Timestamp: time.Now().Unix(),
+		})
 	}
 }

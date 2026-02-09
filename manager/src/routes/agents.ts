@@ -1329,6 +1329,253 @@ agents.post('/:id/servers', async (c) => {
 });
 
 /**
+ * GET /api/agents/:id/containers/:containerId/inspect
+ * Inspect an unmanaged container for adoption
+ *
+ * Returns: Extracted container config (name, image, ports, env, mounts)
+ */
+agents.get('/:id/containers/:containerId/inspect', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const containerId = c.req.param('containerId');
+
+  const hasPermission = await canCreateServer(c.env.DB, user.id, user.role, agentId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - requires admin or agent-admin role for this agent' }, 403);
+  }
+
+  try {
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const response = await stub.fetch(`http://do/servers/${containerId}/inspect`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const errorData: any = await response.json();
+      return c.json({ error: errorData.error || 'Failed to inspect container' }, response.status);
+    }
+
+    const result = await response.json();
+    return c.json(result);
+  } catch (error) {
+    console.error('[Agents API] Error inspecting container:', error);
+    return c.json({ error: 'Failed to inspect container' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/servers/adopt
+ * Adopt an unmanaged container into ZedOps management
+ *
+ * Body: { containerId, name, imageTag?, config?, gamePort?, udpPort?, rconPort?, server_data_path? }
+ * Returns: Adopted server object
+ */
+agents.post('/:id/servers/adopt', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+
+  const hasPermission = await canCreateServer(c.env.DB, user.id, user.role, agentId);
+  if (!hasPermission) {
+    return c.json({ error: 'Forbidden - requires admin or agent-admin role for this agent' }, 403);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch (error) {
+    return c.json({ error: 'Invalid request body' }, 400);
+  }
+
+  if (!body.containerId) {
+    return c.json({ error: 'Missing required field: containerId' }, 400);
+  }
+
+  if (!body.name) {
+    return c.json({ error: 'Missing required field: name' }, 400);
+  }
+
+  // Validate server name
+  const nameRegex = /^[a-z][a-z0-9-]{2,31}$/;
+  if (!nameRegex.test(body.name)) {
+    return c.json({
+      error: 'Invalid server name. Must be 3-32 characters, start with letter, lowercase alphanumeric and hyphens only.',
+    }, 400);
+  }
+
+  try {
+    // Get agent
+    const agent = await c.env.DB.prepare(
+      `SELECT id, name, steam_zomboid_registry, server_data_path FROM agents WHERE id = ?`
+    ).bind(agentId).first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    // Check name uniqueness
+    const existingName = await c.env.DB.prepare(
+      `SELECT id FROM servers WHERE agent_id = ? AND name = ?`
+    ).bind(agentId, body.name).first();
+
+    if (existingName) {
+      return c.json({ error: `Server with name '${body.name}' already exists on this agent` }, 409);
+    }
+
+    // Get DO stub
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    // Inspect container to get current config
+    const inspectResponse = await stub.fetch(`http://do/servers/${body.containerId}/inspect`, {
+      method: 'GET',
+    });
+
+    if (!inspectResponse.ok) {
+      const errorData: any = await inspectResponse.json();
+      return c.json({ error: errorData.error || 'Failed to inspect container for adoption' }, inspectResponse.status);
+    }
+
+    const inspectResult: any = await inspectResponse.json();
+
+    // Merge: user overrides take precedence over extracted values
+    const registry = body.image || inspectResult.registry || agent.steam_zomboid_registry;
+    const imageTag = body.imageTag || inspectResult.imageTag || 'latest';
+    const gamePort = body.gamePort || inspectResult.gamePort || 16261;
+    const udpPort = body.udpPort || inspectResult.udpPort || (gamePort + 1);
+    const rconPort = body.rconPort || inspectResult.rconPort || 27015;
+    const config = body.config || inspectResult.config || {};
+    const dataPath = body.server_data_path || agent.server_data_path;
+
+    // Check for port conflicts in DB
+    const dbConflict = await c.env.DB.prepare(
+      `SELECT id, name FROM servers WHERE agent_id = ? AND (game_port = ? OR udp_port = ? OR rcon_port = ?)`
+    ).bind(agentId, gamePort, udpPort, rconPort).first();
+
+    if (dbConflict) {
+      return c.json({
+        error: `Port conflict: One or more ports (${gamePort}, ${udpPort}, ${rconPort}) already allocated to server '${dbConflict.name}'`,
+      }, 409);
+    }
+
+    // Generate server ID
+    const serverId = crypto.randomUUID();
+    const now = Date.now();
+
+    // Insert D1 record with status='adopting'
+    await c.env.DB.prepare(
+      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'adopting', ?, ?, ?)`
+    ).bind(
+      serverId,
+      agentId,
+      body.name,
+      JSON.stringify(config),
+      body.image || null,
+      imageTag,
+      gamePort,
+      udpPort,
+      rconPort,
+      now,
+      now,
+      body.server_data_path || null
+    ).run();
+
+    // Add port env vars to config
+    const configWithPorts = {
+      ...config,
+      RCON_PORT: rconPort.toString(),
+      SERVER_DEFAULT_PORT: gamePort.toString(),
+      SERVER_UDP_PORT: udpPort.toString(),
+    };
+
+    // Send adopt request to DO
+    const adoptResponse = await stub.fetch(`http://do/servers/adopt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serverId,
+        name: body.name,
+        containerId: body.containerId,
+        registry,
+        imageTag,
+        config: configWithPorts,
+        gamePort,
+        udpPort,
+        rconPort,
+        dataPath,
+      }),
+    });
+
+    if (!adoptResponse.ok) {
+      // Update status to failed
+      await c.env.DB.prepare(
+        `UPDATE servers SET status = 'failed', updated_at = ? WHERE id = ?`
+      ).bind(Date.now(), serverId).run();
+
+      const errorData: any = await adoptResponse.json();
+      return c.json({ error: errorData.error || 'Failed to adopt server on agent' }, adoptResponse.status);
+    }
+
+    const result: any = await adoptResponse.json();
+
+    // Update D1 with new container ID and status
+    await c.env.DB.prepare(
+      `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
+    ).bind(result.containerId, Date.now(), serverId).run();
+
+    // Return created server
+    const server = await c.env.DB.prepare(
+      `SELECT * FROM servers WHERE id = ?`
+    ).bind(serverId).first();
+
+    // Audit log
+    await logAudit(c.env.DB, c, {
+      userId: user.id,
+      action: 'server.adopted',
+      resourceType: 'server',
+      resourceId: serverId,
+      details: {
+        serverName: body.name,
+        agentId,
+        containerId: body.containerId,
+        newContainerId: result.containerId,
+      },
+    });
+
+    return c.json({
+      success: true,
+      server: {
+        id: server!.id,
+        agent_id: server!.agent_id,
+        name: server!.name,
+        container_id: server!.container_id,
+        config: server!.config,
+        image_tag: server!.image_tag,
+        game_port: server!.game_port,
+        udp_port: server!.udp_port,
+        rcon_port: server!.rcon_port,
+        status: server!.status,
+        created_at: server!.created_at,
+        updated_at: server!.updated_at,
+      },
+    }, 201);
+  } catch (error) {
+    console.error('[Agents API] Error adopting server:', error);
+    return c.json({ error: 'Failed to adopt server' }, 500);
+  }
+});
+
+/**
  * GET /api/agents/:id/servers
  * List all servers for a specific agent
  *

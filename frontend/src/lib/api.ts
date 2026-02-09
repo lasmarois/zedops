@@ -512,6 +512,65 @@ export async function createServer(
 }
 
 /**
+ * Inspect an unmanaged container for adoption
+ */
+export async function inspectContainer(
+  agentId: string,
+  containerId: string
+): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/containers/${containerId}/inspect`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to inspect container');
+  }
+
+  return response.json();
+}
+
+/**
+ * Adopt an unmanaged container into ZedOps management
+ */
+export async function adoptServer(
+  agentId: string,
+  request: {
+    containerId: string;
+    name: string;
+    imageTag?: string;
+    image?: string;
+    config?: Record<string, string>;
+    gamePort?: number;
+    udpPort?: number;
+    rconPort?: number;
+    server_data_path?: string;
+  }
+): Promise<CreateServerResponse> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/servers/adopt`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    if (response.status === 409) {
+      const data = await response.json();
+      throw new Error(data.error || 'Conflict');
+    }
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to adopt server');
+  }
+
+  return response.json();
+}
+
+/**
  * Delete a server
  */
 export async function deleteServer(
