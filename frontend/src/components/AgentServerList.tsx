@@ -712,7 +712,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
   if (isLoading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="flex justify-between items-center mb-8">
           <div>
             <Button variant="secondary" onClick={onBack} className="mb-4">
@@ -758,7 +758,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Button variant="secondary" onClick={onBack} className="mb-8">
           ← Back to Agents
         </Button>
@@ -772,15 +772,15 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6 md:mb-8">
         <div>
           <Button variant="secondary" onClick={onBack} className="mb-4">
             ← Back to Agents
           </Button>
-          <h1 className="text-3xl font-bold">Zomboid Servers on {agentName}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Zomboid Servers on {agentName}</h1>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
           <ServerCardLayoutToggle />
           <Button variant="glass-primary" onClick={() => setShowServerForm(true)} size="lg">
             + Create Server
@@ -794,7 +794,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
             >
               {cleanupFailedServersMutation.isPending
                 ? 'Cleaning...'
-                : `🧹 Clean Up Failed Servers (${serversData.servers.filter(s => s.status === 'failed').length})`}
+                : `Clean Up Failed (${serversData.servers.filter(s => s.status === 'failed').length})`}
             </Button>
           )}
         </div>

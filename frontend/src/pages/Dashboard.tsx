@@ -115,17 +115,17 @@ export function Dashboard() {
   })
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <Breadcrumb items={[{ label: "Dashboard" }]} />
-          <h1 className="text-3xl font-bold mt-4">Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-bold mt-4">Dashboard</h1>
           <p className="text-muted-foreground mt-2">
             Infrastructure overview and recent activity
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+        <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="self-start">
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>

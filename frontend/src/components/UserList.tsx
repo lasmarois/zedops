@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
@@ -100,7 +101,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
 
   if (isLoading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-[80px]" />
@@ -142,7 +143,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>Error: {error.message}</AlertDescription>
         </Alert>
@@ -156,13 +157,13 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 md:mb-8">
         <div className="flex items-center gap-4">
           <Button variant="secondary" onClick={onBack}>
             ← Back
           </Button>
-          <h1 className="text-3xl font-bold">User Management</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">User Management</h1>
         </div>
         {isAdmin && (
           <Button
@@ -172,6 +173,7 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
               setInviteToken(null);
               setMessage(null);
             }}
+            className="self-start sm:self-auto"
           >
             {showInviteForm ? 'Cancel' : '+ Invite User'}
           </Button>
@@ -258,7 +260,9 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
           No users found.
         </div>
       ) : (
-        <div className="border rounded-md">
+        <>
+        {/* Desktop: table */}
+        <div className="hidden md:block border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
@@ -317,6 +321,56 @@ export function UserList({ onBack, onManagePermissions }: UserListProps) {
             </TableBody>
           </Table>
         </div>
+
+        {/* Mobile: cards */}
+        <div className="md:hidden space-y-3">
+          {data?.users.map((user) => (
+            <Card key={user.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="font-medium truncate flex-1 mr-2">
+                    {user.email}
+                    {user.id === currentUser?.id && (
+                      <Badge variant="default" className="ml-2">You</Badge>
+                    )}
+                  </div>
+                  {user.role === 'admin' ? (
+                    <Badge variant="destructive">Admin</Badge>
+                  ) : (
+                    <Badge variant="secondary">Member</Badge>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground mb-3">
+                  {formatDate(user.created_at)}
+                </div>
+                {isAdmin && (
+                  <div className="flex gap-2 pt-3 border-t border-border">
+                    <Button
+                      size="sm"
+                      variant="glass-info"
+                      className="flex-1 min-h-[44px]"
+                      onClick={() => onManagePermissions(user)}
+                    >
+                      Permissions
+                    </Button>
+                    {user.id !== currentUser?.id && (
+                      <Button
+                        size="sm"
+                        variant="glass-destructive"
+                        className="flex-1 min-h-[44px]"
+                        onClick={() => handleDeleteUser(user.id, user.email)}
+                        disabled={deleteUserMutation.isPending && deleteUserMutation.variables === user.id}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        </>
       )}
 
       {/* Delete User Confirmation Dialog */}

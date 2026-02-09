@@ -82,13 +82,14 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={handleCancel}>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel onClick={handleCancel} className="w-full sm:w-auto">
             {cancelText}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
             className={cn(
+              "w-full sm:w-auto",
               variant === "destructive" &&
                 buttonVariants({ variant: "destructive" })
             )}

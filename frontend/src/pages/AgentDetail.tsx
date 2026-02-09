@@ -144,7 +144,7 @@ export function AgentDetail() {
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -154,7 +154,7 @@ export function AgentDetail() {
 
   if (!agent) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Breadcrumb items={[
           { label: "Agents", href: "/agents" },
           { label: "Not Found" }
@@ -178,7 +178,7 @@ export function AgentDetail() {
   const disks = metrics?.disks || []
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Breadcrumb */}
       <Breadcrumb items={[
         { label: "Agents", href: "/agents" },
@@ -186,9 +186,9 @@ export function AgentDetail() {
       ]} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold">{agent.name}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold">{agent.name}</h1>
           <StatusBadge
             variant={agent.status === 'online' ? 'success' : 'error'}
             icon={agent.status === 'online' ? 'pulse' : 'cross'}
@@ -206,6 +206,7 @@ export function AgentDetail() {
           variant="glass-destructive"
           disabled
           title="Not yet implemented - Planned for future release"
+          className="self-start"
         >
           Disconnect
         </Button>
@@ -213,12 +214,15 @@ export function AgentDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-6" onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="servers">Servers</TabsTrigger>
-          <TabsTrigger value="config">Configuration</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-        </TabsList>
+        <div className="relative">
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 md:hidden" />
+          <TabsList className="overflow-x-auto scrollbar-hide w-full justify-start md:justify-center">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="servers">Servers</TabsTrigger>
+            <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="logs">Logs</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
@@ -281,32 +285,56 @@ export function AgentDetail() {
               </CardHeader>
               <CardContent className="p-0">
                 {agent.status === 'online' && disks.length > 0 ? (
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left text-xs font-medium text-muted-foreground p-3">Mount</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground p-3">Used</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground p-3">Total</th>
-                        <th className="text-left text-xs font-medium text-muted-foreground p-3 w-48">Usage</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground p-3">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {disks.map((disk, index) => (
-                        <tr key={index} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="p-3 text-sm font-medium truncate max-w-[200px]" title={disk.path}>{disk.label || disk.path}</td>
-                          <td className="p-3 text-sm text-right text-muted-foreground">{disk.usedGB} GB</td>
-                          <td className="p-3 text-sm text-right text-muted-foreground">{disk.totalGB} GB</td>
-                          <td className="p-3">
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div className="h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(disk.percent, 100)}%`, backgroundColor: getMetricColor(disk.percent) }} />
-                            </div>
-                          </td>
-                          <td className="p-3 text-sm text-right font-semibold" style={{ color: getMetricColor(disk.percent) }}>{disk.percent.toFixed(0)}%</td>
-                        </tr>
+                  <>
+                    {/* Desktop: table */}
+                    <div className="hidden md:block">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left text-xs font-medium text-muted-foreground p-3">Mount</th>
+                            <th className="text-right text-xs font-medium text-muted-foreground p-3">Used</th>
+                            <th className="text-right text-xs font-medium text-muted-foreground p-3">Total</th>
+                            <th className="text-left text-xs font-medium text-muted-foreground p-3 w-48">Usage</th>
+                            <th className="text-right text-xs font-medium text-muted-foreground p-3">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {disks.map((disk, index) => (
+                            <tr key={index} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="p-3 text-sm font-medium truncate max-w-[200px]" title={disk.path}>{disk.label || disk.path}</td>
+                              <td className="p-3 text-sm text-right text-muted-foreground">{disk.usedGB} GB</td>
+                              <td className="p-3 text-sm text-right text-muted-foreground">{disk.totalGB} GB</td>
+                              <td className="p-3">
+                                <div className="w-full bg-muted rounded-full h-2">
+                                  <div className="h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(disk.percent, 100)}%`, backgroundColor: getMetricColor(disk.percent) }} />
+                                </div>
+                              </td>
+                              <td className="p-3 text-sm text-right font-semibold" style={{ color: getMetricColor(disk.percent) }}>{disk.percent.toFixed(0)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile: cards */}
+                    <div className="md:hidden space-y-3 p-3">
+                      {disks.map((disk, i) => (
+                        <div key={i} className="p-3 bg-muted/30 rounded-lg space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium truncate flex-1 mr-2 text-sm">{disk.label || disk.path}</span>
+                            <span className="text-sm font-semibold" style={{ color: getMetricColor(disk.percent) }}>{disk.percent.toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(disk.percent, 100)}%`, backgroundColor: getMetricColor(disk.percent) }} />
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>{disk.usedGB} GB used</span>
+                            <span>{disk.totalGB} GB total</span>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  </>
                 ) : (
                   <div className="p-4 text-muted-foreground">No data</div>
                 )}

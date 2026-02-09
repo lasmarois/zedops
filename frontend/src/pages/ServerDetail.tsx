@@ -16,7 +16,13 @@ import { checkServerData } from "@/lib/api"
 import { useRestartContainer } from "@/hooks/useContainers"
 import { useMoveProgress } from "@/hooks/useMoveProgress"
 import { RconHistoryProvider } from "@/contexts/RconHistoryContext"
-import { PlayCircle, StopCircle, RefreshCw, Wrench, Trash2, Users } from "lucide-react"
+import { PlayCircle, StopCircle, RefreshCw, Wrench, Trash2, Users, MoreVertical } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { getDisplayStatus } from "@/lib/server-status"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { ErrorDialog } from "@/components/ui/error-dialog"
@@ -232,7 +238,7 @@ function ServerDetailContent() {
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -242,7 +248,7 @@ function ServerDetailContent() {
 
   if (error || !serverData?.server) {
     return (
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         <div className="text-center py-16">
           <h2 className="text-2xl font-bold text-error">Server Not Found</h2>
           <p className="text-muted-foreground mt-2">
@@ -283,7 +289,7 @@ function ServerDetailContent() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Breadcrumb */}
       <Breadcrumb items={[
         { label: "Servers", href: "/servers" },
@@ -291,9 +297,10 @@ function ServerDetailContent() {
       ]} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold">{serverName}</h1>
+      <div className="space-y-4">
+        {/* Title row — wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2 md:gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold">{serverName}</h1>
           <span className="text-sm text-muted-foreground">
             on {agentName}
           </span>
@@ -315,8 +322,8 @@ function ServerDetailContent() {
           )}
         </div>
 
-        {/* Segmented Action Buttons */}
-        <div className="flex items-center gap-3">
+        {/* Desktop: Segmented Action Buttons */}
+        <div className="hidden md:flex items-center gap-3">
           {/* Primary Actions Group */}
           <div className="flex items-center rounded-xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
             {status === 'stopped' || status === 'missing' ? (
@@ -376,18 +383,79 @@ function ServerDetailContent() {
             </button>
           </div>
         </div>
+
+        {/* Mobile: Action Dropdown */}
+        <div className="md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="min-h-[44px]">
+                <MoreVertical className="h-5 w-5 mr-2" /> Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {status === 'stopped' || status === 'missing' ? (
+                <DropdownMenuItem
+                  onClick={handleStart}
+                  disabled={startServerMutation.isPending}
+                  className="text-success"
+                >
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  {status === 'missing' ? 'Recreate' : 'Start'}
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem
+                    onClick={handleStop}
+                    disabled={stopServerMutation.isPending}
+                    className="text-warning"
+                  >
+                    <StopCircle className="h-4 w-4 mr-2" />
+                    Stop
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleRestart}
+                    disabled={restartContainerMutation.isPending}
+                    className="text-info"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Restart
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem
+                onClick={handleRebuild}
+                disabled={rebuildServerMutation.isPending}
+                className="text-info"
+              >
+                <Wrench className="h-4 w-4 mr-2" />
+                Rebuild
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleDelete}
+                disabled={deleteServerMutation.isPending}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="config">Configuration</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="rcon">RCON</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="backups">Backups</TabsTrigger>
-        </TabsList>
+        <div className="relative">
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 md:hidden" />
+          <TabsList className="overflow-x-auto scrollbar-hide w-full justify-start md:justify-center">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="logs">Logs</TabsTrigger>
+            <TabsTrigger value="rcon">RCON</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+            <TabsTrigger value="backups">Backups</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
@@ -676,7 +744,7 @@ export function ServerDetail() {
   const { id } = useParams<{ id: string }>()
 
   if (!id) {
-    return <div className="p-8 text-center">Server ID not provided</div>
+    return <div className="p-4 md:p-8 text-center">Server ID not provided</div>
   }
 
   return (

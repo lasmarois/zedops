@@ -47,58 +47,84 @@ export function CompactAuditLog({ entries }: CompactAuditLogProps) {
           <div key={entry.id}>
             <div
               className={cn(
-                "grid items-center gap-4 px-3 py-2 rounded-md text-sm",
-                entry.details
-                  ? "grid-cols-[70px_180px_120px_1fr_auto]"
-                  : "grid-cols-[70px_180px_120px_1fr]",
+                "px-3 py-2 rounded-md text-sm",
                 "hover:bg-muted/50 transition-colors cursor-pointer",
                 isExpanded && "bg-muted/30"
               )}
               onClick={() => setExpanded(isExpanded ? null : entry.id)}
             >
-              {/* Timestamp - far left */}
-              <span className="text-muted-foreground text-xs">
-                {entry.timestamp}
-              </span>
-
-              {/* Action: icon + text */}
-              <div className={cn("flex items-center gap-2", colorClasses[actionColor])}>
-                <ActionIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium truncate">
-                  {entry.action.replace(/[._]/g, ' ')}
-                </span>
-              </div>
-
-              {/* Actor with user icon */}
-              <div className="flex items-center gap-1.5 text-foreground">
-                <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="truncate">{entry.user}</span>
-              </div>
-
-              {/* Target: icon + text */}
-              <div className={cn("flex items-center gap-2 min-w-0", colorClasses[targetColor])}>
-                <TargetIcon className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">
-                  {entry.targetName || entry.targetType}
-                </span>
-              </div>
-
-              {/* Expand button (only if details exist) */}
-              {entry.details && (
-                <button
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors justify-end"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setExpanded(isExpanded ? null : entry.id)
-                  }}
-                >
-                  {isExpanded ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
+              {/* Mobile: stacked layout */}
+              <div className="md:hidden space-y-1">
+                <div className={cn("flex items-center gap-2", colorClasses[actionColor])}>
+                  <ActionIcon className="h-4 w-4 flex-shrink-0" />
+                  <span className="font-medium">{entry.action.replace(/[._]/g, ' ')}</span>
+                  {entry.details && (
+                    <span className="ml-auto">
+                      {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </span>
                   )}
-                </button>
-              )}
+                </div>
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{entry.user}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <TargetIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className={cn("truncate", colorClasses[targetColor])}>{entry.targetName || entry.targetType}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">{entry.timestamp}</div>
+              </div>
+
+              {/* Desktop: grid layout */}
+              <div className={cn(
+                "hidden md:grid items-center gap-4",
+                entry.details
+                  ? "grid-cols-[70px_180px_120px_1fr_auto]"
+                  : "grid-cols-[70px_180px_120px_1fr]",
+              )}>
+                {/* Timestamp - far left */}
+                <span className="text-muted-foreground text-xs">
+                  {entry.timestamp}
+                </span>
+
+                {/* Action: icon + text */}
+                <div className={cn("flex items-center gap-2", colorClasses[actionColor])}>
+                  <ActionIcon className="h-4 w-4 flex-shrink-0" />
+                  <span className="font-medium truncate">
+                    {entry.action.replace(/[._]/g, ' ')}
+                  </span>
+                </div>
+
+                {/* Actor with user icon */}
+                <div className="flex items-center gap-1.5 text-foreground">
+                  <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate">{entry.user}</span>
+                </div>
+
+                {/* Target: icon + text */}
+                <div className={cn("flex items-center gap-2 min-w-0", colorClasses[targetColor])}>
+                  <TargetIcon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">
+                    {entry.targetName || entry.targetType}
+                  </span>
+                </div>
+
+                {/* Expand button (only if details exist) */}
+                {entry.details && (
+                  <button
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors justify-end"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setExpanded(isExpanded ? null : entry.id)
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Expanded details */}

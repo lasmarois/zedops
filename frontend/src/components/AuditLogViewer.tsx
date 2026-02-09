@@ -173,8 +173,8 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-8">
+      <div className="p-4 md:p-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 md:mb-8">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-[80px]" />
             <Skeleton className="h-9 w-[200px]" />
@@ -200,7 +200,7 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Alert variant="destructive" className="mb-4">
           <AlertDescription>Error: {error.message}</AlertDescription>
         </Alert>
@@ -212,15 +212,15 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 md:mb-8">
         <div className="flex items-center gap-4">
           <Button variant="secondary" onClick={onBack}>
             ← Back
           </Button>
-          <h1 className="text-3xl font-bold">Audit Logs</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Audit Logs</h1>
         </div>
-        <Button onClick={() => setShowFilters(!showFilters)}>
+        <Button onClick={() => setShowFilters(!showFilters)} className="self-start sm:self-auto">
           {showFilters ? 'Hide Filters' : 'Show Filters'}
         </Button>
       </div>
@@ -306,7 +306,7 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
         <p className="text-muted-foreground">
           Showing {data?.logs.length || 0} of {data?.total || 0} logs
         </p>
@@ -314,6 +314,7 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
           <div className="flex gap-2 items-center">
             <Button
               size="sm"
+              className="min-h-[44px] sm:min-h-0"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
             >
@@ -324,6 +325,7 @@ export function AuditLogViewer({ onBack }: AuditLogViewerProps) {
             </span>
             <Button
               size="sm"
+              className="min-h-[44px] sm:min-h-0"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
             >

@@ -193,12 +193,12 @@ export function ServerList() {
   const hasOnlineAgents = onlineAgents.length > 0
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <Breadcrumb items={[{ label: "Servers" }]} />
-          <h1 className="text-3xl font-bold mt-4">All Servers</h1>
+          <h1 className="text-2xl md:text-3xl font-bold mt-4">All Servers</h1>
           <p className="text-muted-foreground mt-2">
             Global server list across all agents
           </p>
@@ -248,8 +248,8 @@ export function ServerList() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search servers or agents..."

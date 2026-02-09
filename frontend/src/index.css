@@ -96,6 +96,10 @@ pre,
   animation: spin 3s linear infinite;
 }
 
+/* Scrollbar hide utility for horizontal tab scrolling */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Glass button glow utilities */
 @layer utilities {
   .glow-primary { --glow-color: var(--primary); }

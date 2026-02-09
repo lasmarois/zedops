@@ -29,6 +29,7 @@ None
 | 13 | Cloudflare Free Tier — Hibernatable WebSocket Migration | Infra | Complete | 2026-02-08 | 2026-02-08 |
 | 14 | Log Viewer Revamp — xterm.js Terminal-Style Logs | UX | Complete | 2026-02-08 | 2026-02-08 |
 | 15 | Button Polish + Solar Flare Color Fix | UX | Complete | 2026-02-08 | 2026-02-08 |
+| 16 | Mobile-Friendly UI/UX | M16 | Complete | 2026-02-08 | 2026-02-08 |
 
 ---
 
