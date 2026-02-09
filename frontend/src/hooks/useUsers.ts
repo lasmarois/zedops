@@ -10,6 +10,7 @@ import {
   fetchInvitations,
   resendInvitation,
   cancelInvitation,
+  updateUserSystemRole,
   fetchUserRoleAssignments,
   grantRoleAssignment,
   revokeRoleAssignment,
@@ -99,6 +100,23 @@ export function useDeleteUser() {
     mutationFn: (userId: string) => deleteUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
+    },
+  });
+}
+
+/**
+ * Hook to update a user's system role (promote/demote admin)
+ */
+export function useUpdateUserSystemRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: 'admin' | null }) =>
+      updateUserSystemRole(userId, role),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['userRoleAssignments', variables.userId] });
       queryClient.invalidateQueries({ queryKey: ['auditLogs'] });
     },
   });

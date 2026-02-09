@@ -10,6 +10,7 @@ import {
   useUserRoleAssignments,
   useGrantRoleAssignment,
   useRevokeRoleAssignment,
+  useUpdateUserSystemRole,
 } from '../hooks/useUsers';
 import { useAgents } from '../hooks/useAgents';
 import type { UserAccount, RoleAssignment } from '../lib/api';
@@ -45,6 +46,7 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
   const { data: agentsData } = useAgents();
   const grantMutation = useGrantRoleAssignment();
   const revokeMutation = useRevokeRoleAssignment();
+  const systemRoleMutation = useUpdateUserSystemRole();
 
   const [showGrantForm, setShowGrantForm] = useState(false);
   const [role, setRole] = useState<'agent-admin' | 'operator' | 'viewer'>('viewer');
@@ -189,14 +191,51 @@ export function RoleAssignmentsManager({ user, onBack }: RoleAssignmentsManagerP
         </Button>
       </div>
 
-      {/* System Role Badge */}
-      {data?.user.systemRole === 'admin' && (
-        <Alert variant="success" className="mb-4">
-          <AlertDescription>
-            <strong>System Admin:</strong> This user has global admin access and bypasses all permission checks.
-            Role assignments are not needed.
-          </AlertDescription>
-        </Alert>
+      {/* System Admin Toggle */}
+      {data && (
+        <div className="flex items-center justify-between p-4 bg-[#2d2d2d] rounded-lg mb-4">
+          <div>
+            <p className="font-medium text-sm">System Admin</p>
+            <p className="text-xs text-muted-foreground">
+              {data.user.systemRole === 'admin'
+                ? 'Full platform access. Bypasses all permission checks.'
+                : 'Grant full platform admin access to this user.'}
+            </p>
+          </div>
+          {data.user.systemRole === 'admin' ? (
+            <Button
+              size="sm"
+              variant="glass-destructive"
+              disabled={systemRoleMutation.isPending}
+              onClick={async () => {
+                try {
+                  await systemRoleMutation.mutateAsync({ userId: user.id, role: null });
+                  setMessage({ type: 'success', text: 'Admin access removed' });
+                } catch (err) {
+                  setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed' });
+                }
+              }}
+            >
+              Remove Admin
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="glass-primary"
+              disabled={systemRoleMutation.isPending}
+              onClick={async () => {
+                try {
+                  await systemRoleMutation.mutateAsync({ userId: user.id, role: 'admin' });
+                  setMessage({ type: 'success', text: 'User promoted to System Admin' });
+                } catch (err) {
+                  setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed' });
+                }
+              }}
+            >
+              Make Admin
+            </Button>
+          )}
+        </div>
       )}
 
       {message && (

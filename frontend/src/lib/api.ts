@@ -1288,6 +1288,28 @@ export interface UserRoleAssignmentsResponse {
 }
 
 /**
+ * Update a user's system role (admin or null)
+ */
+export async function updateUserSystemRole(userId: string, role: 'admin' | null): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/api/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ role }),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to update user role');
+  }
+
+  return response.json();
+}
+
+/**
  * Get user role assignments
  */
 export async function fetchUserRoleAssignments(userId: string): Promise<UserRoleAssignmentsResponse> {
