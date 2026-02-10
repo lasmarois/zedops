@@ -1530,10 +1530,11 @@ agents.post('/:id/servers/adopt', async (c) => {
 
     const result: any = await adoptResponse.json();
 
-    // Update D1 with new container ID and status
+    // Update D1 with new container ID, status, and resolved data path from agent
+    const resolvedDataPath = result.dataPath || body.server_data_path || null;
     await c.env.DB.prepare(
-      `UPDATE servers SET container_id = ?, status = 'running', updated_at = ? WHERE id = ?`
-    ).bind(result.containerId, Date.now(), serverId).run();
+      `UPDATE servers SET container_id = ?, status = 'running', updated_at = ?, server_data_path = COALESCE(?, server_data_path) WHERE id = ?`
+    ).bind(result.containerId, Date.now(), resolvedDataPath, serverId).run();
 
     // Return created server
     const server = await c.env.DB.prepare(

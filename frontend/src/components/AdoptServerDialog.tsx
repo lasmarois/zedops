@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { inspectContainer, adoptServer } from '../lib/api';
+import { inspectContainer, adoptServer, fetchAgentConfig } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +44,7 @@ export function AdoptServerDialog({
   const [udpPort, setUdpPort] = useState('');
   const [rconPort, setRconPort] = useState('');
   const [nameError, setNameError] = useState('');
+  const [dataPath, setDataPath] = useState('');
 
   // Inspect the container when dialog opens
   const { data: inspectData, isLoading: inspecting, error: inspectError } = useQuery({
@@ -51,6 +52,14 @@ export function AdoptServerDialog({
     queryFn: () => inspectContainer(agentId, containerId),
     enabled: open,
     staleTime: 30000,
+  });
+
+  // Fetch agent config for default data path
+  const { data: agentConfig } = useQuery({
+    queryKey: ['agent-config', agentId],
+    queryFn: () => fetchAgentConfig(agentId),
+    enabled: open,
+    staleTime: 60000,
   });
 
   // Pre-fill form when inspect data arrives
@@ -63,6 +72,13 @@ export function AdoptServerDialog({
     }
   }, [inspectData]);
 
+  // Set default data path from agent config
+  useEffect(() => {
+    if (agentConfig?.server_data_path && !dataPath) {
+      setDataPath(agentConfig.server_data_path);
+    }
+  }, [agentConfig, dataPath]);
+
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
@@ -71,8 +87,15 @@ export function AdoptServerDialog({
       setUdpPort('');
       setRconPort('');
       setNameError('');
+      setDataPath('');
     }
   }, [open]);
+
+  // Extract current mount info for display
+  const currentMounts = inspectData?.mounts?.filter(
+    (m: { target: string }) =>
+      m.target === '/home/steam/zomboid-dedicated' || m.target === '/home/steam/Zomboid'
+  ) || [];
 
   // Adopt mutation
   const adoptMutation = useMutation({
@@ -86,6 +109,7 @@ export function AdoptServerDialog({
         gamePort: parseInt(gamePort) || undefined,
         udpPort: parseInt(udpPort) || undefined,
         rconPort: parseInt(rconPort) || undefined,
+        server_data_path: dataPath || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['containers', agentId] });
@@ -115,9 +139,19 @@ export function AdoptServerDialog({
     adoptMutation.mutate();
   };
 
+  // Check if data needs migration
+  const willMigrate = currentMounts.length > 0 && dataPath && currentMounts.some(
+    (m: { source: string; target: string }) => {
+      const expectedPath = m.target === '/home/steam/zomboid-dedicated'
+        ? `${dataPath}/${name}/bin`
+        : `${dataPath}/${name}/data`;
+      return m.source !== expectedPath;
+    }
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Adopt Server</DialogTitle>
           <DialogDescription>
@@ -145,7 +179,10 @@ export function AdoptServerDialog({
           <div className="space-y-4 py-2">
             <Alert>
               <AlertDescription>
-                This will briefly stop and recreate the container with ZedOps labels. Game data is preserved.
+                This will briefly stop and recreate the container with ZedOps labels.
+                {willMigrate
+                  ? ' Game data will be copied to the ZedOps standard layout.'
+                  : ' Game data is preserved in place.'}
               </AlertDescription>
             </Alert>
 
@@ -199,6 +236,43 @@ export function AdoptServerDialog({
                 />
               </div>
             </div>
+
+            {/* Current mount paths (read-only info) */}
+            {currentMounts.length > 0 && (
+              <div className="space-y-2">
+                <Label>Current Mount Paths</Label>
+                <div className="text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md font-mono space-y-1">
+                  {currentMounts.map((m: { source: string; target: string }, i: number) => (
+                    <div key={i}>
+                      <span className="text-foreground/60">{m.target === '/home/steam/zomboid-dedicated' ? 'bin' : 'data'}:</span>{' '}
+                      {m.source}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Data path choice */}
+            <div className="space-y-2">
+              <Label htmlFor="adopt-data-path">Data Path</Label>
+              <Input
+                id="adopt-data-path"
+                value={dataPath}
+                onChange={(e) => setDataPath(e.target.value)}
+                placeholder={agentConfig?.server_data_path || '/var/lib/zedops/servers'}
+              />
+              <p className="text-xs text-muted-foreground">
+                Server data will be stored at <span className="font-mono">{dataPath || '...'}/{name || '...'}/</span>
+              </p>
+            </div>
+
+            {willMigrate && (
+              <Alert>
+                <AlertDescription className="text-xs">
+                  Data will be migrated from the current mount paths to the standard layout. Original files are preserved as a backup. This may take a moment for large servers.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {adoptMutation.isError && (
               <Alert variant="destructive">

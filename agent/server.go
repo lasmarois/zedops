@@ -576,6 +576,13 @@ type ServerOperationResponse struct {
 	Operation   string `json:"operation"`
 	Error       string `json:"error,omitempty"`
 	ErrorCode   string `json:"errorCode,omitempty"`
+	DataPath    string `json:"dataPath,omitempty"`
+}
+
+// AdoptResult holds the result of a server adoption
+type AdoptResult struct {
+	ContainerID string
+	DataPath    string // Resolved base path where server data lives (ZedOps standard layout)
 }
 
 // ServerDataStatus represents the data existence status for a server
@@ -1083,55 +1090,53 @@ type ServerAdoptRequest struct {
 	DataPath    string            `json:"dataPath"`
 }
 
-// AdoptServer adopts an unmanaged container into ZedOps management
-// It stops the old container, removes it, and creates a new one with proper ZedOps labels
-// while preserving existing data (mounts)
-func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest) (string, error) {
-	log.Printf("Adopting container %s as server '%s'", req.ContainerID, req.Name)
+// AdoptServer adopts an unmanaged container into ZedOps management.
+// It stops the old container, copies data into ZedOps standard layout
+// ({dataPath}/{name}/bin and {dataPath}/{name}/data), removes the old container,
+// and creates a new one with proper ZedOps labels pointing at the standard paths.
+func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest) (*AdoptResult, error) {
+	log.Printf("Adopting container %s as server '%s' (dataPath: %s)", req.ContainerID, req.Name, req.DataPath)
 
 	// 1. Inspect existing container to capture state and mounts
 	inspect, err := dc.cli.ContainerInspect(ctx, req.ContainerID)
 	if err != nil {
-		return "", fmt.Errorf("failed to inspect container: %w", err)
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
 	}
 
 	wasRunning := inspect.State != nil && inspect.State.Running
 
-	// 2. Determine mount sources — reuse existing if they match expected targets
-	// Use top-level inspect.Mounts (populated for both Binds and Mounts style volumes)
-	// instead of HostConfig.Mounts (only populated for --mount style, not -v or docker-compose volumes:)
-	binSource := ""
-	dataSource := ""
-
+	// 2. Extract existing mount sources from container
+	oldBinSource := ""
+	oldDataSource := ""
 	for _, m := range inspect.Mounts {
 		switch m.Destination {
 		case "/home/steam/zomboid-dedicated":
-			binSource = m.Source
+			oldBinSource = m.Source
 		case "/home/steam/Zomboid":
-			dataSource = m.Source
+			oldDataSource = m.Source
 		}
 	}
 
-	// If no matching mounts found, create new directories
-	if binSource == "" || dataSource == "" {
-		basePath := filepath.Join(req.DataPath, req.Name)
-		if binSource == "" {
-			binSource = filepath.Join(basePath, "bin")
-			if err := os.MkdirAll(binSource, 0755); err != nil {
-				return "", fmt.Errorf("failed to create bin directory: %w", err)
-			}
-		}
-		if dataSource == "" {
-			dataSource = filepath.Join(basePath, "data")
-			if err := os.MkdirAll(dataSource, 0755); err != nil {
-				return "", fmt.Errorf("failed to create data directory: %w", err)
-			}
-		}
+	log.Printf("Existing mounts — bin: %q, data: %q", oldBinSource, oldDataSource)
+
+	// 3. Determine standard ZedOps layout paths
+	serverDir := filepath.Join(req.DataPath, req.Name)
+	newBinPath := filepath.Join(serverDir, "bin")
+	newDataPath := filepath.Join(serverDir, "data")
+
+	// Check if data already lives at the standard location (no migration needed)
+	binNeedsMigration := oldBinSource != "" && oldBinSource != newBinPath
+	dataNeedsMigration := oldDataSource != "" && oldDataSource != newDataPath
+
+	// 4. Create standard directories
+	if err := os.MkdirAll(newBinPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create bin directory: %w", err)
+	}
+	if err := os.MkdirAll(newDataPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	log.Printf("Mount sources — bin: %s, data: %s", binSource, dataSource)
-
-	// 3. If running, graceful save then stop
+	// 5. If running, graceful save then stop
 	if wasRunning {
 		dc.GracefulSave(ctx, req.ContainerID)
 		timeout := GracefulStopTimeout
@@ -1140,16 +1145,37 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		}
 	}
 
-	// 4. Remove old container
+	// 6. Migrate data from old mounts to standard layout (copy, not move — leave originals for safety)
+	if binNeedsMigration {
+		log.Printf("Migrating bin data: %s -> %s", oldBinSource, newBinPath)
+		if err := copyDirContents(oldBinSource, newBinPath); err != nil {
+			return nil, fmt.Errorf("failed to migrate bin data: %w", err)
+		}
+		log.Printf("Bin data migration complete")
+	}
+	if dataNeedsMigration {
+		log.Printf("Migrating game data: %s -> %s", oldDataSource, newDataPath)
+		if err := copyDirContents(oldDataSource, newDataPath); err != nil {
+			// Clean up partial bin copy if data migration fails
+			if binNeedsMigration {
+				os.RemoveAll(newBinPath)
+				os.MkdirAll(newBinPath, 0755) // recreate empty dir
+			}
+			return nil, fmt.Errorf("failed to migrate game data: %w", err)
+		}
+		log.Printf("Game data migration complete")
+	}
+
+	// 7. Remove old container
 	log.Printf("Removing old container: %s", req.ContainerID)
 	if err := dc.cli.ContainerRemove(ctx, req.ContainerID, container.RemoveOptions{
 		Force:         true,
 		RemoveVolumes: false,
 	}); err != nil {
-		return "", fmt.Errorf("failed to remove old container: %w", err)
+		return nil, fmt.Errorf("failed to remove old container: %w", err)
 	}
 
-	// 5. Build image reference
+	// 8. Build image reference
 	var fullImage string
 	if strings.Contains(req.ImageTag, ":") {
 		fullImage = req.ImageTag
@@ -1157,13 +1183,13 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		fullImage = fmt.Sprintf("%s:%s", req.Registry, req.ImageTag)
 	}
 
-	// 6. Build env array
+	// 9. Build env array
 	env := make([]string, 0, len(req.Config))
 	for key, value := range req.Config {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// 7. Port bindings
+	// 10. Port bindings
 	portBindings := nat.PortMap{
 		nat.Port(fmt.Sprintf("%d/udp", req.GamePort)): []nat.PortBinding{
 			{HostPort: fmt.Sprintf("%d", req.GamePort)},
@@ -1177,7 +1203,7 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		nat.Port(fmt.Sprintf("%d/udp", req.UDPPort)):  struct{}{},
 	}
 
-	// 8. Create new container with ZedOps labels
+	// 11. Create new container with ZedOps labels — always pointing at standard layout
 	containerName := fmt.Sprintf("steam-zomboid-%s", req.Name)
 	containerConfig := &container.Config{
 		Image: fullImage,
@@ -1196,12 +1222,12 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		Mounts: []mount.Mount{
 			{
 				Type:   mount.TypeBind,
-				Source: binSource,
+				Source: newBinPath,
 				Target: "/home/steam/zomboid-dedicated",
 			},
 			{
 				Type:   mount.TypeBind,
-				Source: dataSource,
+				Source: newDataPath,
 				Target: "/home/steam/Zomboid",
 			},
 		},
@@ -1218,23 +1244,50 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		},
 	}
 
-	log.Printf("Creating adopted container: %s (image: %s)", containerName, fullImage)
+	log.Printf("Creating adopted container: %s (image: %s, bin: %s, data: %s)", containerName, fullImage, newBinPath, newDataPath)
 	resp, err := dc.cli.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, containerName)
 	if err != nil {
-		return "", fmt.Errorf("failed to create adopted container: %w", err)
+		return nil, fmt.Errorf("failed to create adopted container: %w", err)
 	}
 
 	newContainerID := resp.ID
 	log.Printf("Adopted container created: %s (ID: %s)", containerName, newContainerID)
 
-	// 9. Start container
+	// 12. Start container
 	if err := dc.cli.ContainerStart(ctx, newContainerID, container.StartOptions{}); err != nil {
 		dc.cli.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
-		return "", fmt.Errorf("failed to start adopted container: %w", err)
+		return nil, fmt.Errorf("failed to start adopted container: %w", err)
 	}
 
-	log.Printf("Adopted container started: %s", newContainerID)
-	return newContainerID, nil
+	log.Printf("Adopted container started: %s (dataPath: %s)", newContainerID, req.DataPath)
+	return &AdoptResult{
+		ContainerID: newContainerID,
+		DataPath:    req.DataPath,
+	}, nil
+}
+
+// copyDirContents copies all files from src directory into dst directory recursively.
+// If dst already contains files, they are overwritten. Used during adoption to migrate
+// data from arbitrary mount paths into ZedOps standard layout.
+func copyDirContents(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		targetPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+
+		return copyFile(path, targetPath, info.Mode())
+	})
 }
 
 // ==================== Volume Sizes ====================

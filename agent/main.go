@@ -1919,7 +1919,7 @@ func (a *Agent) handleServerAdopt(msg Message) {
 
 	log.Printf("Adopting container %s as server '%s'", req.ContainerID, req.Name)
 
-	newContainerID, err := a.docker.AdoptServer(ctx, req)
+	result, err := a.docker.AdoptServer(ctx, req)
 	if err != nil {
 		log.Printf("Failed to adopt container %s: %v", req.ContainerID, err)
 		if msg.Reply != "" {
@@ -1932,7 +1932,7 @@ func (a *Agent) handleServerAdopt(msg Message) {
 		return
 	}
 
-	log.Printf("Container adopted successfully: %s -> %s", req.ContainerID, newContainerID)
+	log.Printf("Container adopted successfully: %s -> %s (dataPath: %s)", req.ContainerID, result.ContainerID, result.DataPath)
 
 	if msg.Reply != "" {
 		a.sendMessage(Message{
@@ -1940,8 +1940,9 @@ func (a *Agent) handleServerAdopt(msg Message) {
 			Data: ServerOperationResponse{
 				Success:     true,
 				ServerID:    req.ServerID,
-				ContainerID: newContainerID,
+				ContainerID: result.ContainerID,
 				Operation:   "adopt",
+				DataPath:    result.DataPath,
 			},
 			Timestamp: time.Now().Unix(),
 		})
