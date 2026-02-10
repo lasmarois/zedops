@@ -5,11 +5,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inspectContainer, adoptServer, fetchAgentConfig } from '../lib/api';
+import { useAdoptProgress } from '../hooks/useAdoptProgress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +47,14 @@ export function AdoptServerDialog({
   const [rconPort, setRconPort] = useState('');
   const [nameError, setNameError] = useState('');
   const [dataPath, setDataPath] = useState('');
+  const [progressEnabled, setProgressEnabled] = useState(false);
+
+  // Listen for adopt progress via WebSocket
+  const { progress: adoptProgress, reset: resetProgress } = useAdoptProgress({
+    agentId,
+    serverName: name,
+    enabled: progressEnabled,
+  });
 
   // Inspect the container when dialog opens
   const { data: inspectData, isLoading: inspecting, error: inspectError } = useQuery({
@@ -88,8 +98,10 @@ export function AdoptServerDialog({
       setRconPort('');
       setNameError('');
       setDataPath('');
+      setProgressEnabled(false);
+      resetProgress();
     }
-  }, [open]);
+  }, [open, resetProgress]);
 
   // Extract current mount info for display
   const currentMounts = inspectData?.mounts?.filter(
@@ -136,6 +148,9 @@ export function AdoptServerDialog({
 
   const handleSubmit = () => {
     if (!validateName(name)) return;
+    if (willMigrate) {
+      setProgressEnabled(true);
+    }
     adoptMutation.mutate();
   };
 
@@ -274,6 +289,38 @@ export function AdoptServerDialog({
               </Alert>
             )}
 
+            {/* Adoption progress bar */}
+            {adoptMutation.isPending && adoptProgress && (
+              <Alert>
+                <AlertDescription>
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">
+                        {adoptProgress.phase === 'stopping' && 'Stopping container...'}
+                        {adoptProgress.phase === 'copying-bin' && 'Copying game binaries...'}
+                        {adoptProgress.phase === 'copying-data' && 'Copying game data...'}
+                        {adoptProgress.phase === 'creating-container' && 'Creating new container...'}
+                        {adoptProgress.phase === 'complete' && 'Complete!'}
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-2 mt-2">
+                        <div
+                          className="bg-primary rounded-full h-2 transition-all duration-300"
+                          style={{ width: `${adoptProgress.percent}%` }}
+                        />
+                      </div>
+                      {adoptProgress.totalBytes > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {formatBytes(adoptProgress.bytesCopied)} / {formatBytes(adoptProgress.totalBytes)}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground tabular-nums">{adoptProgress.percent}%</span>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {adoptMutation.isError && (
               <Alert variant="destructive">
                 <AlertDescription>
@@ -285,17 +332,29 @@ export function AdoptServerDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={adoptMutation.isPending}>
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={inspecting || !inspectData || adoptMutation.isPending}
           >
-            {adoptMutation.isPending ? 'Adopting...' : 'Adopt Server'}
+            {adoptMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                {adoptProgress ? `${adoptProgress.percent}%` : 'Adopting...'}
+              </>
+            ) : 'Adopt Server'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }

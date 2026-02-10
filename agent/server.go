@@ -1090,11 +1090,24 @@ type ServerAdoptRequest struct {
 	DataPath    string            `json:"dataPath"`
 }
 
+// AdoptProgress represents progress during server adoption data migration
+type AdoptProgress struct {
+	ServerName  string `json:"serverName"`
+	Phase       string `json:"phase"`    // "stopping", "copying-bin", "copying-data", "creating-container", "complete", "error"
+	Percent     int    `json:"percent"`  // 0-100
+	TotalBytes  int64  `json:"totalBytes"`
+	BytesCopied int64  `json:"bytesCopied"`
+	Error       string `json:"error,omitempty"`
+}
+
+// AdoptProgressCallback is a function type for reporting adoption progress
+type AdoptProgressCallback func(progress AdoptProgress)
+
 // AdoptServer adopts an unmanaged container into ZedOps management.
 // It stops the old container, copies data into ZedOps standard layout
 // ({dataPath}/{name}/bin and {dataPath}/{name}/data), removes the old container,
 // and creates a new one with proper ZedOps labels pointing at the standard paths.
-func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest) (*AdoptResult, error) {
+func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest, progressFn AdoptProgressCallback) (*AdoptResult, error) {
 	log.Printf("Adopting container %s as server '%s' (dataPath: %s)", req.ContainerID, req.Name, req.DataPath)
 
 	// 1. Inspect existing container to capture state and mounts
@@ -1138,6 +1151,9 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 
 	// 5. If running, graceful save then stop
 	if wasRunning {
+		if progressFn != nil {
+			progressFn(AdoptProgress{ServerName: req.Name, Phase: "stopping", Percent: 0})
+		}
 		dc.GracefulSave(ctx, req.ContainerID)
 		timeout := GracefulStopTimeout
 		if err := dc.cli.ContainerStop(ctx, req.ContainerID, container.StopOptions{Timeout: &timeout}); err != nil {
@@ -1145,17 +1161,60 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		}
 	}
 
-	// 6. Migrate data from old mounts to standard layout (copy, not move — leave originals for safety)
+	// 6. Calculate total migration size for progress reporting
+	var totalBytes int64
+	if binNeedsMigration {
+		filepath.Walk(oldBinSource, func(_ string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() {
+				totalBytes += info.Size()
+			}
+			return nil
+		})
+	}
+	if dataNeedsMigration {
+		filepath.Walk(oldDataSource, func(_ string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() {
+				totalBytes += info.Size()
+			}
+			return nil
+		})
+	}
+
+	var bytesCopied int64
+
+	// 7. Migrate data from old mounts to standard layout (copy, not move — leave originals for safety)
 	if binNeedsMigration {
 		log.Printf("Migrating bin data: %s -> %s", oldBinSource, newBinPath)
-		if err := copyDirContents(oldBinSource, newBinPath); err != nil {
+		if progressFn != nil {
+			progressFn(AdoptProgress{ServerName: req.Name, Phase: "copying-bin", Percent: 0, TotalBytes: totalBytes, BytesCopied: 0})
+		}
+		if err := copyDirContentsWithProgress(oldBinSource, newBinPath, func(fileBytes int64) {
+			bytesCopied += fileBytes
+			if progressFn != nil && totalBytes > 0 {
+				pct := int(bytesCopied * 100 / totalBytes)
+				progressFn(AdoptProgress{ServerName: req.Name, Phase: "copying-bin", Percent: pct, TotalBytes: totalBytes, BytesCopied: bytesCopied})
+			}
+		}); err != nil {
 			return nil, fmt.Errorf("failed to migrate bin data: %w", err)
 		}
 		log.Printf("Bin data migration complete")
 	}
 	if dataNeedsMigration {
 		log.Printf("Migrating game data: %s -> %s", oldDataSource, newDataPath)
-		if err := copyDirContents(oldDataSource, newDataPath); err != nil {
+		if progressFn != nil {
+			pct := 0
+			if totalBytes > 0 {
+				pct = int(bytesCopied * 100 / totalBytes)
+			}
+			progressFn(AdoptProgress{ServerName: req.Name, Phase: "copying-data", Percent: pct, TotalBytes: totalBytes, BytesCopied: bytesCopied})
+		}
+		if err := copyDirContentsWithProgress(oldDataSource, newDataPath, func(fileBytes int64) {
+			bytesCopied += fileBytes
+			if progressFn != nil && totalBytes > 0 {
+				pct := int(bytesCopied * 100 / totalBytes)
+				progressFn(AdoptProgress{ServerName: req.Name, Phase: "copying-data", Percent: pct, TotalBytes: totalBytes, BytesCopied: bytesCopied})
+			}
+		}); err != nil {
 			// Clean up partial bin copy if data migration fails
 			if binNeedsMigration {
 				os.RemoveAll(newBinPath)
@@ -1166,7 +1225,10 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 		log.Printf("Game data migration complete")
 	}
 
-	// 7. Remove old container
+	// 8. Remove old container and create new one
+	if progressFn != nil {
+		progressFn(AdoptProgress{ServerName: req.Name, Phase: "creating-container", Percent: 95, TotalBytes: totalBytes, BytesCopied: bytesCopied})
+	}
 	log.Printf("Removing old container: %s", req.ContainerID)
 	if err := dc.cli.ContainerRemove(ctx, req.ContainerID, container.RemoveOptions{
 		Force:         true,
@@ -1260,6 +1322,9 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 	}
 
 	log.Printf("Adopted container started: %s (dataPath: %s)", newContainerID, req.DataPath)
+	if progressFn != nil {
+		progressFn(AdoptProgress{ServerName: req.Name, Phase: "complete", Percent: 100, TotalBytes: totalBytes, BytesCopied: bytesCopied})
+	}
 	return &AdoptResult{
 		ContainerID: newContainerID,
 		DataPath:    req.DataPath,
@@ -1270,6 +1335,12 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 // If dst already contains files, they are overwritten. Used during adoption to migrate
 // data from arbitrary mount paths into ZedOps standard layout.
 func copyDirContents(src, dst string) error {
+	return copyDirContentsWithProgress(src, dst, nil)
+}
+
+// copyDirContentsWithProgress copies all files from src to dst with an optional progress callback.
+// The onFileCopied callback is called after each file with the file's size in bytes.
+func copyDirContentsWithProgress(src, dst string, onFileCopied func(fileBytes int64)) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -1286,7 +1357,13 @@ func copyDirContents(src, dst string) error {
 			return os.MkdirAll(targetPath, info.Mode())
 		}
 
-		return copyFile(path, targetPath, info.Mode())
+		if err := copyFile(path, targetPath, info.Mode()); err != nil {
+			return err
+		}
+		if onFileCopied != nil {
+			onFileCopied(info.Size())
+		}
+		return nil
 	})
 }
 

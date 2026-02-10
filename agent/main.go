@@ -1919,7 +1919,16 @@ func (a *Agent) handleServerAdopt(msg Message) {
 
 	log.Printf("Adopting container %s as server '%s'", req.ContainerID, req.Name)
 
-	result, err := a.docker.AdoptServer(ctx, req)
+	// Create progress callback to stream updates via WebSocket
+	progressFn := func(progress AdoptProgress) {
+		a.sendMessage(Message{
+			Subject:   "adopt.progress",
+			Data:      progress,
+			Timestamp: time.Now().Unix(),
+		})
+	}
+
+	result, err := a.docker.AdoptServer(ctx, req, progressFn)
 	if err != nil {
 		log.Printf("Failed to adopt container %s: %v", req.ContainerID, err)
 		if msg.Reply != "" {
