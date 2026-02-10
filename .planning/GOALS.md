@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-None
+**Goal #22**: Fix Adoption Mount Preservation (Binds vs Mounts)
 
 ---
 
@@ -34,6 +34,8 @@ None
 | 18 | Adopt Unmanaged Server as Managed | M14 | Complete | 2026-02-09 | 2026-02-09 |
 | 19 | Survive Worker Deploys Without Agent Death | Infra | Complete | 2026-02-09 | 2026-02-09 |
 | 20 | Email Invites via Resend | M15 | Complete | 2026-02-09 | 2026-02-09 |
+| 21 | Display Server Mods from INI File in Config Tab | M14 | Iced | 2026-02-09 | - |
+| 22 | Fix Adoption Mount Preservation (Binds vs Mounts) | Bugfix | In Progress | 2026-02-09 | - |
 
 ---
 

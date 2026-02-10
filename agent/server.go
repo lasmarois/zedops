@@ -873,10 +873,11 @@ func (dc *DockerClient) GetContainerDataPath(ctx context.Context, containerID st
 		return "", fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	// Look for the bin mount (Target: /home/steam/zomboid-dedicated)
+	// Look for the bin mount (Destination: /home/steam/zomboid-dedicated)
+	// Use top-level inspect.Mounts (works for both Binds and Mounts style volumes)
 	// The Source will be {basePath}/bin, so we strip the /bin suffix
-	for _, m := range inspect.HostConfig.Mounts {
-		if m.Target == "/home/steam/zomboid-dedicated" {
+	for _, m := range inspect.Mounts {
+		if m.Destination == "/home/steam/zomboid-dedicated" {
 			// Source is like /path/to/data/servername/bin
 			// We want to return /path/to/data (the base path, not including server name)
 			binPath := m.Source
@@ -1023,16 +1024,14 @@ func (dc *DockerClient) InspectContainer(ctx context.Context, containerID string
 		fmt.Sscanf(rconStr, "%d", &rconPort)
 	}
 
-	// Extract mounts
+	// Extract mounts — use top-level inspect.Mounts (works for both Binds and Mounts style volumes)
 	var mounts []MountInfo
-	if inspect.HostConfig != nil {
-		for _, m := range inspect.HostConfig.Mounts {
-			mounts = append(mounts, MountInfo{
-				Source: m.Source,
-				Target: m.Target,
-				Type:   string(m.Type),
-			})
-		}
+	for _, m := range inspect.Mounts {
+		mounts = append(mounts, MountInfo{
+			Source: m.Source,
+			Target: m.Destination,
+			Type:   string(m.Type),
+		})
 	}
 
 	// Extract networks
@@ -1099,17 +1098,17 @@ func (dc *DockerClient) AdoptServer(ctx context.Context, req ServerAdoptRequest)
 	wasRunning := inspect.State != nil && inspect.State.Running
 
 	// 2. Determine mount sources — reuse existing if they match expected targets
+	// Use top-level inspect.Mounts (populated for both Binds and Mounts style volumes)
+	// instead of HostConfig.Mounts (only populated for --mount style, not -v or docker-compose volumes:)
 	binSource := ""
 	dataSource := ""
 
-	if inspect.HostConfig != nil {
-		for _, m := range inspect.HostConfig.Mounts {
-			switch m.Target {
-			case "/home/steam/zomboid-dedicated":
-				binSource = m.Source
-			case "/home/steam/Zomboid":
-				dataSource = m.Source
-			}
+	for _, m := range inspect.Mounts {
+		switch m.Destination {
+		case "/home/steam/zomboid-dedicated":
+			binSource = m.Source
+		case "/home/steam/Zomboid":
+			dataSource = m.Source
 		}
 	}
 
