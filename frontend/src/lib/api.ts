@@ -232,6 +232,22 @@ export async function generateEphemeralToken(
 }
 
 /**
+ * Delete a pending agent (cancel registration)
+ */
+export async function deletePendingAgent(agentId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/admin/pending-agents/${agentId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to delete pending agent');
+  }
+}
+
+/**
  * Container types
  */
 export interface PortMapping {

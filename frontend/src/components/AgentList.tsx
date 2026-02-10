@@ -4,14 +4,16 @@
 
 import { useState } from 'react';
 import { useAgents } from '../hooks/useAgents';
+import { deletePendingAgent } from '../lib/api';
 import type { Agent } from '../lib/api';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick, ShieldAlert } from 'lucide-react';
+import { Plus, Laptop, AlertCircle, Cpu, HardDrive, MemoryStick, ShieldAlert, X } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { InstallAgentDialog } from './InstallAgentDialog';
 
@@ -78,6 +80,21 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
   const { user } = useUser();
   const isAdmin = user?.role === 'admin';
   const [showInstallDialog, setShowInstallDialog] = useState(false);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleDeletePending = async (e: React.MouseEvent, agentId: string) => {
+    e.stopPropagation();
+    setDeletingAgentId(agentId);
+    try {
+      await deletePendingAgent(agentId);
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+    } catch {
+      // Error is silently handled — card will remain if deletion fails
+    } finally {
+      setDeletingAgentId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -262,6 +279,18 @@ export function AgentList({ onSelectAgent }: AgentListProps) {
                     <div className="text-sm text-muted-foreground py-4 text-center">
                       <p>Run the installation command on your server.</p>
                       <p className="text-xs mt-2">The agent will appear here once connected.</p>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => handleDeletePending(e, agent.id)}
+                          disabled={deletingAgentId === agent.id}
+                        >
+                          <X className="h-3.5 w-3.5 mr-1" />
+                          {deletingAgentId === agent.id ? 'Removing...' : 'Cancel'}
+                        </Button>
+                      )}
                     </div>
                   ) : isOnline && metrics ? (
                     <div className="space-y-2">
