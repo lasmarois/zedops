@@ -677,6 +677,10 @@ export class AgentConnection extends DurableObject {
         await this.handleBackupProgress(message);
         break;
 
+      case "adopt.progress":
+        await this.handleAdoptProgress(message);
+        break;
+
       case "players.update":
         this.handlePlayersUpdate(message);
         break;
@@ -1916,6 +1920,24 @@ export class AgentConnection extends DurableObject {
         ws.send(broadcastMessage);
       } catch (error) {
         console.error("[AgentConnection] Failed to send backup progress to UI:", error);
+      }
+    }
+  }
+
+  /**
+   * Handle adopt.progress from agent — broadcast to all UI WebSockets
+   */
+  private async handleAdoptProgress(message: Message): Promise<void> {
+    const progress = message.data;
+    console.log(`[AgentConnection] Adopt progress: ${progress.serverName} - ${progress.phase} ${progress.percent}%`);
+
+    const broadcastMessage = JSON.stringify(createMessage("adopt.progress", progress));
+    const uiSockets = this.ctx.getWebSockets("ui");
+    for (const ws of uiSockets) {
+      try {
+        ws.send(broadcastMessage);
+      } catch (error) {
+        console.error("[AgentConnection] Failed to send adopt progress to UI:", error);
       }
     }
   }
