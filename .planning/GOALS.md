@@ -6,7 +6,7 @@
 
 ## Active Goal
 
-**Goal #23** — Adoption Data Path Migration (normalize adopted server data to ZedOps convention)
+None
 
 ---
 
@@ -36,7 +36,8 @@
 | 20 | Email Invites via Resend | M15 | Complete | 2026-02-09 | 2026-02-09 |
 | 21 | Display Server Mods from INI File in Config Tab | M14 | Iced | 2026-02-09 | - |
 | 22 | Fix Adoption Mount Preservation (Binds vs Mounts) | Bugfix | Complete | 2026-02-09 | 2026-02-10 |
-| 23 | Adoption Data Path Migration | M14 | In Progress | 2026-02-10 | - |
+| 23 | Adoption Data Path Migration | M14 | Complete | 2026-02-10 | 2026-02-10 |
+| 24 | Adopt Dialog: Mount Display + Migration Progress | UX | Pending | 2026-02-10 | - |
 
 ---
 
