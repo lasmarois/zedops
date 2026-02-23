@@ -335,6 +335,7 @@ func (a *Agent) authenticate() error {
 			Message         string   `json:"message"`
 			AlertRecipients []string `json:"alertRecipients"`
 			ResendApiKey    string   `json:"resendApiKey"`
+			ResendFromEmail string   `json:"resendFromEmail"`
 		}
 		data, _ := json.Marshal(result.msg.Data)
 		if err := json.Unmarshal(data, &resp); err != nil {
@@ -348,6 +349,7 @@ func (a *Agent) authenticate() error {
 		if resp.ResendApiKey != "" && len(resp.AlertRecipients) > 0 {
 			a.alertConfig = &AlertConfig{
 				ResendApiKey:    resp.ResendApiKey,
+				ResendFromEmail: resp.ResendFromEmail,
 				AlertRecipients: resp.AlertRecipients,
 			}
 			if err := SaveAlertConfig(a.alertConfig); err != nil {

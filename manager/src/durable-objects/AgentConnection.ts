@@ -1043,6 +1043,9 @@ export class AgentConnection extends DurableObject {
       // Gather alert config for the agent (email recipients + API key)
       const alertRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
       const resendApiKey = this.env.RESEND_API_KEY || null;
+      const resendFromEmail = this.env.RESEND_FROM_EMAIL
+        ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
+        : null;
 
       this.send(createMessage("agent.auth.success", {
         agentId,
@@ -1050,6 +1053,7 @@ export class AgentConnection extends DurableObject {
         message: "Authentication successful",
         alertRecipients,
         resendApiKey,
+        resendFromEmail,
       }));
 
       // Trigger initial server status sync in background

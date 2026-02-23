@@ -17,6 +17,7 @@ const alertConfigFile = "alert-config.json"
 // Stored on disk so it's available even when the manager is unreachable.
 type AlertConfig struct {
 	ResendApiKey    string   `json:"resendApiKey"`
+	ResendFromEmail string   `json:"resendFromEmail"`
 	AlertRecipients []string `json:"alertRecipients"`
 }
 
@@ -118,7 +119,7 @@ func (a *Agent) SendAlertEmail(reason string, failingSince time.Time) {
 	log.Printf("Sending offline alert email to %d recipient(s)...", len(a.alertConfig.AlertRecipients))
 
 	for _, email := range a.alertConfig.AlertRecipients {
-		if err := sendResendEmail(a.alertConfig.ResendApiKey, email, subject, body); err != nil {
+		if err := sendResendEmail(a.alertConfig.ResendApiKey, a.alertConfig.ResendFromEmail, email, subject, body); err != nil {
 			log.Printf("Failed to send alert to %s: %v", email, err)
 		}
 	}
@@ -163,16 +164,20 @@ func (a *Agent) SendRecoveryEmail(failingSince time.Time) {
 	log.Printf("Sending recovery email to %d recipient(s)...", len(a.alertConfig.AlertRecipients))
 
 	for _, email := range a.alertConfig.AlertRecipients {
-		if err := sendResendEmail(a.alertConfig.ResendApiKey, email, subject, body); err != nil {
+		if err := sendResendEmail(a.alertConfig.ResendApiKey, a.alertConfig.ResendFromEmail, email, subject, body); err != nil {
 			log.Printf("Failed to send recovery email to %s: %v", email, err)
 		}
 	}
 }
 
 // sendResendEmail sends a single email via Resend API.
-func sendResendEmail(apiKey, to, subject, html string) error {
+func sendResendEmail(apiKey, fromEmail, to, subject, html string) error {
+	from := fromEmail
+	if from == "" {
+		from = "ZedOps Alerts <noreply@example.com>"
+	}
 	payload := map[string]interface{}{
-		"from":    "ZedOps Alerts <noreply@example.com>",
+		"from":    from,
 		"to":      []string{to},
 		"subject": subject,
 		"html":    html,
