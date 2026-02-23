@@ -421,6 +421,50 @@ export async function getUserRoleAssignments(
 }
 
 /**
+ * Get alert recipient emails for a specific agent
+ *
+ * Returns deduplicated list of emails for users who should be notified
+ * when this agent goes offline:
+ * - All admin users (system role)
+ * - Users with agent-level assignments for this agent
+ * - Users with global-level assignments
+ */
+export async function getAlertRecipientsForAgent(
+  db: D1Database,
+  agentId: string
+): Promise<string[]> {
+  const emails = new Set<string>();
+
+  // 1. All admin users
+  const admins = await db
+    .prepare('SELECT email FROM users WHERE role = ?')
+    .bind('admin')
+    .all<{ email: string }>();
+
+  for (const admin of admins.results || []) {
+    emails.add(admin.email);
+  }
+
+  // 2. Users with agent-level or global assignments
+  const assigned = await db
+    .prepare(
+      `SELECT DISTINCT u.email
+       FROM role_assignments ra
+       JOIN users u ON ra.user_id = u.id
+       WHERE (ra.scope = 'agent' AND ra.resource_id = ?)
+          OR (ra.scope = 'global' AND ra.resource_id IS NULL)`
+    )
+    .bind(agentId)
+    .all<{ email: string }>();
+
+  for (const user of assigned.results || []) {
+    emails.add(user.email);
+  }
+
+  return Array.from(emails);
+}
+
+/**
  * Get all role assignments for a specific resource
  *
  * Useful for showing "who has access to this server/agent"
