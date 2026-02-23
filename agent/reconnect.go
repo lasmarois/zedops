@@ -14,6 +14,7 @@ import (
 const (
 	initialBackoff = 1 * time.Second
 	maxBackoff     = 60 * time.Second
+	maxAuthBackoff = 5 * time.Minute // Auth retries back off to 5min max (288 req/day at steady state)
 	backoffFactor  = 2.0
 )
 
@@ -22,14 +23,9 @@ const (
 var ErrAuthFailure = errors.New("authentication failure")
 
 // ErrTransientAuth indicates a transient authentication failure (connection dropped during auth,
-// timeout due to Worker redeployment, etc.). These are retryable with bounded retries.
+// timeout due to Worker redeployment, etc.). These are retried indefinitely with backoff up to 5 minutes.
+// Only explicit server rejection (ErrAuthFailure) causes the agent to exit.
 var ErrTransientAuth = errors.New("transient auth failure")
-
-const (
-	// maxTransientAuthRetries is the maximum number of consecutive transient auth failures
-	// before giving up. 5 retries with exponential backoff = ~30s total, ~10 requests — safe for free tier.
-	maxTransientAuthRetries = 5
-)
 
 // ConnectWithRetry attempts to connect to the manager with exponential backoff
 func (a *Agent) ConnectWithRetry(ctx context.Context) error {
@@ -90,6 +86,7 @@ func (a *Agent) ConnectWithRetry(ctx context.Context) error {
 func (a *Agent) RunWithReconnect(ctx context.Context) error {
 	transientRetries := 0
 	authBackoff := initialBackoff
+	var firstFailure time.Time
 
 	for {
 		select {
@@ -114,27 +111,22 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			if errors.Is(err, ErrTransientAuth) {
 				// Transient failure — connection dropped during auth (likely Worker redeploy)
 				transientRetries++
-				if transientRetries >= maxTransientAuthRetries {
-					log.Println("")
-					log.Println("========================================")
-					log.Printf("AUTH FAILED after %d transient retries — giving up", transientRetries)
-					log.Println("========================================")
-					log.Printf("Error: %v", err)
-					log.Println("")
-					log.Println("The manager may be experiencing extended downtime.")
-					log.Println("The agent will NOT restart automatically.")
-					log.Println("Restart manually once the manager is available:")
-					log.Println("  sudo systemctl start zedops-agent")
-					log.Println("========================================")
-					return fmt.Errorf("%w: exhausted %d transient retries: %v", ErrAuthFailure, maxTransientAuthRetries, err)
+				if transientRetries == 1 {
+					firstFailure = time.Now()
 				}
-				log.Printf("Auth failed (transient: connection dropped during deploy?), retrying (%d/%d) in %v...",
-					transientRetries, maxTransientAuthRetries, authBackoff)
+
+				// Log every attempt for the first 10, then every 5th to reduce spam
+				if transientRetries <= 10 || transientRetries%5 == 0 {
+					elapsed := time.Since(firstFailure).Round(time.Second)
+					log.Printf("Auth failed (transient), retrying (#%d, backoff %v, failing for %v)...",
+						transientRetries, authBackoff, elapsed)
+				}
+
 				select {
 				case <-time.After(authBackoff):
 					authBackoff = time.Duration(float64(authBackoff) * backoffFactor)
-					if authBackoff > maxBackoff {
-						authBackoff = maxBackoff
+					if authBackoff > maxAuthBackoff {
+						authBackoff = maxAuthBackoff
 					}
 				case <-ctx.Done():
 					return ctx.Err()
