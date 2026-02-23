@@ -421,9 +421,9 @@ export async function getUserRoleAssignments(
 }
 
 /**
- * Get alert recipient emails for a specific agent
+ * Get alert recipients for a specific agent (with theme preferences)
  *
- * Returns deduplicated list of emails for users who should be notified
+ * Returns deduplicated list of recipients who should be notified
  * when this agent goes offline:
  * - All admin users (system role)
  * - Users with agent-level assignments for this agent
@@ -432,36 +432,36 @@ export async function getUserRoleAssignments(
 export async function getAlertRecipientsForAgent(
   db: D1Database,
   agentId: string
-): Promise<string[]> {
-  const emails = new Set<string>();
+): Promise<Array<{ email: string; theme: string | null }>> {
+  const recipients = new Map<string, string | null>();
 
   // 1. All admin users
   const admins = await db
-    .prepare('SELECT email FROM users WHERE role = ?')
+    .prepare('SELECT email, theme FROM users WHERE role = ?')
     .bind('admin')
-    .all<{ email: string }>();
+    .all<{ email: string; theme: string | null }>();
 
   for (const admin of admins.results || []) {
-    emails.add(admin.email);
+    recipients.set(admin.email, admin.theme);
   }
 
   // 2. Users with agent-level or global assignments
   const assigned = await db
     .prepare(
-      `SELECT DISTINCT u.email
+      `SELECT DISTINCT u.email, u.theme
        FROM role_assignments ra
        JOIN users u ON ra.user_id = u.id
        WHERE (ra.scope = 'agent' AND ra.resource_id = ?)
           OR (ra.scope = 'global' AND ra.resource_id IS NULL)`
     )
     .bind(agentId)
-    .all<{ email: string }>();
+    .all<{ email: string; theme: string | null }>();
 
   for (const user of assigned.results || []) {
-    emails.add(user.email);
+    recipients.set(user.email, user.theme);
   }
 
-  return Array.from(emails);
+  return Array.from(recipients.entries()).map(([email, theme]) => ({ email, theme }));
 }
 
 /**

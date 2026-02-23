@@ -13,7 +13,7 @@ import * as jose from 'jose';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { hashPassword, validatePasswordStrength, hashToken } from '../lib/auth';
 import { logInvitationCreated, logInvitationAccepted } from '../lib/audit';
-import { sendEmail, buildInvitationEmailHtml } from '../lib/email';
+import { sendEmail, buildInvitationEmailHtml, DEFAULT_EMAIL_THEME } from '../lib/email';
 
 type Bindings = {
   DB: D1Database;
@@ -104,7 +104,7 @@ invitations.post('/', requireAuth(), requireRole('admin'), async (c) => {
     let emailError: string | undefined;
 
     if (c.env.RESEND_API_KEY) {
-      const html = buildInvitationEmailHtml(invitationUrl, role);
+      const html = buildInvitationEmailHtml(invitationUrl, role, DEFAULT_EMAIL_THEME);
       const from = c.env.RESEND_FROM_EMAIL
         ? `ZedOps <${c.env.RESEND_FROM_EMAIL}>`
         : undefined;
@@ -300,7 +300,7 @@ invitations.post('/:id/resend', requireAuth(), requireRole('admin'), async (c) =
     let emailError: string | undefined;
 
     if (c.env.RESEND_API_KEY) {
-      const html = buildInvitationEmailHtml(invitationUrl, role);
+      const html = buildInvitationEmailHtml(invitationUrl, role, DEFAULT_EMAIL_THEME);
       const from = c.env.RESEND_FROM_EMAIL
         ? `ZedOps <${c.env.RESEND_FROM_EMAIL}>`
         : undefined;

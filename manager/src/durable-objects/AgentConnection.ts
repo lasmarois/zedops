@@ -30,7 +30,7 @@ import {
 } from "../types/LogMessage";
 import { logRconCommand } from "../lib/audit";
 import { getAlertRecipientsForAgent } from "../lib/permissions";
-import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml } from "../lib/email";
+import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml, getEmailThemeColors } from "../lib/email";
 
 export class AgentConnection extends DurableObject {
   // Core agent state (restored from storage after hibernation)
@@ -1021,8 +1021,8 @@ export class AgentConnection extends DurableObject {
       if (alertSentAt && disconnectedAt && this.env.RESEND_API_KEY) {
         const downtimeMs = Date.now() - disconnectedAt;
         const downtimeMinutes = Math.round(downtimeMs / 60000);
-        const recipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
-        this.ctx.waitUntil(this.sendRecoveryEmails(agentName, downtimeMinutes, recipients));
+        const recoveryRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+        this.ctx.waitUntil(this.sendRecoveryEmails(agentName, downtimeMinutes, recoveryRecipients));
         await this.ctx.storage.delete('alertSentAt');
       }
 
@@ -1041,7 +1041,11 @@ export class AgentConnection extends DurableObject {
       console.log(`[AgentConnection] Agent authenticated: ${agentName} (${agentId})`);
 
       // Gather alert config for the agent (email recipients + API key)
-      const alertRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+      const rawRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+      const alertRecipients = rawRecipients.map(r => ({
+        email: r.email,
+        colors: getEmailThemeColors(r.theme),
+      }));
       const resendApiKey = this.env.RESEND_API_KEY || null;
       const resendFromEmail = this.env.RESEND_FROM_EMAIL
         ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
@@ -1264,8 +1268,8 @@ export class AgentConnection extends DurableObject {
       return;
     }
 
-    const recipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
-    if (recipients.length === 0) {
+    const rawRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+    if (rawRecipients.length === 0) {
       console.log(`[AgentConnection] No alert recipients for agent ${agentName} — skipping`);
       return;
     }
@@ -1274,24 +1278,24 @@ export class AgentConnection extends DurableObject {
       ? new Date(disconnectedAt).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
       : 'Unknown';
 
-    const html = buildAgentOfflineEmailHtml(agentName, disconnectedDate);
-
-    console.log(`[AgentConnection] Sending offline alert for ${agentName} to ${recipients.length} recipient(s)`);
+    console.log(`[AgentConnection] Sending offline alert for ${agentName} to ${rawRecipients.length} recipient(s)`);
 
     const fromEmail = this.env.RESEND_FROM_EMAIL
       ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
       : undefined;
 
-    for (const email of recipients) {
+    for (const recipient of rawRecipients) {
+      const colors = getEmailThemeColors(recipient.theme);
+      const html = buildAgentOfflineEmailHtml(agentName, disconnectedDate, colors);
       const result = await sendEmail(apiKey, {
-        to: email,
+        to: recipient.email,
         subject: `[ZedOps] Agent "${agentName}" is offline`,
         html,
         from: fromEmail,
       });
 
       if (!result.success) {
-        console.error(`[AgentConnection] Failed to send offline alert to ${email}: ${result.error}`);
+        console.error(`[AgentConnection] Failed to send offline alert to ${recipient.email}: ${result.error}`);
       }
     }
 
@@ -1302,27 +1306,28 @@ export class AgentConnection extends DurableObject {
   /**
    * Send recovery emails to all alert recipients (called via waitUntil on reconnect)
    */
-  private async sendRecoveryEmails(agentName: string, downtimeMinutes: number, recipients: string[]): Promise<void> {
+  private async sendRecoveryEmails(agentName: string, downtimeMinutes: number, recipients: Array<{ email: string; theme: string | null }>): Promise<void> {
     const apiKey = this.env.RESEND_API_KEY;
     if (!apiKey || recipients.length === 0) return;
 
-    const html = buildAgentRecoveredEmailHtml(agentName, downtimeMinutes);
     const fromEmail = this.env.RESEND_FROM_EMAIL
       ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
       : undefined;
 
     console.log(`[AgentConnection] Sending recovery email for ${agentName} to ${recipients.length} recipient(s)`);
 
-    for (const email of recipients) {
+    for (const recipient of recipients) {
+      const colors = getEmailThemeColors(recipient.theme);
+      const html = buildAgentRecoveredEmailHtml(agentName, downtimeMinutes, colors);
       const result = await sendEmail(apiKey, {
-        to: email,
+        to: recipient.email,
         subject: `[ZedOps] Agent "${agentName}" is back online`,
         html,
         from: fromEmail,
       });
 
       if (!result.success) {
-        console.error(`[AgentConnection] Failed to send recovery email to ${email}: ${result.error}`);
+        console.error(`[AgentConnection] Failed to send recovery email to ${recipient.email}: ${result.error}`);
       }
     }
   }

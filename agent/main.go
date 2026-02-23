@@ -330,12 +330,12 @@ func (a *Agent) authenticate() error {
 
 		// Parse authentication response
 		var resp struct {
-			AgentID         string   `json:"agentId"`
-			AgentName       string   `json:"agentName"`
-			Message         string   `json:"message"`
-			AlertRecipients []string `json:"alertRecipients"`
-			ResendApiKey    string   `json:"resendApiKey"`
-			ResendFromEmail string   `json:"resendFromEmail"`
+			AgentID         string           `json:"agentId"`
+			AgentName       string           `json:"agentName"`
+			Message         string           `json:"message"`
+			AlertRecipients []AlertRecipient `json:"alertRecipients"`
+			ResendApiKey    string           `json:"resendApiKey"`
+			ResendFromEmail string           `json:"resendFromEmail"`
 		}
 		data, _ := json.Marshal(result.msg.Data)
 		if err := json.Unmarshal(data, &resp); err != nil {
