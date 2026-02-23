@@ -60,6 +60,7 @@ type Agent struct {
 	isAuthenticated  bool                          // True when successfully authenticated
 	authMutex        sync.RWMutex                  // Protects isAuthenticated
 	updater          *AutoUpdater                  // Auto-updater for push notifications
+	alertConfig      *AlertConfig                  // Cached alert config (Resend API key + recipients)
 }
 
 func main() {
@@ -134,6 +135,14 @@ func main() {
 		rconManager:    rconManager,
 		logCapture:     logCapture,
 		volumeCache:    make(map[string]*volumeSizeCache),
+	}
+
+	// Load cached alert config from disk (available before auth, for offline alerting)
+	if cachedConfig, err := LoadAlertConfig(); err != nil {
+		log.Printf("Warning: failed to load alert config: %v", err)
+	} else if cachedConfig != nil {
+		agent.alertConfig = cachedConfig
+		log.Printf("Loaded cached alert config (%d recipient(s))", len(cachedConfig.AlertRecipients))
 	}
 
 	// Initialize player stats collector (requires Docker client and agent for messaging)
@@ -321,9 +330,11 @@ func (a *Agent) authenticate() error {
 
 		// Parse authentication response
 		var resp struct {
-			AgentID   string `json:"agentId"`
-			AgentName string `json:"agentName"`
-			Message   string `json:"message"`
+			AgentID         string   `json:"agentId"`
+			AgentName       string   `json:"agentName"`
+			Message         string   `json:"message"`
+			AlertRecipients []string `json:"alertRecipients"`
+			ResendApiKey    string   `json:"resendApiKey"`
 		}
 		data, _ := json.Marshal(result.msg.Data)
 		if err := json.Unmarshal(data, &resp); err != nil {
@@ -332,6 +343,20 @@ func (a *Agent) authenticate() error {
 
 		a.agentID = resp.AgentID
 		log.Printf("Authentication successful! Agent ID: %s", a.agentID)
+
+		// Cache alert config to disk (available even when manager is unreachable)
+		if resp.ResendApiKey != "" && len(resp.AlertRecipients) > 0 {
+			a.alertConfig = &AlertConfig{
+				ResendApiKey:    resp.ResendApiKey,
+				AlertRecipients: resp.AlertRecipients,
+			}
+			if err := SaveAlertConfig(a.alertConfig); err != nil {
+				log.Printf("Warning: failed to save alert config: %v", err)
+			} else {
+				log.Printf("Alert config cached (%d recipient(s))", len(resp.AlertRecipients))
+			}
+		}
+
 		return nil
 
 	case <-timeout:

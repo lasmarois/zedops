@@ -53,6 +53,99 @@ export async function sendEmail(apiKey: string, options: SendEmailOptions): Prom
   }
 }
 
+export function buildAgentOfflineEmailHtml(agentName: string, disconnectedAt: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#080604;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8e0d6;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#080604" style="background-color:#080604;padding:40px 20px;">
+    <tr>
+      <td align="center" bgcolor="#080604">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#121010" style="max-width:520px;background-color:#121010;border-radius:12px;border:1px solid #2a1f17;">
+          <tr>
+            <td bgcolor="#121010" style="padding:32px 32px 16px;text-align:center;border-bottom:1px solid #2a1f17;">
+              <h1 style="margin:0;font-size:26px;font-weight:700;color:#f58b07;letter-spacing:-0.5px;">ZedOps</h1>
+              <p style="margin:6px 0 0;font-size:12px;color:#6b5d52;letter-spacing:1px;text-transform:uppercase;">Agent Alert</p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#121010" style="padding:24px 32px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#e8e0d6;line-height:1.5;">
+                Agent <strong style="color:#f58b07;">${agentName}</strong> has been <strong style="color:#ef4444;">offline</strong> for 5 minutes.
+              </p>
+              <p style="margin:0 0 8px;font-size:14px;color:#6b5d52;line-height:1.5;">
+                Disconnected at: <strong style="color:#e8e0d6;">${disconnectedAt}</strong>
+              </p>
+              <p style="margin:16px 0 0;font-size:14px;color:#6b5d52;line-height:1.5;">
+                The agent may have crashed, the host may be down, or there may be a network issue. Check the agent host and restart if needed.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#121010" style="padding:16px 32px;border-top:1px solid #2a1f17;">
+              <p style="margin:0;font-size:12px;color:#6b5d52;text-align:center;">
+                You received this because you are assigned to this agent on ZedOps.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export function buildAgentRecoveredEmailHtml(agentName: string, downtimeMinutes: number): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#080604;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e8e0d6;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#080604" style="background-color:#080604;padding:40px 20px;">
+    <tr>
+      <td align="center" bgcolor="#080604">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#121010" style="max-width:520px;background-color:#121010;border-radius:12px;border:1px solid #2a1f17;">
+          <tr>
+            <td bgcolor="#121010" style="padding:32px 32px 16px;text-align:center;border-bottom:1px solid #2a1f17;">
+              <h1 style="margin:0;font-size:26px;font-weight:700;color:#f58b07;letter-spacing:-0.5px;">ZedOps</h1>
+              <p style="margin:6px 0 0;font-size:12px;color:#6b5d52;letter-spacing:1px;text-transform:uppercase;">Agent Recovery</p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#121010" style="padding:24px 32px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#e8e0d6;line-height:1.5;">
+                Agent <strong style="color:#f58b07;">${agentName}</strong> is back <strong style="color:#22c55e;">online</strong>.
+              </p>
+              <p style="margin:0;font-size:14px;color:#6b5d52;line-height:1.5;">
+                Total downtime: <strong style="color:#e8e0d6;">${downtimeMinutes} minute${downtimeMinutes !== 1 ? 's' : ''}</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#121010" style="padding:16px 32px;border-top:1px solid #2a1f17;">
+              <p style="margin:0;font-size:12px;color:#6b5d52;text-align:center;">
+                You received this because you are assigned to this agent on ZedOps.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildInvitationEmailHtml(invitationUrl: string, role: string): string {
   return `<!DOCTYPE html>
 <html>

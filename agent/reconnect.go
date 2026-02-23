@@ -87,6 +87,8 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 	transientRetries := 0
 	authBackoff := initialBackoff
 	var firstFailure time.Time
+	alertSent := false
+	const alertDelay = 10 * time.Minute
 
 	for {
 		select {
@@ -122,6 +124,12 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 						transientRetries, authBackoff, elapsed)
 				}
 
+				// Send alert email after 10 minutes of continuous failure (once per outage)
+				if !alertSent && time.Since(firstFailure) >= alertDelay {
+					alertSent = true
+					go a.SendAlertEmail(err.Error(), firstFailure)
+				}
+
 				select {
 				case <-time.After(authBackoff):
 					authBackoff = time.Duration(float64(authBackoff) * backoffFactor)
@@ -155,9 +163,15 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			return fmt.Errorf("%w: %v", ErrAuthFailure, err)
 		}
 
-		// Auth succeeded — reset transient retry state
+		// Auth succeeded — send recovery email if alert was sent during this outage
+		if alertSent {
+			go a.SendRecoveryEmail(firstFailure)
+		}
+
+		// Reset transient retry state
 		transientRetries = 0
 		authBackoff = initialBackoff
+		alertSent = false
 
 		// Mark as authenticated
 		a.setAuthenticated(true)

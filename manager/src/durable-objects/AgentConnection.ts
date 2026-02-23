@@ -29,6 +29,8 @@ import {
   AgentLogLine,
 } from "../types/LogMessage";
 import { logRconCommand } from "../lib/audit";
+import { getAlertRecipientsForAgent } from "../lib/permissions";
+import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml } from "../lib/email";
 
 export class AgentConnection extends DurableObject {
   // Core agent state (restored from storage after hibernation)
@@ -724,6 +726,18 @@ export class AgentConnection extends DurableObject {
       } catch (error) {
         console.error("[AgentConnection] Failed to update agent status:", error);
       }
+
+      // Set DO alarm for offline alert (5 minutes)
+      // If agent reconnects before alarm fires, it will be cancelled in handleAgentAuth
+      try {
+        await this.ctx.storage.put('disconnectedAgentId', this.agentId);
+        await this.ctx.storage.put('disconnectedAgentName', this.agentName);
+        await this.ctx.storage.put('disconnectedAt', Date.now());
+        await this.ctx.storage.setAlarm(Date.now() + 5 * 60 * 1000);
+        console.log(`[AgentConnection] Offline alert alarm set for 5 minutes (agent: ${this.agentName})`);
+      } catch (error) {
+        console.error("[AgentConnection] Failed to set offline alert alarm:", error);
+      }
     }
 
     // Clear persistent state
@@ -995,6 +1009,23 @@ export class AgentConnection extends DurableObject {
       this.agentName = agentName;
       this.isRegistered = true;
 
+      // Cancel any pending offline alert alarm (agent reconnected in time)
+      const disconnectedAt = await this.ctx.storage.get<number>('disconnectedAt');
+      await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.delete('disconnectedAgentId');
+      await this.ctx.storage.delete('disconnectedAgentName');
+      await this.ctx.storage.delete('disconnectedAt');
+
+      // If there was a disconnect and an alert was already sent, send recovery email
+      const alertSentAt = await this.ctx.storage.get<number>('alertSentAt');
+      if (alertSentAt && disconnectedAt && this.env.RESEND_API_KEY) {
+        const downtimeMs = Date.now() - disconnectedAt;
+        const downtimeMinutes = Math.round(downtimeMs / 60000);
+        const recipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+        this.ctx.waitUntil(this.sendRecoveryEmails(agentName, downtimeMinutes, recipients));
+        await this.ctx.storage.delete('alertSentAt');
+      }
+
       // Persist to storage for hibernation recovery
       await this.ctx.storage.put('agentId', agentId);
       await this.ctx.storage.put('agentName', agentName);
@@ -1009,10 +1040,16 @@ export class AgentConnection extends DurableObject {
 
       console.log(`[AgentConnection] Agent authenticated: ${agentName} (${agentId})`);
 
+      // Gather alert config for the agent (email recipients + API key)
+      const alertRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+      const resendApiKey = this.env.RESEND_API_KEY || null;
+
       this.send(createMessage("agent.auth.success", {
         agentId,
         agentName,
         message: "Authentication successful",
+        alertRecipients,
+        resendApiKey,
       }));
 
       // Trigger initial server status sync in background
@@ -1185,6 +1222,105 @@ export class AgentConnection extends DurableObject {
     lastUpdate: number;
   } | null {
     return this.playerStats.get(serverId) || null;
+  }
+
+  // ─── Offline Alert Alarm ─────────────────────────────────────────
+
+  /**
+   * DO alarm handler — fires 5 minutes after agent disconnect.
+   * If agent is still offline, sends alert emails to assigned users + admins.
+   */
+  async alarm(): Promise<void> {
+    const agentId = await this.ctx.storage.get<string>('disconnectedAgentId');
+    const agentName = await this.ctx.storage.get<string>('disconnectedAgentName');
+    const disconnectedAt = await this.ctx.storage.get<number>('disconnectedAt');
+
+    if (!agentId || !agentName) {
+      console.log('[AgentConnection] Alarm fired but no disconnect info — ignoring');
+      return;
+    }
+
+    // Verify agent is still offline in DB
+    const agent = await this.env.DB.prepare('SELECT status FROM agents WHERE id = ?')
+      .bind(agentId)
+      .first<{ status: string }>();
+
+    if (agent && agent.status === 'online') {
+      console.log(`[AgentConnection] Alarm fired but agent ${agentName} is back online — skipping alert`);
+      await this.ctx.storage.delete('disconnectedAgentId');
+      await this.ctx.storage.delete('disconnectedAgentName');
+      await this.ctx.storage.delete('disconnectedAt');
+      return;
+    }
+
+    // Agent is still offline — send alert emails
+    const apiKey = this.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.log(`[AgentConnection] No RESEND_API_KEY configured — skipping offline alert for ${agentName}`);
+      return;
+    }
+
+    const recipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+    if (recipients.length === 0) {
+      console.log(`[AgentConnection] No alert recipients for agent ${agentName} — skipping`);
+      return;
+    }
+
+    const disconnectedDate = disconnectedAt
+      ? new Date(disconnectedAt).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
+      : 'Unknown';
+
+    const html = buildAgentOfflineEmailHtml(agentName, disconnectedDate);
+
+    console.log(`[AgentConnection] Sending offline alert for ${agentName} to ${recipients.length} recipient(s)`);
+
+    const fromEmail = this.env.RESEND_FROM_EMAIL
+      ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
+      : undefined;
+
+    for (const email of recipients) {
+      const result = await sendEmail(apiKey, {
+        to: email,
+        subject: `[ZedOps] Agent "${agentName}" is offline`,
+        html,
+        from: fromEmail,
+      });
+
+      if (!result.success) {
+        console.error(`[AgentConnection] Failed to send offline alert to ${email}: ${result.error}`);
+      }
+    }
+
+    // Mark that alert was sent (so we can send recovery email later)
+    await this.ctx.storage.put('alertSentAt', Date.now());
+  }
+
+  /**
+   * Send recovery emails to all alert recipients (called via waitUntil on reconnect)
+   */
+  private async sendRecoveryEmails(agentName: string, downtimeMinutes: number, recipients: string[]): Promise<void> {
+    const apiKey = this.env.RESEND_API_KEY;
+    if (!apiKey || recipients.length === 0) return;
+
+    const html = buildAgentRecoveredEmailHtml(agentName, downtimeMinutes);
+    const fromEmail = this.env.RESEND_FROM_EMAIL
+      ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
+      : undefined;
+
+    console.log(`[AgentConnection] Sending recovery email for ${agentName} to ${recipients.length} recipient(s)`);
+
+    for (const email of recipients) {
+      const result = await sendEmail(apiKey, {
+        to: email,
+        subject: `[ZedOps] Agent "${agentName}" is back online`,
+        html,
+        from: fromEmail,
+      });
+
+      if (!result.success) {
+        console.error(`[AgentConnection] Failed to send recovery email to ${email}: ${result.error}`);
+      }
+    }
   }
 
   // ─── Send Helpers ─────────────────────────────────────────────────
