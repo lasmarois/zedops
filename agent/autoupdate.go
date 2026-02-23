@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -70,6 +71,11 @@ func (u *AutoUpdater) checkAndUpdate(bustCache bool) {
 
 	if latestVersion == Version {
 		log.Printf("Agent is up to date (version %s)", Version)
+		return
+	}
+
+	if !isNewerVersion(latestVersion, Version) {
+		log.Printf("Remote version %s is not newer than current %s, skipping", latestVersion, Version)
 		return
 	}
 
@@ -190,4 +196,32 @@ func (u *AutoUpdater) restart() error {
 	// This replaces the current process - code after this won't execute
 	log.Println("Executing new binary...")
 	return syscall.Exec(u.currentBinary, args, env)
+}
+
+// isNewerVersion returns true if remote is newer than current (semver comparison).
+// Versions are expected in "MAJOR.MINOR.PATCH" format (e.g., "1.0.11").
+func isNewerVersion(remote, current string) bool {
+	rParts := parseVersion(remote)
+	cParts := parseVersion(current)
+	for i := 0; i < 3; i++ {
+		if rParts[i] > cParts[i] {
+			return true
+		}
+		if rParts[i] < cParts[i] {
+			return false
+		}
+	}
+	return false // equal
+}
+
+// parseVersion splits a "MAJOR.MINOR.PATCH" string into [3]int.
+func parseVersion(v string) [3]int {
+	var parts [3]int
+	for i, s := range strings.SplitN(v, ".", 3) {
+		if i >= 3 {
+			break
+		}
+		parts[i], _ = strconv.Atoi(s)
+	}
+	return parts
 }
