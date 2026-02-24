@@ -209,15 +209,20 @@ servers.get('/:id', async (c) => {
     let health: string | undefined;
     let imageVersion: string | undefined;
     let playerStats: { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean } | null = null;
+    let iniMods: string | null = null;
+    let iniWorkshopItems: string | null = null;
     if (server.agent_status === 'online' && server.agent_name) {
       try {
         const id = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
         const stub = c.env.AGENT_CONNECTION.get(id);
 
         // Fetch containers and player stats in parallel
-        const [containerResponse, playersResponse] = await Promise.all([
+        const [containerResponse, playersResponse, iniResponse] = await Promise.all([
           stub.fetch(`http://do/containers`, { method: 'GET' }),
           stub.fetch(`http://do/players/${serverId}`, { method: 'GET' }),
+          server.container_id
+            ? stub.fetch(`http://do/servers/${serverId}/ini?serverName=${encodeURIComponent(server.name as string)}`, { method: 'GET' })
+            : Promise.resolve(null),
         ]);
 
         if (containerResponse.ok && server.container_id) {
@@ -238,6 +243,15 @@ servers.get('/:id', async (c) => {
           const playersData = await playersResponse.json() as { success: boolean; stats?: { playerCount: number; maxPlayers: number; players: string[]; rconConnected: boolean } };
           if (playersData.stats) {
             playerStats = playersData.stats;
+          }
+        }
+
+        // Fetch INI mods (graceful — null if unavailable)
+        if (iniResponse && iniResponse.ok) {
+          const iniData = await iniResponse.json() as { success: boolean; mods?: string; workshopItems?: string };
+          if (iniData.success) {
+            iniMods = iniData.mods || null;
+            iniWorkshopItems = iniData.workshopItems || null;
           }
         }
       } catch (err) {
@@ -273,6 +287,8 @@ servers.get('/:id', async (c) => {
       players: playerStats?.players ?? null,
       rcon_connected: playerStats?.rconConnected ?? null, // P2: RCON health status
       data_exists: server.data_exists === 1, // Convert SQLite integer to boolean
+      ini_mods: iniMods,
+      ini_workshop_items: iniWorkshopItems,
       deleted_at: server.deleted_at,
       created_at: server.created_at,
       updated_at: server.updated_at,
