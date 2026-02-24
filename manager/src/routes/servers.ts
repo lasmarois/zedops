@@ -250,8 +250,8 @@ servers.get('/:id', async (c) => {
         if (iniResponse && iniResponse.ok) {
           const iniData = await iniResponse.json() as { success: boolean; mods?: string; workshopItems?: string };
           if (iniData.success) {
-            iniMods = iniData.mods || null;
-            iniWorkshopItems = iniData.workshopItems || null;
+            iniMods = iniData.mods ?? null;
+            iniWorkshopItems = iniData.workshopItems ?? null;
           }
         }
       } catch (err) {
