@@ -438,6 +438,8 @@ func (a *Agent) receiveMessages() {
 			a.handleServerVolumeSizes(msg)
 		case "server.movedata":
 			a.handleServerMoveData(msg)
+		case "server.readini":
+			a.handleServerReadINI(msg)
 		case "server.inspect":
 			a.handleServerInspect(msg)
 		case "server.adopt":
@@ -1145,6 +1147,46 @@ func (a *Agent) handleServerGetDataPath(msg Message) {
 					Success:  true,
 					DataPath: dataPath,
 				},
+				Timestamp: time.Now().Unix(),
+			}
+		}
+		a.sendMessage(response)
+	}
+}
+
+// handleServerReadINI handles server.readini messages
+// Reads a PZ server's .ini file and returns Mods and WorkshopItems
+func (a *Agent) handleServerReadINI(msg Message) {
+	data, _ := json.Marshal(msg.Data)
+	var req ServerReadINIRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		if msg.Reply != "" {
+			a.sendMessage(Message{
+				Subject:   msg.Reply,
+				Data:      ServerReadINIResponse{Success: false, Error: "Invalid request format: " + err.Error()},
+				Timestamp: time.Now().Unix(),
+			})
+		}
+		return
+	}
+
+	log.Printf("Reading INI for server %s from container %s", req.ServerName, req.ContainerID)
+
+	ctx := context.Background()
+	result, err := a.docker.ReadServerINI(ctx, req.ContainerID, req.ServerName)
+
+	if msg.Reply != "" {
+		var response Message
+		if err != nil {
+			response = Message{
+				Subject:   msg.Reply,
+				Data:      ServerReadINIResponse{Success: false, Error: err.Error()},
+				Timestamp: time.Now().Unix(),
+			}
+		} else {
+			response = Message{
+				Subject:   msg.Reply,
+				Data:      result,
 				Timestamp: time.Now().Unix(),
 			}
 		}
