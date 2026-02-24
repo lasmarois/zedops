@@ -122,27 +122,104 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
         <CardHeader>
           <CardTitle className="text-lg">Mods</CardTitle>
         </CardHeader>
-        <CardContent>
-          {config.SERVER_MODS ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Installed Mods</p>
-                <div className="flex flex-wrap gap-2">
-                  {config.SERVER_MODS.split(';').map((mod: string, i: number) => (
-                    <Badge key={i} variant="secondary">{mod}</Badge>
-                  ))}
-                </div>
-              </div>
-              {config.SERVER_WORKSHOP_ITEMS && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Workshop Item IDs</p>
-                  <p className="text-sm text-muted-foreground">{config.SERVER_WORKSHOP_ITEMS}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic py-2">No mods installed</p>
-          )}
+        <CardContent className="space-y-4">
+          {(() => {
+            // Parse ENV mods (managed by ZedOps)
+            const envMods = config.SERVER_MODS
+              ? config.SERVER_MODS.split(';').map((m: string) => m.trim()).filter(Boolean)
+              : [];
+            const envWorkshop = config.SERVER_WORKSHOP_ITEMS
+              ? config.SERVER_WORKSHOP_ITEMS.split(';').map((w: string) => w.trim()).filter(Boolean)
+              : [];
+
+            // Parse INI mods (what's actually running)
+            const iniMods = server.ini_mods
+              ? server.ini_mods.split(';').map((m: string) => m.trim().replace(/^\\/, '')).filter(Boolean)
+              : [];
+            const iniWorkshop = server.ini_workshop_items
+              ? server.ini_workshop_items.split(';').map((w: string) => w.trim()).filter(Boolean)
+              : [];
+
+            // Compute manual mods (in INI but not in ENV)
+            // Normalize for comparison: strip backslash prefixes from both sides
+            const envModsNorm = new Set(envMods.map((m: string) => m.replace(/^\\/, '')));
+            const envWorkshopNorm = new Set(envWorkshop);
+            const manualMods = iniMods.filter((m: string) => !envModsNorm.has(m));
+            const manualWorkshop = iniWorkshop.filter((w: string) => !envWorkshopNorm.has(w));
+
+            const hasEnvMods = envMods.length > 0;
+            const hasManualMods = manualMods.length > 0;
+            const hasEnvWorkshop = envWorkshop.length > 0;
+            const hasManualWorkshop = manualWorkshop.length > 0;
+            const hasAnything = hasEnvMods || hasManualMods || hasEnvWorkshop || hasManualWorkshop;
+
+            if (!hasAnything) {
+              return <p className="text-sm text-muted-foreground italic py-2">No mods installed</p>;
+            }
+
+            return (
+              <>
+                {/* Managed Mods */}
+                {hasEnvMods && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Managed by ZedOps ({envMods.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {envMods.map((mod: string, i: number) => (
+                        <Badge key={i} variant="secondary">{mod.replace(/^\\/, '')}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual Mods (INI only) */}
+                {hasManualMods && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Installed on Server ({manualMods.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {manualMods.map((mod: string, i: number) => (
+                        <Badge key={i} variant="outline">{mod}</Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Added outside ZedOps (in-game, RCON, or INI edit)</p>
+                  </div>
+                )}
+
+                {/* Workshop Items — Managed */}
+                {hasEnvWorkshop && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Workshop Items — Managed ({envWorkshop.length})
+                    </p>
+                    <p className="text-sm text-muted-foreground">{envWorkshop.join('; ')}</p>
+                  </div>
+                )}
+
+                {/* Workshop Items — Manual */}
+                {hasManualWorkshop && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Workshop Items — On Server ({manualWorkshop.length})
+                    </p>
+                    <p className="text-sm text-muted-foreground">{manualWorkshop.join('; ')}</p>
+                    {!hasManualMods && (
+                      <p className="text-xs text-muted-foreground mt-1">Added outside ZedOps</p>
+                    )}
+                  </div>
+                )}
+
+                {/* INI unavailable notice */}
+                {server.ini_mods === null && (hasEnvMods || hasEnvWorkshop) && (
+                  <p className="text-xs text-muted-foreground italic">
+                    Live mod list unavailable (agent offline or server has no INI file)
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 

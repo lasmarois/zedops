@@ -57,6 +57,9 @@ interface ServerWithAgent {
   playerCount: number | null
   maxPlayers: number | null
   players: string[] | null
+  // Goal #21: INI mod data
+  iniMods: string | null
+  iniWorkshopItems: string | null
 }
 
 export function ServerList() {
@@ -106,6 +109,9 @@ export function ServerList() {
     playerCount: server.player_count,
     maxPlayers: server.max_players,
     players: server.players,
+    // Goal #21: INI mod data
+    iniMods: server.ini_mods,
+    iniWorkshopItems: server.ini_workshop_items,
   })) || []
 
   // Separate active and deleted servers
@@ -371,6 +377,8 @@ export function ServerList() {
               config: server.config,
               server_data_path: server.serverDataPath,
               data_exists: server.dataExists,
+              ini_mods: server.iniMods,
+              ini_workshop_items: server.iniWorkshopItems,
               deleted_at: server.deletedAt,
               updated_at: server.updatedAt,
               // M9.8.41: Player stats
