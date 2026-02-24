@@ -221,7 +221,12 @@ servers.get('/:id', async (c) => {
           stub.fetch(`http://do/containers`, { method: 'GET' }),
           stub.fetch(`http://do/players/${serverId}`, { method: 'GET' }),
           server.container_id
-            ? stub.fetch(`http://do/servers/${serverId}/ini?serverName=${encodeURIComponent(server.name as string)}`, { method: 'GET' })
+            ? (() => {
+                // INI file uses PZ SERVER_NAME (from config), not the DB server name
+                const configObj = server.config ? JSON.parse(server.config as string) : {};
+                const pzServerName = configObj.SERVER_NAME || server.name;
+                return stub.fetch(`http://do/servers/${serverId}/ini?serverName=${encodeURIComponent(pzServerName as string)}`, { method: 'GET' });
+              })()
             : Promise.resolve(null),
         ]);
 
