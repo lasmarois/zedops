@@ -706,6 +706,13 @@ export class AgentConnection extends DurableObject {
         await this.handleMetricsBatch(message);
         break;
 
+      case "agent.update.starting":
+        // Agent confirmed it's about to restart for an update — set flag so disconnect uses longer grace
+        await this.ctx.storage.put('updatePending', true);
+        await this.ctx.storage.put('updatePendingAt', Date.now());
+        console.log(`[AgentConnection] Agent ${this.agentName} confirmed update restart imminent`);
+        break;
+
       default:
         console.warn(`[AgentConnection] Unknown subject: ${subject}`);
         this.sendError(`Unknown subject: ${subject}`);
@@ -742,14 +749,19 @@ export class AgentConnection extends DurableObject {
         console.error("[AgentConnection] Failed to update agent status:", error);
       }
 
-      // Set DO alarm for offline alert (5 minutes)
+      // Set DO alarm for offline alert
       // If agent reconnects before alarm fires, it will be cancelled in handleAgentAuth
+      // Use longer grace period (10 min) if an update was recently pushed to this agent
       try {
+        const updatePending = await this.ctx.storage.get<boolean>('updatePending');
+        const graceMs = updatePending ? 10 * 60 * 1000 : 5 * 60 * 1000;
+        const graceLabel = updatePending ? '10 minutes (update pending)' : '5 minutes';
+
         await this.ctx.storage.put('disconnectedAgentId', this.agentId);
         await this.ctx.storage.put('disconnectedAgentName', this.agentName);
         await this.ctx.storage.put('disconnectedAt', Date.now());
-        await this.ctx.storage.setAlarm(Date.now() + 5 * 60 * 1000);
-        console.log(`[AgentConnection] Offline alert alarm set for 5 minutes (agent: ${this.agentName})`);
+        await this.ctx.storage.setAlarm(Date.now() + graceMs);
+        console.log(`[AgentConnection] Offline alert alarm set for ${graceLabel} (agent: ${this.agentName})`);
       } catch (error) {
         console.error("[AgentConnection] Failed to set offline alert alarm:", error);
       }
@@ -1031,6 +1043,10 @@ export class AgentConnection extends DurableObject {
       await this.ctx.storage.delete('disconnectedAgentName');
       await this.ctx.storage.delete('disconnectedAt');
 
+      // Clear update-pending flag (agent reconnected after update or flag was stale)
+      await this.ctx.storage.delete('updatePending');
+      await this.ctx.storage.delete('updatePendingAt');
+
       // If there was a disconnect and an alert was already sent, send recovery email
       const alertSentAt = await this.ctx.storage.get<number>('alertSentAt');
       if (alertSentAt && disconnectedAt && this.env.RESEND_API_KEY) {
@@ -1250,7 +1266,8 @@ export class AgentConnection extends DurableObject {
   // ─── Offline Alert Alarm ─────────────────────────────────────────
 
   /**
-   * DO alarm handler — fires 5 minutes after agent disconnect.
+   * DO alarm handler — fires after agent disconnect grace period.
+   * Normal disconnect: 5 minutes. Update-pending disconnect: 10 minutes.
    * If agent is still offline, sends alert emails to assigned users + admins.
    */
   async alarm(): Promise<void> {
@@ -1261,6 +1278,14 @@ export class AgentConnection extends DurableObject {
     if (!agentId || !agentName) {
       console.log('[AgentConnection] Alarm fired but no disconnect info — ignoring');
       return;
+    }
+
+    // Clean up stale update-pending flag
+    const updatePending = await this.ctx.storage.get<boolean>('updatePending');
+    if (updatePending) {
+      await this.ctx.storage.delete('updatePending');
+      await this.ctx.storage.delete('updatePendingAt');
+      console.log(`[AgentConnection] Cleared stale update-pending flag for ${agentName}`);
     }
 
     // Verify agent is still offline in DB
@@ -1554,7 +1579,10 @@ export class AgentConnection extends DurableObject {
       });
       agentWs.send(JSON.stringify(message));
 
-      console.log(`[AgentConnection] Sent update notification (version ${body.version}) to agent ${this.agentName}`);
+      // Mark agent as update-pending so disconnect alarm uses longer grace period
+      await this.ctx.storage.put('updatePending', true);
+      await this.ctx.storage.put('updatePendingAt', Date.now());
+      console.log(`[AgentConnection] Sent update notification (version ${body.version}) to agent ${this.agentName} — update-pending flag set`);
 
       return new Response(JSON.stringify({
         success: true,

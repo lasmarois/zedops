@@ -23,8 +23,9 @@ type VersionInfo struct {
 
 // AutoUpdater handles automatic agent updates
 type AutoUpdater struct {
-	managerURL    string
-	currentBinary string
+	managerURL      string
+	currentBinary   string
+	onBeforeRestart func() // Called before syscall.Exec to notify manager
 }
 
 // NewAutoUpdater creates a new auto updater
@@ -186,6 +187,11 @@ func (u *AutoUpdater) downloadAndApply(downloadURL, newVersion string) error {
 
 // restart replaces the current process with a new instance
 func (u *AutoUpdater) restart() error {
+	// Notify manager that we're about to restart for an update
+	if u.onBeforeRestart != nil {
+		u.onBeforeRestart()
+	}
+
 	// Get current arguments
 	args := os.Args
 

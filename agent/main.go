@@ -180,6 +180,17 @@ func main() {
 		log.Println("Auto-update disabled via --no-update flag")
 	} else {
 		updater := NewAutoUpdater(*managerURL)
+		updater.onBeforeRestart = func() {
+			log.Println("Notifying manager of imminent update restart...")
+			if err := agent.sendMessage(Message{
+				Subject: "agent.update.starting",
+				Data:    map[string]interface{}{},
+			}); err != nil {
+				log.Printf("Failed to notify manager of update restart: %v", err)
+			}
+			// Brief pause to let the message reach the manager before process replacement
+			time.Sleep(100 * time.Millisecond)
+		}
 		agent.updater = updater
 		updater.CheckOnce()
 	}
