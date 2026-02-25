@@ -181,6 +181,10 @@ func main() {
 	} else {
 		updater := NewAutoUpdater(*managerURL)
 		updater.onBeforeRestart = func() {
+			if !agent.IsAuthenticated() {
+				log.Println("Not connected to manager — skipping update restart notification")
+				return
+			}
 			log.Println("Notifying manager of imminent update restart...")
 			if err := agent.sendMessage(Message{
 				Subject: "agent.update.starting",
