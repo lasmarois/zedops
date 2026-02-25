@@ -437,6 +437,8 @@ export interface Server {
   players: string[] | null;
   rcon_connected?: boolean | null; // P2: RCON health status
   data_exists: boolean;
+  ini_mods: string | null; // Raw Mods= line from server INI file
+  ini_workshop_items: string | null; // Raw WorkshopItems= line from server INI file
   deleted_at: number | null;
   created_at: number;
   updated_at: number;

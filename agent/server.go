@@ -620,6 +620,20 @@ type ServerGetDataPathResponse struct {
 	Error    string `json:"error,omitempty"`
 }
 
+// ServerReadINIRequest represents a server.readini message payload
+type ServerReadINIRequest struct {
+	ContainerID string `json:"containerId"`
+	ServerName  string `json:"serverName"`
+}
+
+// ServerReadINIResponse represents the response to a server.readini message
+type ServerReadINIResponse struct {
+	Success       bool   `json:"success"`
+	Mods          string `json:"mods,omitempty"`
+	WorkshopItems string `json:"workshopItems,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
 // CheckServerData checks if server data directories exist on the host
 func (dc *DockerClient) CheckServerData(serverName, dataPath string) ServerDataStatus {
 	binPath := filepath.Join(dataPath, serverName, "bin")
@@ -898,6 +912,51 @@ func (dc *DockerClient) GetContainerDataPath(ctx context.Context, containerID st
 	}
 
 	return "", fmt.Errorf("no bin mount found in container (expected mount at /home/steam/zomboid-dedicated)")
+}
+
+// ReadServerINI reads a PZ server's .ini file and extracts Mods and WorkshopItems lines.
+// It inspects the container to find the data mount, then reads {dataMount}/Server/{serverName}.ini.
+func (dc *DockerClient) ReadServerINI(ctx context.Context, containerID, serverName string) (*ServerReadINIResponse, error) {
+	// Find the data mount (/home/steam/Zomboid) source path
+	inspect, err := dc.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	var dataMount string
+	for _, m := range inspect.Mounts {
+		if m.Destination == "/home/steam/Zomboid" {
+			dataMount = m.Source
+			break
+		}
+	}
+	if dataMount == "" {
+		return nil, fmt.Errorf("no data mount found (expected /home/steam/Zomboid)")
+	}
+
+	// Read the INI file
+	iniPath := filepath.Join(dataMount, "Server", serverName+".ini")
+	content, err := os.ReadFile(iniPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read INI file %s: %w", iniPath, err)
+	}
+
+	// Parse Mods= and WorkshopItems= lines
+	var mods, workshopItems string
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Mods=") {
+			mods = strings.TrimPrefix(trimmed, "Mods=")
+		} else if strings.HasPrefix(trimmed, "WorkshopItems=") {
+			workshopItems = strings.TrimPrefix(trimmed, "WorkshopItems=")
+		}
+	}
+
+	return &ServerReadINIResponse{
+		Success:       true,
+		Mods:          mods,
+		WorkshopItems: workshopItems,
+	}, nil
 }
 
 // copyFile copies a single file preserving permissions

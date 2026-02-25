@@ -391,6 +391,21 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // Server read INI endpoint (read mods from PZ .ini file)
+    if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/ini") && request.method === "GET") {
+      const parts = url.pathname.split("/");
+      const serverId = parts[2];
+      const serverName = url.searchParams.get("serverName");
+      if (serverId && serverName) {
+        return this.handleServerReadINIRequest(serverId, serverName);
+      } else {
+        return new Response(JSON.stringify({ error: "Missing serverId or serverName query parameter" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Server storage endpoint
     if (url.pathname.startsWith("/servers/") && url.pathname.endsWith("/storage") && request.method === "POST") {
       const parts = url.pathname.split("/");
@@ -2681,6 +2696,49 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Get data path failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  private async handleServerReadINIRequest(serverId: string, serverName: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const server = await this.env.DB.prepare(
+      "SELECT container_id FROM servers WHERE id = ?"
+    ).bind(serverId).first();
+
+    if (!server || !server.container_id) {
+      return new Response(JSON.stringify({ error: "Server not found or has no container" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const reply = await this.sendMessageWithReply({
+        subject: "server.readini",
+        data: {
+          containerId: server.container_id as string,
+          serverName,
+        },
+      }, 10000);
+
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Read INI failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },
