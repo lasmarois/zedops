@@ -21,6 +21,7 @@ import { roleAssignments } from './routes/role-assignments';
 import { audit } from './routes/audit';
 import { preferences } from './routes/preferences';
 import { hashPassword } from './lib/auth';
+import { verifyToken } from './lib/tokens';
 
 // Export Durable Object class
 export { AgentConnection };
@@ -146,6 +147,59 @@ app.get('/api/agent/version', async (c) => {
         'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-arm64`,
       },
     });
+  }
+});
+
+/**
+ * POST /api/agent/validate-token
+ * Validates an ephemeral registration token before the agent is installed.
+ * No auth required — the token itself is self-validating.
+ *
+ * Body: { token: string, agentName: string }
+ * Returns: { valid: true, agentId: string, expiresIn: number } or { valid: false, error: string }
+ */
+app.post('/api/agent/validate-token', async (c) => {
+  let body: { token?: string; agentName?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ valid: false, error: 'Invalid request body' }, 400);
+  }
+
+  const { token, agentName } = body;
+  if (!token || !agentName) {
+    return c.json({ valid: false, error: 'token and agentName are required' }, 400);
+  }
+
+  try {
+    const payload = await verifyToken(token, c.env.TOKEN_SECRET);
+
+    // Must be an ephemeral token (not permanent)
+    if (payload.type !== 'ephemeral') {
+      return c.json({ valid: false, error: 'Not an ephemeral registration token' });
+    }
+
+    // Agent name must match
+    if (payload.agentName !== agentName) {
+      return c.json({ valid: false, error: `Token is for agent "${payload.agentName}", not "${agentName}"` });
+    }
+
+    // Calculate time remaining
+    const now = Math.floor(Date.now() / 1000);
+    const expiresIn = payload.exp ? payload.exp - now : 0;
+
+    return c.json({
+      valid: true,
+      agentId: payload.agentId,
+      expiresIn,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    // jose throws specific errors for expired/invalid tokens
+    if (message.includes('expired')) {
+      return c.json({ valid: false, error: 'Token has expired — generate a new one from the UI' });
+    }
+    return c.json({ valid: false, error: 'Invalid token — check that it was copied correctly' });
   }
 });
 

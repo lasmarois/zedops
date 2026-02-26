@@ -72,6 +72,41 @@ check_root() {
     fi
 }
 
+validate_token() {
+    # Convert WebSocket URL to HTTPS for API call
+    # wss://host/ws -> https://host
+    API_BASE=$(echo "$MANAGER_URL" | sed 's|^wss://|https://|;s|^ws://|http://|;s|/ws$||')
+
+    log_info "Validating token against ${API_BASE}..."
+
+    VALIDATE_RESPONSE=$(curl -sSL -w "\n%{http_code}" \
+        -X POST "${API_BASE}/api/agent/validate-token" \
+        -H "Content-Type: application/json" \
+        -d "{\"token\":\"${TOKEN}\",\"agentName\":\"${AGENT_NAME}\"}" \
+        2>/dev/null) || true
+
+    HTTP_CODE=$(echo "$VALIDATE_RESPONSE" | tail -1)
+    BODY=$(echo "$VALIDATE_RESPONSE" | sed '$d')
+
+    if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ]; then
+        log_warn "Could not reach manager for token validation (network error) — proceeding anyway"
+        return
+    fi
+
+    # Parse the valid field from JSON response
+    IS_VALID=$(echo "$BODY" | grep -o '"valid":\s*true' || true)
+
+    if [ -n "$IS_VALID" ]; then
+        log_info "Token valid ✓"
+    else
+        # Extract error message from response
+        ERROR_MSG=$(echo "$BODY" | grep -o '"error":"[^"]*"' | sed 's/"error":"//;s/"$//' || echo "Unknown error")
+        log_error "Token validation failed: ${ERROR_MSG}"
+        log_error "Generate a new token from the manager UI and try again"
+        exit 1
+    fi
+}
+
 detect_platform() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
@@ -193,11 +228,33 @@ EOF
 
     log_info "Configuration saved to ${CONFIG_DIR}/config"
 
+    # Clean up stale legacy tokens (old install script saved to ~/.zedops-agent/)
+    LEGACY_TOKEN="/root/.zedops-agent/token"
+    if [ -f "$LEGACY_TOKEN" ]; then
+        log_warn "Removing stale legacy token at $LEGACY_TOKEN"
+        rm -f "$LEGACY_TOKEN"
+        # Remove legacy dir if empty
+        rmdir /root/.zedops-agent 2>/dev/null || true
+    fi
+
+    # Check if agent is already registered (permanent token exists)
+    if [ -f "/var/lib/zedops-agent/token" ]; then
+        log_warn "Agent is already registered (permanent token exists at /var/lib/zedops-agent/token)"
+        log_warn "Skipping ephemeral token save — the existing registration will be used"
+        if [ -n "$TOKEN" ]; then
+            log_warn "The --token flag was provided but will be ignored (agent already registered)"
+        fi
+        return
+    fi
+
     # Handle token if provided (save as ephemeral — agent will exchange for permanent on registration)
     if [ -n "$TOKEN" ]; then
+        # Validate token against manager before saving
+        validate_token
+
         mkdir -p /var/lib/zedops-agent
         chmod 700 /var/lib/zedops-agent
-        echo "$TOKEN" > /var/lib/zedops-agent/ephemeral-token
+        printf '%s' "$TOKEN" > /var/lib/zedops-agent/ephemeral-token
         chmod 600 /var/lib/zedops-agent/ephemeral-token
         log_info "Ephemeral token saved to /var/lib/zedops-agent/ephemeral-token"
     fi
