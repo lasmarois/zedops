@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // stateDir is the FHS-compliant location for agent state files.
@@ -67,6 +70,15 @@ func MigrateFromLegacyDir() {
 			log.Printf("Migration: failed to read %s: %v", src, err)
 			continue
 		}
+
+		// Skip migrating stale ephemeral JWTs from the token file
+		// (old install script saved ephemeral tokens to the permanent path)
+		if f == tokenFile && isEphemeralJWT(string(data)) {
+			log.Printf("Migration: skipping stale ephemeral JWT at %s (deleting)", src)
+			os.Remove(src)
+			continue
+		}
+
 		if err := os.WriteFile(dst, data, 0600); err != nil {
 			log.Printf("Migration: failed to write %s: %v", dst, err)
 			continue
@@ -92,9 +104,47 @@ func GetEphemeralTokenPath() string {
 	return filepath.Join(stateDir, ephemeralTokenFile)
 }
 
+// isEphemeralJWT checks if a token string is an ephemeral JWT by decoding
+// the payload (middle segment) and checking the "type" field.
+// This is a lightweight check — no signature verification needed here.
+func isEphemeralJWT(token string) bool {
+	parts := strings.Split(strings.TrimSpace(token), ".")
+	if len(parts) != 3 {
+		return false
+	}
+
+	// Decode the payload (middle segment) — base64url without padding
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+
+	var claims struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return false
+	}
+
+	return claims.Type == "ephemeral"
+}
+
 // LoadToken loads the permanent token from disk.
+// If the stored token is actually an ephemeral JWT (from a stale install),
+// it is deleted and an empty string is returned.
 func LoadToken() (string, error) {
-	return loadFile(GetTokenPath())
+	token, err := loadFile(GetTokenPath())
+	if err != nil || token == "" {
+		return token, err
+	}
+
+	if isEphemeralJWT(token) {
+		log.Printf("WARNING: Permanent token file contains a stale ephemeral JWT — deleting %s", GetTokenPath())
+		os.Remove(GetTokenPath())
+		return "", nil
+	}
+
+	return token, nil
 }
 
 // LoadEphemeralToken loads the ephemeral token from disk.
