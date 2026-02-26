@@ -423,45 +423,77 @@ export async function getUserRoleAssignments(
 /**
  * Get alert recipients for a specific agent (with theme preferences)
  *
- * Returns deduplicated list of recipients who should be notified
- * when this agent goes offline:
+ * Returns deduplicated list of recipients who should be notified,
+ * filtered by notification preferences (opt-out model: no row = alerts ON).
+ *
+ * Candidates:
  * - All admin users (system role)
  * - Users with agent-level assignments for this agent
  * - Users with global-level assignments
+ *
+ * Preference resolution (most specific wins):
+ * 1. Per-agent row (user_id + agent_id) — if exists, use it
+ * 2. Global row (user_id + agent_id IS NULL) — if exists, use it
+ * 3. No row — default ON
  */
 export async function getAlertRecipientsForAgent(
   db: D1Database,
-  agentId: string
+  agentId: string,
+  alertType: 'offline' | 'recovery' = 'offline'
 ): Promise<Array<{ email: string; theme: string | null }>> {
-  const recipients = new Map<string, string | null>();
+  const recipients = new Map<string, { email: string; theme: string | null; userId: string }>();
 
   // 1. All admin users
   const admins = await db
-    .prepare('SELECT email, theme FROM users WHERE role = ?')
+    .prepare('SELECT id, email, theme FROM users WHERE role = ?')
     .bind('admin')
-    .all<{ email: string; theme: string | null }>();
+    .all<{ id: string; email: string; theme: string | null }>();
 
   for (const admin of admins.results || []) {
-    recipients.set(admin.email, admin.theme);
+    recipients.set(admin.email, { email: admin.email, theme: admin.theme, userId: admin.id });
   }
 
   // 2. Users with agent-level or global assignments
   const assigned = await db
     .prepare(
-      `SELECT DISTINCT u.email, u.theme
+      `SELECT DISTINCT u.id, u.email, u.theme
        FROM role_assignments ra
        JOIN users u ON ra.user_id = u.id
        WHERE (ra.scope = 'agent' AND ra.resource_id = ?)
           OR (ra.scope = 'global' AND ra.resource_id IS NULL)`
     )
     .bind(agentId)
-    .all<{ email: string; theme: string | null }>();
+    .all<{ id: string; email: string; theme: string | null }>();
 
   for (const user of assigned.results || []) {
-    recipients.set(user.email, user.theme);
+    recipients.set(user.email, { email: user.email, theme: user.theme, userId: user.id });
   }
 
-  return Array.from(recipients.entries()).map(([email, theme]) => ({ email, theme }));
+  // 3. Filter by notification preferences (opt-out model: no row = ON)
+  const alertColumn = alertType === 'offline' ? 'alert_offline' : 'alert_recovery';
+  const filtered: Array<{ email: string; theme: string | null }> = [];
+
+  for (const recipient of recipients.values()) {
+    // Check per-agent preference first, then global, then default ON
+    const pref = await db
+      .prepare(
+        `SELECT ${alertColumn} as enabled FROM notification_preferences
+         WHERE user_id = ? AND agent_id = ?
+         UNION ALL
+         SELECT ${alertColumn} as enabled FROM notification_preferences
+         WHERE user_id = ? AND agent_id IS NULL
+         LIMIT 1`
+      )
+      .bind(recipient.userId, agentId, recipient.userId)
+      .first<{ enabled: number }>();
+
+    // No preference row = default ON (opt-out model)
+    if (!pref || pref.enabled !== 0) {
+      filtered.push({ email: recipient.email, theme: recipient.theme });
+    }
+  }
+
+  return filtered;
 }
 
 /**

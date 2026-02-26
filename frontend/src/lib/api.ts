@@ -1756,3 +1756,83 @@ export async function executeRconCommand(
 
   return response.json();
 }
+
+// ============================================================================
+// Notification Preferences
+// ============================================================================
+
+export interface NotificationPreferences {
+  alertOffline: boolean;
+  alertRecovery: boolean;
+}
+
+export interface AgentNotificationOverride {
+  agentId: string;
+  agentName: string;
+  alertOffline: boolean;
+  alertRecovery: boolean;
+}
+
+export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
+  const response = await fetch(`${API_BASE}/api/preferences`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch preferences');
+  }
+  const data = await response.json();
+  return data.notifications || { alertOffline: true, alertRecovery: true };
+}
+
+export async function updateNotificationPreferences(
+  prefs: Partial<NotificationPreferences>
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/preferences`, {
+    method: 'PATCH',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notifications: prefs }),
+  });
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to update notification preferences');
+  }
+}
+
+export async function fetchAgentNotificationOverrides(): Promise<AgentNotificationOverride[]> {
+  const response = await fetch(`${API_BASE}/api/preferences/agents`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to fetch agent notification overrides');
+  }
+  const data = await response.json();
+  return data.overrides || [];
+}
+
+export async function setAgentNotificationOverride(
+  agentId: string,
+  prefs: { alertOffline: boolean; alertRecovery: boolean }
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/preferences/agents/${agentId}/notifications`, {
+    method: 'PUT',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  });
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to set agent notification override');
+  }
+}
+
+export async function removeAgentNotificationOverride(agentId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/preferences/agents/${agentId}/notifications`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    handleAuthError(response);
+    throw new Error('Failed to remove agent notification override');
+  }
+}
