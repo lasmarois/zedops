@@ -47,23 +47,16 @@ type AlertConfig struct {
 	AlertRecipients []AlertRecipient `json:"alertRecipients"`
 }
 
-// GetAlertConfigPath returns the path to the alert config file (~/.zedops-agent/alert-config.json)
-func GetAlertConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-	return filepath.Join(home, tokenDir, alertConfigFile), nil
+// GetAlertConfigPath returns the path to the alert config file.
+func GetAlertConfigPath() string {
+	return filepath.Join(StateDir(), alertConfigFile)
 }
 
 // LoadAlertConfig loads the cached alert config from disk.
 // Returns nil if the file doesn't exist (agent has never connected).
 // Handles backward compatibility: old format had alertRecipients as []string.
 func LoadAlertConfig() (*AlertConfig, error) {
-	path, err := GetAlertConfigPath()
-	if err != nil {
-		return nil, err
-	}
+	path := GetAlertConfigPath()
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -102,16 +95,11 @@ func LoadAlertConfig() (*AlertConfig, error) {
 
 // SaveAlertConfig saves the alert config to disk.
 func SaveAlertConfig(config *AlertConfig) error {
-	path, err := GetAlertConfigPath()
-	if err != nil {
+	if err := ensureStateDir(); err != nil {
 		return err
 	}
 
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create alert config directory: %w", err)
-	}
-
+	path := GetAlertConfigPath()
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal alert config: %w", err)

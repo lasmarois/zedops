@@ -193,12 +193,13 @@ EOF
 
     log_info "Configuration saved to ${CONFIG_DIR}/config"
 
-    # Handle token if provided
+    # Handle token if provided (save as ephemeral — agent will exchange for permanent on registration)
     if [ -n "$TOKEN" ]; then
-        mkdir -p /root/.zedops-agent
-        echo "$TOKEN" > /root/.zedops-agent/token
-        chmod 600 /root/.zedops-agent/token
-        log_info "Token saved to /root/.zedops-agent/token"
+        mkdir -p /var/lib/zedops-agent
+        chmod 700 /var/lib/zedops-agent
+        echo "$TOKEN" > /var/lib/zedops-agent/ephemeral-token
+        chmod 600 /var/lib/zedops-agent/ephemeral-token
+        log_info "Ephemeral token saved to /var/lib/zedops-agent/ephemeral-token"
     fi
 }
 
@@ -229,7 +230,7 @@ RestartPreventExitStatus=78
 User=root
 Group=root
 
-# Token is stored in /root/.zedops-agent/token
+# State files stored in /var/lib/zedops-agent/
 Environment=HOME=/root
 
 # Logging via journald

@@ -93,15 +93,27 @@ func main() {
 		name = hostname
 	}
 
-	// Try to load permanent token
+	// Migrate legacy token/config from ~/.zedops-agent/ to /var/lib/zedops-agent/
+	MigrateFromLegacyDir()
+
+	// Load tokens: permanent first, then ephemeral file, then --token CLI flag
 	permanentToken, err := LoadToken()
 	if err != nil {
 		log.Fatal("Failed to load token:", err)
 	}
 
-	// If no permanent token and no ephemeral token provided, error
-	if permanentToken == "" && *token == "" {
-		log.Fatal("Error: No permanent token found. Provide --token for first-time registration.")
+	ephemeralToken := *token // from --token CLI flag
+	if permanentToken == "" && ephemeralToken == "" {
+		// No permanent token and no CLI flag — check for ephemeral token file
+		fileToken, err := LoadEphemeralToken()
+		if err != nil {
+			log.Fatal("Failed to load ephemeral token:", err)
+		}
+		ephemeralToken = fileToken
+	}
+
+	if permanentToken == "" && ephemeralToken == "" {
+		log.Fatal("Error: No token found. Generate a token in the manager UI and run the install script.")
 	}
 
 	// Initialize Docker client
@@ -128,7 +140,7 @@ func main() {
 	agent := &Agent{
 		managerURL:     *managerURL,
 		agentName:      name,
-		ephemeralToken: *token,
+		ephemeralToken: ephemeralToken,
 		permanentToken: permanentToken,
 		docker:         dockerClient,
 		logStreams:     make(map[string]context.CancelFunc),
@@ -278,13 +290,14 @@ func (a *Agent) register() error {
 		a.agentID = resp.AgentID
 		a.permanentToken = resp.Token
 
-		// Save permanent token
+		// Save permanent token and clean up ephemeral token
 		if err := SaveToken(a.permanentToken); err != nil {
 			return fmt.Errorf("failed to save token: %w", err)
 		}
+		DeleteEphemeralToken()
 
 		log.Printf("Registration successful! Agent ID: %s", a.agentID)
-		log.Println("Permanent token saved to ~/.zedops-agent/token")
+		log.Printf("Permanent token saved to %s", GetTokenPath())
 		return nil
 
 	case <-timeout:
