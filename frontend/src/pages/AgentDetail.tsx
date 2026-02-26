@@ -11,10 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAgents } from "@/hooks/useAgents"
-import { HardDrive, Cpu, MemoryStick, Loader2, Trash2 } from "lucide-react"
+import { HardDrive, Cpu, MemoryStick, Loader2, Trash2, Bell, BellOff } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AgentServerList } from "@/components/AgentServerList"
 import { AgentLogViewer } from "@/components/AgentLogViewer"
-import { fetchAgentConfig, updateAgentConfig, deleteAgent, type AgentConfig } from "@/lib/api"
+import {
+  fetchAgentConfig, updateAgentConfig, deleteAgent, type AgentConfig,
+  fetchAgentNotificationOverrides, setAgentNotificationOverride, removeAgentNotificationOverride,
+} from "@/lib/api"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // Helper to get color based on percentage
@@ -67,6 +71,34 @@ export function AgentDetail() {
       navigate('/agents')
     },
   })
+
+  // Notification mute state
+  const { data: notifOverrides } = useQuery({
+    queryKey: ['notification-overrides'],
+    queryFn: fetchAgentNotificationOverrides,
+  })
+
+  const setOverrideMutation = useMutation({
+    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean } }) =>
+      setAgentNotificationOverride(agentId, prefs),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
+  })
+
+  const removeOverrideMutation = useMutation({
+    mutationFn: (agentId: string) => removeAgentNotificationOverride(agentId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
+  })
+
+  const isMuted = id ? notifOverrides?.some(o => o.agentId === id && !o.alertOffline && !o.alertRecovery) ?? false : false
+
+  const toggleMute = () => {
+    if (!id) return
+    if (isMuted) {
+      removeOverrideMutation.mutate(id)
+    } else {
+      setOverrideMutation.mutate({ agentId: id, prefs: { alertOffline: false, alertRecovery: false } })
+    }
+  }
 
   const agent = agentsData?.agents.find(a => a.id === id)
 
@@ -214,19 +246,38 @@ export function AgentDetail() {
           )}
         </div>
 
-        <Button
-          variant="glass-destructive"
-          onClick={() => setShowRemoveConfirm(true)}
-          disabled={removeAgentMutation.isPending}
-          className="self-start"
-        >
-          {removeAgentMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          ) : (
-            <Trash2 className="h-4 w-4 mr-2" />
-          )}
-          Remove Agent
-        </Button>
+        <div className="flex items-center gap-2 self-start">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleMute}
+                  className={isMuted ? 'text-muted-foreground' : ''}
+                >
+                  {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isMuted ? 'Alerts muted' : 'Alerts enabled'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <Button
+            variant="glass-destructive"
+            onClick={() => setShowRemoveConfirm(true)}
+            disabled={removeAgentMutation.isPending}
+          >
+            {removeAgentMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            Remove Agent
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}

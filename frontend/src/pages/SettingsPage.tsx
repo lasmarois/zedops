@@ -6,10 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { Check, Palette, Lock } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Check, Palette, Lock, Bell, BellOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { THEMES, getTheme, applyTheme } from '@/lib/theme';
-import { changePassword } from '@/lib/api';
+import {
+  changePassword,
+  fetchNotificationPreferences,
+  updateNotificationPreferences,
+  fetchAgentNotificationOverrides,
+  setAgentNotificationOverride,
+  removeAgentNotificationOverride,
+  type NotificationPreferences,
+} from '@/lib/api';
+import { useAgents } from '@/hooks/useAgents';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage() {
   const [activeTheme, setActiveTheme] = useState(getTheme);
@@ -77,6 +88,11 @@ export function SettingsPage() {
 
       <Separator />
 
+      {/* Notifications */}
+      <NotificationsSection />
+
+      <Separator />
+
       {/* Account - Change Password */}
       <section>
         <div className="flex items-center gap-2 mb-4">
@@ -94,6 +110,130 @@ export function SettingsPage() {
         </Card>
       </section>
     </div>
+  );
+}
+
+function NotificationsSection() {
+  const queryClient = useQueryClient();
+  const { data: agentsData } = useAgents();
+  const agents = agentsData?.agents || [];
+
+  const { data: prefs } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: fetchNotificationPreferences,
+  });
+
+  const { data: overrides } = useQuery({
+    queryKey: ['notification-overrides'],
+    queryFn: fetchAgentNotificationOverrides,
+  });
+
+  const updateGlobal = useMutation({
+    mutationFn: (update: Partial<NotificationPreferences>) =>
+      updateNotificationPreferences(update),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-preferences'] }),
+  });
+
+  const setOverride = useMutation({
+    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean } }) =>
+      setAgentNotificationOverride(agentId, prefs),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
+  });
+
+  const removeOverride = useMutation({
+    mutationFn: (agentId: string) => removeAgentNotificationOverride(agentId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
+  });
+
+  const overrideMap = new Map(
+    (overrides || []).map(o => [o.agentId, o])
+  );
+
+  const isAgentMuted = (agentId: string) => {
+    const override = overrideMap.get(agentId);
+    if (override) return !override.alertOffline && !override.alertRecovery;
+    return false;
+  };
+
+  const toggleAgentMute = (agentId: string) => {
+    const muted = isAgentMuted(agentId);
+    if (muted) {
+      removeOverride.mutate(agentId);
+    } else {
+      setOverride.mutate({ agentId, prefs: { alertOffline: false, alertRecovery: false } });
+    }
+  };
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <Bell className="h-5 w-5 text-primary" />
+        <h2 className="text-lg font-semibold">Notifications</h2>
+      </div>
+
+      <Card className="max-w-lg">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Global Defaults</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Agent offline alerts</Label>
+              <p className="text-xs text-muted-foreground">Email when an agent goes offline</p>
+            </div>
+            <Switch
+              checked={prefs?.alertOffline ?? true}
+              onCheckedChange={(checked) => updateGlobal.mutate({ alertOffline: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Recovery alerts</Label>
+              <p className="text-xs text-muted-foreground">Email when an agent comes back online</p>
+            </div>
+            <Switch
+              checked={prefs?.alertRecovery ?? true}
+              onCheckedChange={(checked) => updateGlobal.mutate({ alertRecovery: checked })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {agents.length > 0 && (
+        <Card className="max-w-lg mt-4">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Per-Agent Overrides</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {agents.map((agent) => {
+              const muted = isAgentMuted(agent.id);
+              return (
+                <div key={agent.id} className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      'h-2 w-2 rounded-full',
+                      agent.status === 'online' ? 'bg-green-500' : 'bg-muted-foreground/30'
+                    )} />
+                    <span className="text-sm">{agent.name}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleAgentMute(agent.id)}
+                    className={cn(muted && 'text-muted-foreground')}
+                  >
+                    {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                  </Button>
+                </div>
+              );
+            })}
+            <p className="text-xs text-muted-foreground pt-1">
+              Muted agents will not send you any alert emails.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </section>
   );
 }
 

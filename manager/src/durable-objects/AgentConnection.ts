@@ -1052,7 +1052,7 @@ export class AgentConnection extends DurableObject {
       if (alertSentAt && disconnectedAt && this.env.RESEND_API_KEY) {
         const downtimeMs = Date.now() - disconnectedAt;
         const downtimeMinutes = Math.round(downtimeMs / 60000);
-        const recoveryRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId);
+        const recoveryRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId, 'recovery');
         this.ctx.waitUntil(this.sendRecoveryEmails(agentName, downtimeMinutes, recoveryRecipients));
         await this.ctx.storage.delete('alertSentAt');
       }
