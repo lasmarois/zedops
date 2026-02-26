@@ -157,7 +157,7 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			log.Println("To fix:")
 			log.Println("  1. Generate a new token in the manager UI")
 			log.Println("  2. Re-run the install script with --token flag")
-			log.Println("     Or manually update /root/.zedops-agent/token")
+			log.Printf("     Or manually update %s", GetTokenPath())
 			log.Println("  3. Restart the agent: sudo systemctl start zedops-agent")
 			log.Println("========================================")
 			return fmt.Errorf("%w: %v", ErrAuthFailure, err)

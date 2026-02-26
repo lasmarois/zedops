@@ -16,7 +16,8 @@ RUN go mod tidy
 RUN go mod download
 
 # Build the agent
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o zedops-agent .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.Version=${VERSION}" -o zedops-agent .
 
 # Use scratch for minimal extraction container (binary runs on host, not in container)
 FROM scratch
