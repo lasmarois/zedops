@@ -89,21 +89,29 @@ jobs:
             exit 0
           fi
 
-          echo "Broadcasting update v${{ steps.version.outputs.VERSION }} to agents..."
-          response=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://zedops.mail-bcf.workers.dev/api/webhook/broadcast-update" \
-            -H "Content-Type: application/json" \
-            -H "X-Webhook-Secret: $BROADCAST_WEBHOOK_SECRET" \
-            -d '{"version": "${{ steps.version.outputs.VERSION }}"}')
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          ENVIRONMENTS=("prod:https://zedops.mail-bcf.workers.dev" "dev:https://zedops-dev.mail-bcf.workers.dev")
 
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
+          for entry in "${ENVIRONMENTS[@]}"; do
+            env_name="${entry%%:*}"
+            base_url="${entry#*:}"
 
-          echo "Response: $body"
-          echo "HTTP Code: $http_code"
+            echo "Broadcasting update v${VERSION} to ${env_name} agents..."
+            response=$(curl -s -w "\n%{http_code}" -X POST \
+              "${base_url}/api/webhook/broadcast-update" \
+              -H "Content-Type: application/json" \
+              -H "X-Webhook-Secret: $BROADCAST_WEBHOOK_SECRET" \
+              -d "{\"version\": \"${VERSION}\"}")
 
-          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
-            echo "✅ Broadcast successful"
-          else
-            echo "⚠️ Broadcast failed (non-critical)"
-          fi
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | head -n-1)
+
+            echo "  Response: $body"
+            echo "  HTTP Code: $http_code"
+
+            if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+              echo "  ✅ ${env_name} broadcast successful"
+            else
+              echo "  ⚠️ ${env_name} broadcast failed (non-critical)"
+            fi
+          done
