@@ -135,7 +135,7 @@ function NotificationsSection() {
   });
 
   const setOverride = useMutation({
-    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean } }) =>
+    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean; alertUpdate: boolean } }) =>
       setAgentNotificationOverride(agentId, prefs),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
   });
@@ -151,7 +151,7 @@ function NotificationsSection() {
 
   const isAgentMuted = (agentId: string) => {
     const override = overrideMap.get(agentId);
-    if (override) return !override.alertOffline && !override.alertRecovery;
+    if (override) return !override.alertOffline && !override.alertRecovery && !override.alertUpdate;
     return false;
   };
 
@@ -160,7 +160,7 @@ function NotificationsSection() {
     if (muted) {
       removeOverride.mutate(agentId);
     } else {
-      setOverride.mutate({ agentId, prefs: { alertOffline: false, alertRecovery: false } });
+      setOverride.mutate({ agentId, prefs: { alertOffline: false, alertRecovery: false, alertUpdate: false } });
     }
   };
 
@@ -194,6 +194,16 @@ function NotificationsSection() {
             <Switch
               checked={prefs?.alertRecovery ?? true}
               onCheckedChange={(checked) => updateGlobal.mutate({ alertRecovery: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Agent update alerts</Label>
+              <p className="text-xs text-muted-foreground">Email when an agent auto-updates to a new version</p>
+            </div>
+            <Switch
+              checked={prefs?.alertUpdate ?? true}
+              onCheckedChange={(checked) => updateGlobal.mutate({ alertUpdate: checked })}
             />
           </div>
         </CardContent>

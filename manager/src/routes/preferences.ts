@@ -40,14 +40,15 @@ preferences.get('/', async (c) => {
 
   // Get global notification preferences (agent_id IS NULL)
   const notifRow = await c.env.DB.prepare(
-    'SELECT alert_offline, alert_recovery FROM notification_preferences WHERE user_id = ? AND agent_id IS NULL'
-  ).bind(user.id).first<{ alert_offline: number; alert_recovery: number }>();
+    'SELECT alert_offline, alert_recovery, alert_update FROM notification_preferences WHERE user_id = ? AND agent_id IS NULL'
+  ).bind(user.id).first<{ alert_offline: number; alert_recovery: number; alert_update: number }>();
 
   return c.json({
     theme: row.theme || 'solar-flare',
     notifications: {
       alertOffline: notifRow ? notifRow.alert_offline === 1 : true,
       alertRecovery: notifRow ? notifRow.alert_recovery === 1 : true,
+      alertUpdate: notifRow ? notifRow.alert_update === 1 : true,
     },
   });
 });
@@ -55,7 +56,7 @@ preferences.get('/', async (c) => {
 preferences.patch('/', async (c) => {
   const user = c.get('user') as { id: string };
 
-  let body: { theme?: string; notifications?: { alertOffline?: boolean; alertRecovery?: boolean } };
+  let body: { theme?: string; notifications?: { alertOffline?: boolean; alertRecovery?: boolean; alertUpdate?: boolean } };
   try {
     body = await c.req.json();
   } catch {
@@ -76,6 +77,7 @@ preferences.patch('/', async (c) => {
     const n = body.notifications;
     const alertOffline = n.alertOffline !== undefined ? (n.alertOffline ? 1 : 0) : null;
     const alertRecovery = n.alertRecovery !== undefined ? (n.alertRecovery ? 1 : 0) : null;
+    const alertUpdate = n.alertUpdate !== undefined ? (n.alertUpdate ? 1 : 0) : null;
 
     const existing = await c.env.DB.prepare(
       'SELECT user_id FROM notification_preferences WHERE user_id = ? AND agent_id IS NULL'
@@ -86,6 +88,7 @@ preferences.patch('/', async (c) => {
       const vals: (number | string)[] = [];
       if (alertOffline !== null) { sets.push('alert_offline = ?'); vals.push(alertOffline); }
       if (alertRecovery !== null) { sets.push('alert_recovery = ?'); vals.push(alertRecovery); }
+      if (alertUpdate !== null) { sets.push('alert_update = ?'); vals.push(alertUpdate); }
       if (sets.length > 0) {
         sets.push('updated_at = ?');
         vals.push(Math.floor(Date.now() / 1000));
@@ -96,12 +99,13 @@ preferences.patch('/', async (c) => {
       }
     } else {
       await c.env.DB.prepare(
-        `INSERT INTO notification_preferences (user_id, agent_id, alert_offline, alert_recovery, created_at, updated_at)
-         VALUES (?, NULL, ?, ?, ?, ?)`
+        `INSERT INTO notification_preferences (user_id, agent_id, alert_offline, alert_recovery, alert_update, created_at, updated_at)
+         VALUES (?, NULL, ?, ?, ?, ?, ?)`
       ).bind(
         user.id,
         alertOffline ?? 1,
         alertRecovery ?? 1,
+        alertUpdate ?? 1,
         Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000)
       ).run();
@@ -117,7 +121,7 @@ preferences.get('/agents', async (c) => {
   const user = c.get('user') as { id: string };
 
   const rows = await c.env.DB.prepare(
-    `SELECT np.agent_id, np.alert_offline, np.alert_recovery, a.name as agent_name
+    `SELECT np.agent_id, np.alert_offline, np.alert_recovery, np.alert_update, a.name as agent_name
      FROM notification_preferences np
      JOIN agents a ON np.agent_id = a.id
      WHERE np.user_id = ? AND np.agent_id IS NOT NULL`
@@ -125,6 +129,7 @@ preferences.get('/agents', async (c) => {
     agent_id: string;
     alert_offline: number;
     alert_recovery: number;
+    alert_update: number;
     agent_name: string;
   }>();
 
@@ -134,6 +139,7 @@ preferences.get('/agents', async (c) => {
       agentName: r.agent_name,
       alertOffline: r.alert_offline === 1,
       alertRecovery: r.alert_recovery === 1,
+      alertUpdate: r.alert_update === 1,
     })),
   });
 });
@@ -142,7 +148,7 @@ preferences.put('/agents/:agentId/notifications', async (c) => {
   const user = c.get('user') as { id: string };
   const agentId = c.req.param('agentId');
 
-  let body: { alertOffline?: boolean; alertRecovery?: boolean };
+  let body: { alertOffline?: boolean; alertRecovery?: boolean; alertUpdate?: boolean };
   try {
     body = await c.req.json();
   } catch {
@@ -158,6 +164,7 @@ preferences.put('/agents/:agentId/notifications', async (c) => {
   const now = Math.floor(Date.now() / 1000);
   const alertOffline = body.alertOffline !== undefined ? (body.alertOffline ? 1 : 0) : 1;
   const alertRecovery = body.alertRecovery !== undefined ? (body.alertRecovery ? 1 : 0) : 1;
+  const alertUpdate = body.alertUpdate !== undefined ? (body.alertUpdate ? 1 : 0) : 1;
 
   const existing = await c.env.DB.prepare(
     'SELECT user_id FROM notification_preferences WHERE user_id = ? AND agent_id = ?'
@@ -165,16 +172,16 @@ preferences.put('/agents/:agentId/notifications', async (c) => {
 
   if (existing) {
     await c.env.DB.prepare(
-      'UPDATE notification_preferences SET alert_offline = ?, alert_recovery = ?, updated_at = ? WHERE user_id = ? AND agent_id = ?'
-    ).bind(alertOffline, alertRecovery, now, user.id, agentId).run();
+      'UPDATE notification_preferences SET alert_offline = ?, alert_recovery = ?, alert_update = ?, updated_at = ? WHERE user_id = ? AND agent_id = ?'
+    ).bind(alertOffline, alertRecovery, alertUpdate, now, user.id, agentId).run();
   } else {
     await c.env.DB.prepare(
-      `INSERT INTO notification_preferences (user_id, agent_id, alert_offline, alert_recovery, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(user.id, agentId, alertOffline, alertRecovery, now, now).run();
+      `INSERT INTO notification_preferences (user_id, agent_id, alert_offline, alert_recovery, alert_update, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(user.id, agentId, alertOffline, alertRecovery, alertUpdate, now, now).run();
   }
 
-  return c.json({ success: true, agentId, alertOffline: alertOffline === 1, alertRecovery: alertRecovery === 1 });
+  return c.json({ success: true, agentId, alertOffline: alertOffline === 1, alertRecovery: alertRecovery === 1, alertUpdate: alertUpdate === 1 });
 });
 
 preferences.delete('/agents/:agentId/notifications', async (c) => {

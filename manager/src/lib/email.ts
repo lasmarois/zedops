@@ -172,6 +172,55 @@ export function buildAgentRecoveredEmailHtml(agentName: string, downtimeMinutes:
 </html>`;
 }
 
+export function buildAgentUpdatedEmailHtml(agentName: string, oldVersion: string, newVersion: string, c: EmailThemeColors = DEFAULT_EMAIL_THEME): string {
+  const updatedAt = new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' });
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:${c.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${c.text};">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="${c.bg}" style="background-color:${c.bg};padding:40px 20px;">
+    <tr>
+      <td align="center" bgcolor="${c.bg}">
+        <table width="100%" cellpadding="0" cellspacing="0" bgcolor="${c.card}" style="max-width:520px;background-color:${c.card};border-radius:12px;border:1px solid ${c.border};">
+          <tr>
+            <td bgcolor="${c.card}" style="padding:32px 32px 16px;text-align:center;border-bottom:1px solid ${c.border};">
+              <h1 style="margin:0;font-size:26px;font-weight:700;color:${c.accent};letter-spacing:-0.5px;">ZedOps</h1>
+              <p style="margin:6px 0 0;font-size:12px;color:${c.muted};letter-spacing:1px;text-transform:uppercase;">Agent Update</p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${c.card}" style="padding:24px 32px;">
+              <p style="margin:0 0 16px;font-size:16px;color:${c.text};line-height:1.5;">
+                Agent <strong style="color:${c.accent};">${agentName}</strong> updated successfully.
+              </p>
+              <p style="margin:0 0 8px;font-size:14px;color:${c.muted};line-height:1.5;">
+                Version: <strong style="color:${c.text};">v${oldVersion}</strong> &rarr; <strong style="color:${c.success};">v${newVersion}</strong>
+              </p>
+              <p style="margin:8px 0 0;font-size:14px;color:${c.muted};line-height:1.5;">
+                Updated at: <strong style="color:${c.text};">${updatedAt}</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${c.card}" style="padding:16px 32px;border-top:1px solid ${c.border};">
+              <p style="margin:0;font-size:12px;color:${c.muted};text-align:center;">
+                You received this because you are assigned to this agent on ZedOps.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildInvitationEmailHtml(invitationUrl: string, role: string, c: EmailThemeColors = DEFAULT_EMAIL_THEME): string {
   return `<!DOCTYPE html>
 <html>

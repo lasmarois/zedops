@@ -30,7 +30,7 @@ import {
 } from "../types/LogMessage";
 import { logRconCommand } from "../lib/audit";
 import { getAlertRecipientsForAgent } from "../lib/permissions";
-import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml, getEmailThemeColors } from "../lib/email";
+import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml, buildAgentUpdatedEmailHtml, getEmailThemeColors } from "../lib/email";
 
 export class AgentConnection extends DurableObject {
   // Core agent state (restored from storage after hibernation)
@@ -706,12 +706,18 @@ export class AgentConnection extends DurableObject {
         await this.handleMetricsBatch(message);
         break;
 
-      case "agent.update.starting":
-        // Agent confirmed it's about to restart for an update — set flag so disconnect uses longer grace
+      case "agent.update.starting": {
+        // Store the agent's current (pre-update) version for the update notification email
+        const fromVersion = message.data?.version || null;
+        if (fromVersion) {
+          await this.ctx.storage.put('updateFromVersion', fromVersion);
+        }
+        // Set update-pending flag so disconnect uses longer grace period
         await this.ctx.storage.put('updatePending', true);
         await this.ctx.storage.put('updatePendingAt', Date.now());
-        console.log(`[AgentConnection] Agent ${this.agentName} confirmed update restart imminent`);
+        console.log(`[AgentConnection] Agent ${this.agentName} confirmed update restart imminent (from version ${fromVersion})`);
         break;
+      }
 
       default:
         console.warn(`[AgentConnection] Unknown subject: ${subject}`);
@@ -1057,6 +1063,16 @@ export class AgentConnection extends DurableObject {
         await this.ctx.storage.delete('alertSentAt');
       }
 
+      // If agent just updated (updateFromVersion flag exists), send update notification emails
+      const updateFromVersion = await this.ctx.storage.get<string>('updateFromVersion');
+      const updateToVersion = await this.ctx.storage.get<string>('updateToVersion');
+      if (updateFromVersion && updateToVersion && updateFromVersion !== updateToVersion && this.env.RESEND_API_KEY) {
+        const updateRecipients = await getAlertRecipientsForAgent(this.env.DB, agentId, 'update');
+        this.ctx.waitUntil(this.sendUpdateEmails(agentName, updateFromVersion, updateToVersion, updateRecipients));
+      }
+      await this.ctx.storage.delete('updateFromVersion');
+      await this.ctx.storage.delete('updateToVersion');
+
       // Persist to storage for hibernation recovery
       await this.ctx.storage.put('agentId', agentId);
       await this.ctx.storage.put('agentName', agentName);
@@ -1372,6 +1388,40 @@ export class AgentConnection extends DurableObject {
     }
   }
 
+  /**
+   * Send update notification emails to all alert recipients (called via waitUntil on reconnect after auto-update)
+   */
+  private async sendUpdateEmails(
+    agentName: string,
+    oldVersion: string,
+    newVersion: string,
+    recipients: Array<{ email: string; theme: string | null }>
+  ): Promise<void> {
+    const apiKey = this.env.RESEND_API_KEY;
+    if (!apiKey || recipients.length === 0) return;
+
+    const fromEmail = this.env.RESEND_FROM_EMAIL
+      ? `ZedOps Alerts <${this.env.RESEND_FROM_EMAIL}>`
+      : undefined;
+
+    console.log(`[AgentConnection] Sending update notification for ${agentName} (v${oldVersion} → v${newVersion}) to ${recipients.length} recipient(s)`);
+
+    for (const recipient of recipients) {
+      const colors = getEmailThemeColors(recipient.theme);
+      const html = buildAgentUpdatedEmailHtml(agentName, oldVersion, newVersion, colors);
+      const result = await sendEmail(apiKey, {
+        to: recipient.email,
+        subject: `[ZedOps] Agent "${agentName}" updated to v${newVersion}`,
+        html,
+        from: fromEmail,
+      });
+
+      if (!result.success) {
+        console.error(`[AgentConnection] Failed to send update email to ${recipient.email}: ${result.error}`);
+      }
+    }
+  }
+
   // ─── Send Helpers ─────────────────────────────────────────────────
 
   /**
@@ -1582,6 +1632,7 @@ export class AgentConnection extends DurableObject {
       // Mark agent as update-pending so disconnect alarm uses longer grace period
       await this.ctx.storage.put('updatePending', true);
       await this.ctx.storage.put('updatePendingAt', Date.now());
+      await this.ctx.storage.put('updateToVersion', body.version);
       console.log(`[AgentConnection] Sent update notification (version ${body.version}) to agent ${this.agentName} — update-pending flag set`);
 
       return new Response(JSON.stringify({
