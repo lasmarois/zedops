@@ -188,7 +188,7 @@ func main() {
 			log.Println("Notifying manager of imminent update restart...")
 			if err := agent.sendMessage(Message{
 				Subject: "agent.update.starting",
-				Data:    map[string]interface{}{},
+				Data:    map[string]interface{}{"version": Version},
 			}); err != nil {
 				log.Printf("Failed to notify manager of update restart: %v", err)
 			}

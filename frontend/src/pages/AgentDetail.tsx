@@ -79,7 +79,7 @@ export function AgentDetail() {
   })
 
   const setOverrideMutation = useMutation({
-    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean } }) =>
+    mutationFn: ({ agentId, prefs }: { agentId: string; prefs: { alertOffline: boolean; alertRecovery: boolean; alertUpdate: boolean } }) =>
       setAgentNotificationOverride(agentId, prefs),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
   })
@@ -89,14 +89,14 @@ export function AgentDetail() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-overrides'] }),
   })
 
-  const isMuted = id ? notifOverrides?.some(o => o.agentId === id && !o.alertOffline && !o.alertRecovery) ?? false : false
+  const isMuted = id ? notifOverrides?.some(o => o.agentId === id && !o.alertOffline && !o.alertRecovery && !o.alertUpdate) ?? false : false
 
   const toggleMute = () => {
     if (!id) return
     if (isMuted) {
       removeOverrideMutation.mutate(id)
     } else {
-      setOverrideMutation.mutate({ agentId: id, prefs: { alertOffline: false, alertRecovery: false } })
+      setOverrideMutation.mutate({ agentId: id, prefs: { alertOffline: false, alertRecovery: false, alertUpdate: false } })
     }
   }
 

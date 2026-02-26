@@ -1764,6 +1764,7 @@ export async function executeRconCommand(
 export interface NotificationPreferences {
   alertOffline: boolean;
   alertRecovery: boolean;
+  alertUpdate: boolean;
 }
 
 export interface AgentNotificationOverride {
@@ -1771,6 +1772,7 @@ export interface AgentNotificationOverride {
   agentName: string;
   alertOffline: boolean;
   alertRecovery: boolean;
+  alertUpdate: boolean;
 }
 
 export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
@@ -1782,7 +1784,7 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
     throw new Error('Failed to fetch preferences');
   }
   const data = await response.json();
-  return data.notifications || { alertOffline: true, alertRecovery: true };
+  return data.notifications || { alertOffline: true, alertRecovery: true, alertUpdate: true };
 }
 
 export async function updateNotificationPreferences(
@@ -1813,7 +1815,7 @@ export async function fetchAgentNotificationOverrides(): Promise<AgentNotificati
 
 export async function setAgentNotificationOverride(
   agentId: string,
-  prefs: { alertOffline: boolean; alertRecovery: boolean }
+  prefs: { alertOffline: boolean; alertRecovery: boolean; alertUpdate: boolean }
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/api/preferences/agents/${agentId}/notifications`, {
     method: 'PUT',

@@ -439,7 +439,7 @@ export async function getUserRoleAssignments(
 export async function getAlertRecipientsForAgent(
   db: D1Database,
   agentId: string,
-  alertType: 'offline' | 'recovery' = 'offline'
+  alertType: 'offline' | 'recovery' | 'update' = 'offline'
 ): Promise<Array<{ email: string; theme: string | null }>> {
   const recipients = new Map<string, { email: string; theme: string | null; userId: string }>();
 
@@ -470,7 +470,12 @@ export async function getAlertRecipientsForAgent(
   }
 
   // 3. Filter by notification preferences (opt-out model: no row = ON)
-  const alertColumn = alertType === 'offline' ? 'alert_offline' : 'alert_recovery';
+  const alertColumnMap: Record<string, string> = {
+    offline: 'alert_offline',
+    recovery: 'alert_recovery',
+    update: 'alert_update',
+  };
+  const alertColumn = alertColumnMap[alertType] || 'alert_offline';
   const filtered: Array<{ email: string; theme: string | null }> = [];
 
   for (const recipient of recipients.values()) {
