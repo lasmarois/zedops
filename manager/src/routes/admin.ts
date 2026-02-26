@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { generateEphemeralToken } from '../lib/tokens';
 import { requireAuth, requireRole, AuthUser } from '../middleware/auth';
+import { logAgentTokenGenerated, logAgentDeleted } from '../lib/audit';
 
 type Bindings = {
   DB: D1Database;
@@ -65,6 +66,10 @@ admin.post('/tokens', requireAuth(), requireRole('admin'), async (c) => {
   // Generate ephemeral token with agentId
   const token = await generateEphemeralToken(agentId, agentName, c.env.TOKEN_SECRET);
 
+  // Audit log
+  const user = c.get('user');
+  await logAgentTokenGenerated(c.env.DB, c, user.id, agentId, agentName);
+
   return c.json({
     token,
     expiresIn: '1h',
@@ -84,8 +89,8 @@ admin.delete('/pending-agents/:id', requireAuth(), requireRole('admin'), async (
 
   // Check if agent exists and is pending
   const agent = await c.env.DB.prepare(
-    'SELECT id, status FROM agents WHERE id = ?'
-  ).bind(agentId).first();
+    'SELECT id, name, status FROM agents WHERE id = ?'
+  ).bind(agentId).first() as { id: string; name: string; status: string } | null;
 
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
@@ -97,6 +102,10 @@ admin.delete('/pending-agents/:id', requireAuth(), requireRole('admin'), async (
 
   // Delete the pending agent
   await c.env.DB.prepare('DELETE FROM agents WHERE id = ?').bind(agentId).run();
+
+  // Audit log
+  const user = c.get('user');
+  await logAgentDeleted(c.env.DB, c, user.id, agentId, agent.name, 'pending');
 
   return c.json({ success: true });
 });

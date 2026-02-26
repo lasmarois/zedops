@@ -44,6 +44,7 @@ export type AuditAction =
   | 'server.rebuilt'
   | 'server.adopted'
   // Agent operations
+  | 'agent.token_generated'
   | 'agent.registered'
   | 'agent.deleted'
   // RCON operations
@@ -421,6 +422,69 @@ export async function logRoleAssignmentGranted(
       scope,
       resourceId,
     },
+  });
+}
+
+/**
+ * Log agent token generated (ephemeral token for registration)
+ */
+export async function logAgentTokenGenerated(
+  db: D1Database,
+  c: Context,
+  userId: string,
+  agentId: string,
+  agentName: string
+): Promise<void> {
+  await logAudit(db, c, {
+    userId,
+    action: 'agent.token_generated',
+    resourceType: 'agent',
+    resourceId: agentId,
+    details: { agentName },
+  });
+}
+
+/**
+ * Log agent registered (completed registration via ephemeral token)
+ */
+export async function logAgentRegistered(
+  db: D1Database,
+  agentId: string,
+  agentName: string,
+  ipAddress: string | null
+): Promise<void> {
+  try {
+    const id = crypto.randomUUID();
+    const timestamp = Date.now();
+    await db
+      .prepare(
+        `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, details, ip_address, user_agent, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(id, null, 'agent.registered', 'agent', agentId, JSON.stringify({ agentName }), ipAddress, null, timestamp)
+      .run();
+  } catch (error) {
+    console.error('[Audit] Failed to log agent.registered:', error);
+  }
+}
+
+/**
+ * Log agent deleted (active or pending)
+ */
+export async function logAgentDeleted(
+  db: D1Database,
+  c: Context,
+  userId: string,
+  agentId: string,
+  agentName: string,
+  status: string
+): Promise<void> {
+  await logAudit(db, c, {
+    userId,
+    action: 'agent.deleted',
+    resourceType: 'agent',
+    resourceId: agentId,
+    details: { agentName, status },
   });
 }
 

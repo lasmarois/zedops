@@ -28,7 +28,7 @@ import {
   CircularBuffer,
   AgentLogLine,
 } from "../types/LogMessage";
-import { logRconCommand } from "../lib/audit";
+import { logRconCommand, logAgentRegistered } from "../lib/audit";
 import { getAlertRecipientsForAgent } from "../lib/permissions";
 import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml, buildAgentUpdatedEmailHtml, getEmailThemeColors } from "../lib/email";
 
@@ -963,6 +963,9 @@ export class AgentConnection extends DurableObject {
       await this.ctx.storage.put('agentName', agentName);
 
       console.log(`[AgentConnection] Agent registered: ${agentName} (${agentId})`);
+
+      // Audit log (no Hono context in DO, so use direct DB insert variant)
+      this.ctx.waitUntil(logAgentRegistered(this.env.DB, agentId, agentName, this.clientIp));
 
       await this.send(createMessage("agent.register.success", {
         agentId,
