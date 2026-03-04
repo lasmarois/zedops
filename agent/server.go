@@ -295,7 +295,16 @@ func (dc *DockerClient) RebuildServer(ctx context.Context, containerID string) (
 		}
 	}
 
-	// 3. Graceful save, then stop and remove old container
+	// 3. Update OCI version label from new image (old container labels carry stale version)
+	imgInspect, _, err := dc.cli.ImageInspectWithRaw(ctx, oldImage)
+	if err == nil {
+		if version, ok := imgInspect.Config.Labels["org.opencontainers.image.version"]; ok {
+			labels["org.opencontainers.image.version"] = version
+			log.Printf("Updated image version label: %s", version)
+		}
+	}
+
+	// 4. Graceful save, then stop and remove old container
 	dc.GracefulSave(ctx, containerID)
 
 	log.Printf("Stopping old container: %s", containerID)
@@ -312,7 +321,7 @@ func (dc *DockerClient) RebuildServer(ctx context.Context, containerID string) (
 		return "", fmt.Errorf("failed to remove old container: %w", err)
 	}
 
-	// 4. Create new container with same config
+	// 5. Create new container with same config
 	containerConfig := &container.Config{
 		Image:  oldImage,
 		Env:    env,
@@ -430,7 +439,18 @@ func (dc *DockerClient) rebuildWithNewConfig(ctx context.Context, req ServerRebu
 		}
 	}
 
-	// 4. Convert config map to ENV array
+	// 4. Update OCI version label from new image (old container labels carry stale version)
+	imgInspect, _, imgErr := dc.cli.ImageInspectWithRaw(ctx, fullImage)
+	if imgErr == nil {
+		if version, ok := imgInspect.Config.Labels["org.opencontainers.image.version"]; ok {
+			labels["org.opencontainers.image.version"] = version
+			log.Printf("Updated image version label: %s", version)
+		}
+	} else {
+		log.Printf("Warning: could not inspect image %s for version label: %v", fullImage, imgErr)
+	}
+
+	// 5. Convert config map to ENV array
 	env := make([]string, 0, len(req.Config))
 	for key, value := range req.Config {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))

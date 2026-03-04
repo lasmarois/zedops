@@ -180,8 +180,13 @@ func (dc *DockerClient) ListContainers(ctx context.Context) ([]ContainerInfo, er
 			Labels:  c.Labels, // Include container labels for sync matching
 		}
 
-		// Extract OCI version label from container labels
-		if version, ok := c.Labels["org.opencontainers.image.version"]; ok {
+		// Extract OCI version label from the IMAGE (not container — container labels can be stale after rebuild)
+		if imgInspect, _, imgErr := dc.cli.ImageInspectWithRaw(ctx, c.ImageID); imgErr == nil {
+			if version, ok := imgInspect.Config.Labels["org.opencontainers.image.version"]; ok {
+				info.ImageVersion = version
+			}
+		} else if version, ok := c.Labels["org.opencontainers.image.version"]; ok {
+			// Fallback to container label if image inspect fails
 			info.ImageVersion = version
 		}
 
