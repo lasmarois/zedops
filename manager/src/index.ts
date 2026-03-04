@@ -56,13 +56,13 @@ app.route('/api/servers', servers); // Global server endpoints
 /**
  * GET /api/agent/version
  * Returns the latest agent version for auto-update checks
- * Fetches from GitHub releases API with 1-hour cache
+ * Fetches from GitHub releases API with 5-minute cache
  * No auth required - agents need to check before authenticating
  */
 app.get('/api/agent/version', async (c) => {
   const GITHUB_REPO = 'lasmarois/zedops';
   const CACHE_KEY = 'agent-version-info';
-  const CACHE_TTL = 3600; // 1 hour in seconds
+  const CACHE_TTL = 300; // 5 minutes — short enough for quick update propagation
 
   // Try to get from Cloudflare Cache
   const cache = caches.default;
