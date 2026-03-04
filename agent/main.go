@@ -58,7 +58,9 @@ type Agent struct {
 	volumeCache      map[string]*volumeSizeCache   // serverName -> cached sizes
 	volumeCacheMu    sync.RWMutex                  // Protects volumeCache
 	isAuthenticated  bool                          // True when successfully authenticated
-	authMutex        sync.RWMutex                  // Protects isAuthenticated
+	wasAuthenticated bool                          // True if agent was ever authenticated this process lifetime
+	lastDisconnect   time.Time                     // When the last healthy disconnect occurred
+	authMutex        sync.RWMutex                  // Protects isAuthenticated, wasAuthenticated, lastDisconnect
 	updater          *AutoUpdater                  // Auto-updater for push notifications
 	alertConfig      *AlertConfig                  // Cached alert config (Resend API key + recipients)
 }
@@ -243,7 +245,7 @@ func (a *Agent) register() error {
 	}
 
 	// Wait for registration response (with timeout)
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	type authResult struct {
 		msg *Message
 		err error
@@ -302,7 +304,7 @@ func (a *Agent) register() error {
 
 	case <-timeout:
 		// Timeout — likely connection dropped silently during deploy
-		return fmt.Errorf("%w: registration timeout (no response in 10s)", ErrTransientAuth)
+		return fmt.Errorf("%w: registration timeout (no response in 30s)", ErrTransientAuth)
 	}
 }
 
@@ -319,7 +321,8 @@ func (a *Agent) authenticate() error {
 	}
 
 	// Wait for authentication response (with timeout)
-	timeout := time.After(10 * time.Second)
+	// 30s allows for Durable Object hibernation cold starts on CF free tier
+	timeout := time.After(30 * time.Second)
 	type authResult struct {
 		msg *Message
 		err error
@@ -390,8 +393,8 @@ func (a *Agent) authenticate() error {
 		return nil
 
 	case <-timeout:
-		// Timeout — likely connection dropped silently during deploy
-		return fmt.Errorf("%w: authentication timeout (no response in 10s)", ErrTransientAuth)
+		// Timeout — likely DO hibernation cold start or Worker redeployment
+		return fmt.Errorf("%w: authentication timeout (no response in 30s)", ErrTransientAuth)
 	}
 }
 
@@ -413,6 +416,18 @@ func (a *Agent) setAuthenticated(status bool) {
 	a.authMutex.Lock()
 	defer a.authMutex.Unlock()
 	a.isAuthenticated = status
+	if status {
+		a.wasAuthenticated = true
+	} else if a.wasAuthenticated {
+		a.lastDisconnect = time.Now()
+	}
+}
+
+// inReconnectWindow returns true if the agent was recently authenticated and should use fast retries.
+func (a *Agent) inReconnectWindow() bool {
+	a.authMutex.RLock()
+	defer a.authMutex.RUnlock()
+	return a.wasAuthenticated && !a.lastDisconnect.IsZero() && time.Since(a.lastDisconnect) < reconnectWindow
 }
 
 func (a *Agent) receiveMessages() {

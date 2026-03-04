@@ -12,10 +12,12 @@ import (
 )
 
 const (
-	initialBackoff = 1 * time.Second
-	maxBackoff     = 60 * time.Second
-	maxAuthBackoff = 5 * time.Minute // Auth retries back off to 5min max (288 req/day at steady state)
-	backoffFactor  = 2.0
+	initialBackoff   = 1 * time.Second
+	maxBackoff       = 60 * time.Second
+	maxAuthBackoff   = 1 * time.Minute // Auth retries back off to 1min max (was 5min)
+	backoffFactor    = 2.0
+	reconnectBackoff = 3 * time.Second // Fast fixed-interval retry after a healthy disconnect
+	reconnectWindow  = 2 * time.Minute // Use fast retries for this long before escalating
 )
 
 // ErrAuthFailure indicates a fatal authentication failure (invalid token, agent not found, etc.)
@@ -23,7 +25,8 @@ const (
 var ErrAuthFailure = errors.New("authentication failure")
 
 // ErrTransientAuth indicates a transient authentication failure (connection dropped during auth,
-// timeout due to Worker redeployment, etc.). These are retried indefinitely with backoff up to 5 minutes.
+// timeout due to DO hibernation cold start, Worker redeployment, etc.).
+// These are retried indefinitely with backoff up to 1 minute.
 // Only explicit server rejection (ErrAuthFailure) causes the agent to exit.
 var ErrTransientAuth = errors.New("transient auth failure")
 
@@ -111,17 +114,30 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			a.conn.Close()
 
 			if errors.Is(err, ErrTransientAuth) {
-				// Transient failure — connection dropped during auth (likely Worker redeploy)
+				// Transient failure — DO hibernation cold start or Worker redeploy
 				transientRetries++
 				if transientRetries == 1 {
 					firstFailure = time.Now()
 				}
 
-				// Log every attempt for the first 10, then every 5th to reduce spam
-				if transientRetries <= 10 || transientRetries%5 == 0 {
-					elapsed := time.Since(firstFailure).Round(time.Second)
-					log.Printf("Auth failed (transient), retrying (#%d, backoff %v, failing for %v)...",
-						transientRetries, authBackoff, elapsed)
+				// Determine retry interval: fast fixed retries vs exponential backoff
+				var retryDelay time.Duration
+				if a.inReconnectWindow() {
+					// Recently authenticated — use fast retries (DO likely just needs to wake up)
+					retryDelay = reconnectBackoff
+					if transientRetries <= 10 || transientRetries%5 == 0 {
+						elapsed := time.Since(firstFailure).Round(time.Second)
+						log.Printf("Auth failed (reconnecting), fast retry in %v (#%d, failing for %v)...",
+							retryDelay, transientRetries, elapsed)
+					}
+				} else {
+					// Fresh connection or reconnect window expired — exponential backoff
+					retryDelay = authBackoff
+					if transientRetries <= 10 || transientRetries%5 == 0 {
+						elapsed := time.Since(firstFailure).Round(time.Second)
+						log.Printf("Auth failed (transient), retrying (#%d, backoff %v, failing for %v)...",
+							transientRetries, retryDelay, elapsed)
+					}
 				}
 
 				// Send alert email after 10 minutes of continuous failure (once per outage)
@@ -131,10 +147,13 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 				}
 
 				select {
-				case <-time.After(authBackoff):
-					authBackoff = time.Duration(float64(authBackoff) * backoffFactor)
-					if authBackoff > maxAuthBackoff {
-						authBackoff = maxAuthBackoff
+				case <-time.After(retryDelay):
+					if !a.inReconnectWindow() {
+						// Only escalate backoff outside the reconnect window
+						authBackoff = time.Duration(float64(authBackoff) * backoffFactor)
+						if authBackoff > maxAuthBackoff {
+							authBackoff = maxAuthBackoff
+						}
 					}
 				case <-ctx.Done():
 					return ctx.Err()
@@ -194,7 +213,7 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 			// Connection closed, clean up and reconnect
 			heartbeatCancel()
 			a.conn.Close()
-			a.setAuthenticated(false) // Mark as not authenticated
+			a.setAuthenticated(false) // Mark as not authenticated (also records lastDisconnect)
 			a.cleanupOnDisconnect()   // Reset log streaming state
 			log.Println("Connection lost, reconnecting...")
 			time.Sleep(initialBackoff)
