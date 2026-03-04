@@ -64,17 +64,20 @@ app.get('/api/agent/version', async (c) => {
   const CACHE_KEY = 'agent-version-info';
   const CACHE_TTL = 300; // 5 minutes — short enough for quick update propagation
 
-  // Try to get from Cloudflare Cache
+  // Try to get from Cloudflare Cache (skip if ?t= cache-bust param present)
   const cache = caches.default;
   const cacheUrl = new URL(c.req.url);
   cacheUrl.pathname = `/__cache/${CACHE_KEY}`;
+  cacheUrl.search = ''; // Normalize cache key
   const cacheRequest = new Request(cacheUrl.toString());
+  const bustCache = c.req.query('t') !== undefined;
 
-  let cachedResponse = await cache.match(cacheRequest);
-  if (cachedResponse) {
-    // Return cached response
-    const data = await cachedResponse.json();
-    return c.json(data);
+  if (!bustCache) {
+    const cachedResponse = await cache.match(cacheRequest);
+    if (cachedResponse) {
+      const data = await cachedResponse.json();
+      return c.json(data);
+    }
   }
 
   // Fetch from GitHub releases API
