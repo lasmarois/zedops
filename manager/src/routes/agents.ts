@@ -1217,9 +1217,10 @@ agents.post('/:id/servers', async (c) => {
     // Store in D1 with status='creating'
     // M9.8.23: Include server_data_path (NULL = inherit from agent, Non-NULL = custom)
     // M9.8.32: Include image (NULL = use agent's steam_zomboid_registry, Non-NULL = custom)
+    // M16: Include image_compliance (NULL if no pre-check was done)
     await c.env.DB.prepare(
-      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, ?)`
+      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path, image_compliance)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'creating', ?, ?, ?, ?)`
     )
       .bind(
         serverId,
@@ -1233,7 +1234,8 @@ agents.post('/:id/servers', async (c) => {
         rconPort,
         now,
         now,
-        body.server_data_path || null  // Store custom path or NULL (inherit from agent)
+        body.server_data_path || null,  // Store custom path or NULL (inherit from agent)
+        body.imageCompliance ? JSON.stringify(body.imageCompliance) : null  // M16: Compliance report
       )
       .run();
 
@@ -1473,10 +1475,27 @@ agents.post('/:id/servers/adopt', async (c) => {
     const serverId = crypto.randomUUID();
     const now = Date.now();
 
+    // M16: Run container compliance check if agent is online
+    let complianceReport: any = null;
+    if (body.containerId) {
+      try {
+        const complianceResponse = await stub.fetch(`http://do/containers/${body.containerId}/compliance`, {
+          method: 'POST',
+        });
+        if (complianceResponse.ok) {
+          complianceReport = await complianceResponse.json();
+        }
+      } catch (err) {
+        // Non-fatal — proceed with adoption even if compliance check fails
+        console.log('[Agents API] Compliance check during adoption failed (non-fatal):', err);
+      }
+    }
+
     // Insert D1 record with status='adopting'
+    // M16: Include image_compliance from container check
     await c.env.DB.prepare(
-      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'adopting', ?, ?, ?)`
+      `INSERT INTO servers (id, agent_id, name, container_id, config, image, image_tag, game_port, udp_port, rcon_port, status, created_at, updated_at, server_data_path, image_compliance)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'adopting', ?, ?, ?, ?)`
     ).bind(
       serverId,
       agentId,
@@ -1489,7 +1508,8 @@ agents.post('/:id/servers/adopt', async (c) => {
       rconPort,
       now,
       now,
-      body.server_data_path || null
+      body.server_data_path || null,
+      complianceReport ? JSON.stringify(complianceReport) : null  // M16: Compliance report
     ).run();
 
     // Add port env vars to config
@@ -3514,6 +3534,68 @@ agents.get('/:id/images/defaults', async (c) => {
   } catch (error) {
     console.error('[Agents API] Error fetching image defaults:', error);
     return c.json({ error: 'Failed to fetch image defaults' }, 500);
+  }
+});
+
+/**
+ * POST /api/agents/:id/images/check
+ * M16: Run image compliance check against the agent
+ *
+ * Body: { registry: string, imageTag: string }
+ * Returns: ComplianceReport
+ */
+agents.post('/:id/images/check', async (c) => {
+  const user = c.get('user');
+  if (!user || user.role === 'viewer') {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const agentId = c.req.param('id');
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch (error) {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { registry, imageTag } = body;
+  if (!registry || !imageTag) {
+    return c.json({ error: 'Missing required fields: registry, imageTag' }, 400);
+  }
+
+  try {
+    const agent = await c.env.DB.prepare('SELECT name, status FROM agents WHERE id = ?')
+      .bind(agentId)
+      .first();
+
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404);
+    }
+
+    if (agent.status !== 'online') {
+      return c.json({ error: 'Agent is offline — cannot run compliance check' }, 503);
+    }
+
+    const doId = c.env.AGENT_CONNECTION.idFromName(agent.name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const response = await stub.fetch('http://do/images/compliance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ registry, imageTag }),
+    });
+
+    if (!response.ok) {
+      const errorData: any = await response.json();
+      return c.json({ error: errorData.error || 'Image compliance check failed' }, response.status);
+    }
+
+    const report = await response.json();
+    return c.json(report);
+  } catch (error) {
+    console.error('[Agents API] Error checking image compliance:', error);
+    return c.json({ error: 'Failed to check image compliance' }, 500);
   }
 });
 

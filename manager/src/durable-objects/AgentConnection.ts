@@ -294,6 +294,15 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // M16: Container compliance check (relay to agent) — must be BEFORE generic container operation handler
+    if (url.pathname.startsWith("/containers/") && url.pathname.endsWith("/compliance") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const containerId = parts[2];
+      if (containerId) {
+        return this.handleContainerComplianceRequest(containerId);
+      }
+    }
+
     // Container operation endpoint
     if (url.pathname.startsWith("/containers/") && request.method === "POST") {
       const parts = url.pathname.split("/");
@@ -469,6 +478,11 @@ export class AgentConnection extends DurableObject {
       if (serverId && filename) {
         return this.handleBackupRestoreRequest(request, serverId, filename);
       }
+    }
+
+    // M16: Image compliance check (relay to agent)
+    if (url.pathname === "/images/compliance" && request.method === "POST") {
+      return this.handleImageComplianceRequest(request);
     }
 
     // Force disconnect agent (called during agent removal)
@@ -3634,6 +3648,90 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Backup restore failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  // ─── M16: Compliance Check Handlers ──────────────────────────────
+
+  /**
+   * Relay image.compliance request to agent.
+   * 60s timeout (image pull may be slow on first run).
+   */
+  private async handleImageComplianceRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { registry, imageTag } = body as { registry?: string; imageTag?: string };
+    if (!registry || !imageTag) {
+      return new Response(JSON.stringify({ error: "Missing required fields: registry, imageTag" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const reply = await this.sendMessageWithReply(
+        { subject: "image.compliance", data: { registry, imageTag } },
+        60000 // 60s timeout for image pull
+      );
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Image compliance check failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Relay container.compliance request to agent.
+   * 30s timeout (no image pull needed).
+   */
+  private async handleContainerComplianceRequest(containerId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const reply = await this.sendMessageWithReply(
+        { subject: "container.compliance", data: { containerId } },
+        30000 // 30s timeout
+      );
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Container compliance check failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },
