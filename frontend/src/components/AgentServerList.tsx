@@ -13,8 +13,9 @@ import {
 import { useServers, useCreateServer, useDeleteServer, useRebuildServer, useCleanupFailedServers, useStartServer, usePurgeServer, useRestoreServer, useSyncServers } from '../hooks/useServers';
 import { ServerForm } from './ServerForm';
 import { RconTerminal } from './RconTerminal';
-import { checkServerData } from '../lib/api';
-import type { Container, CreateServerRequest, Server } from '../lib/api';
+import { checkServerData, checkImageCompliance, fetchAgentConfig } from '../lib/api';
+import type { Container, CreateServerRequest, Server, ComplianceReport } from '../lib/api';
+import { ComplianceCheckModal } from './ComplianceCheckModal';
 import { getDisplayStatus } from '../lib/server-status';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -95,6 +96,13 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
   const [confirmRecover, setConfirmRecover] = useState<{ serverId: string; serverName: string } | null>(null); // Missing server without data
   const [rconServer, setRconServer] = useState<Server | null>(null);
   const [adoptContainer, setAdoptContainer] = useState<{ id: string; name: string } | null>(null);
+
+  // M16: Compliance check state
+  const [complianceModalOpen, setComplianceModalOpen] = useState(false);
+  const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceError, setComplianceError] = useState<string | null>(null);
+  const [pendingCreateRequest, setPendingCreateRequest] = useState<{ request: CreateServerRequest; serverIdToDelete?: string } | null>(null);
 
   // Automatic sync detection - detects when containers are deleted via docker rm
   const lastSyncRef = useRef<{ [serverId: string]: number }>({});
@@ -297,7 +305,42 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
     return { variant: getStateVariant(state), label: container.state, icon: 'dot' };
   };
 
+  // M16: Step 1 — User submits form → trigger compliance check
   const handleCreateServer = async (request: CreateServerRequest, serverIdToDelete?: string) => {
+    // Store the pending request and open compliance modal
+    setPendingCreateRequest({ request, serverIdToDelete });
+    setComplianceReport(null);
+    setComplianceError(null);
+    setComplianceLoading(true);
+    setComplianceModalOpen(true);
+
+    // Determine the registry to check
+    try {
+      const agentConfig = await fetchAgentConfig(agentId);
+      const registry = request.image || agentConfig.steam_zomboid_registry;
+
+      const report = await checkImageCompliance(agentId, registry, request.imageTag);
+      setComplianceReport(report);
+    } catch (err) {
+      setComplianceError(err instanceof Error ? err.message : 'Compliance check failed');
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
+  // M16: Step 2 — User clicks Proceed in compliance modal → actually create
+  const handleComplianceProceed = async () => {
+    if (!pendingCreateRequest) return;
+    const { request, serverIdToDelete } = pendingCreateRequest;
+
+    setComplianceModalOpen(false);
+
+    // Attach compliance report to the create request
+    const requestWithCompliance: CreateServerRequest = {
+      ...request,
+      ...(complianceReport ? { imageCompliance: complianceReport } : {}),
+    };
+
     try {
       // If editing (retrying a failed server), delete the old failed entry first
       if (serverIdToDelete) {
@@ -308,7 +351,7 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         });
       }
 
-      const result = await createServerMutation.mutateAsync({ agentId, request });
+      const result = await createServerMutation.mutateAsync({ agentId, request: requestWithCompliance });
       if (result.success) {
         setServerMessage({
           message: serverIdToDelete
@@ -332,7 +375,18 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
         type: 'error',
       });
       setTimeout(() => setServerMessage(null), 5000);
+    } finally {
+      setPendingCreateRequest(null);
+      setComplianceReport(null);
     }
+  };
+
+  // M16: Step 3 — User cancels compliance modal → abort
+  const handleComplianceCancel = () => {
+    setComplianceModalOpen(false);
+    setPendingCreateRequest(null);
+    setComplianceReport(null);
+    setComplianceError(null);
   };
 
   const handleEditServer = (server: Server) => {
@@ -1211,10 +1265,20 @@ export function AgentServerList({ agentId, agentName, onBack, onViewLogs }: Agen
             setShowServerForm(false);
             setEditServer(undefined);
           }}
-          isSubmitting={createServerMutation.isPending}
+          isSubmitting={createServerMutation.isPending || complianceLoading}
           editServer={editServer}
         />
       )}
+
+      {/* M16: Compliance check modal — shown between form submit and actual creation */}
+      <ComplianceCheckModal
+        report={complianceReport}
+        isLoading={complianceLoading}
+        error={complianceError}
+        open={complianceModalOpen}
+        onProceed={handleComplianceProceed}
+        onCancel={handleComplianceCancel}
+      />
 
       {rconServer && (() => {
         // Parse RCON_PASSWORD from server config
