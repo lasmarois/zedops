@@ -499,6 +499,10 @@ func (a *Agent) receiveMessages() {
 			a.handleRegistryTags(msg)
 		case "images.inspect":
 			a.handleImageInspect(msg)
+		case "image.compliance":
+			go a.handleImageCompliance(msg)
+		case "container.compliance":
+			a.handleContainerCompliance(msg)
 		case "backup.create":
 			go a.handleBackupCreate(msg)
 		case "backup.list":
