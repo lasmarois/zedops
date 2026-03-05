@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, Container, HardDrive } from "lucide-react"
+import { Activity, Container, HardDrive, Shield } from "lucide-react"
+import type { ComplianceReport } from "../../lib/api"
 
 interface StorageInfo {
   binBytes: number
@@ -17,6 +18,7 @@ interface HealthIndicatorsProps {
   rconConnected?: boolean
   diskUsagePercent?: number
   storage?: StorageInfo | null
+  compliance?: ComplianceReport
 }
 
 // Format bytes to human readable
@@ -89,6 +91,7 @@ export function HealthIndicators({
   rconConnected,
   diskUsagePercent,
   storage,
+  compliance,
 }: HealthIndicatorsProps) {
   // Determine container status
   const containerStatus: HealthStatus = !isRunning
@@ -140,6 +143,18 @@ export function HealthIndicators({
           status={rconStatus}
           detail={rconConnected === undefined ? "Not checked" : undefined}
         />
+        {compliance && (
+          <Indicator
+            icon={<Shield className="h-4 w-4" />}
+            label="Compatibility"
+            status={
+              compliance.summary.fail > 0 ? 'error' :
+              compliance.summary.warn > 0 ? 'warning' :
+              'healthy'
+            }
+            detail={`${compliance.summary.pass} pass, ${compliance.summary.warn} warn, ${compliance.summary.fail} fail`}
+          />
+        )}
         {/* Disk Space - Expanded section with storage details */}
         <div className="py-2">
           <div className="flex items-center justify-between">

@@ -25,6 +25,7 @@ interface ServerOverviewProps {
     players?: string[] | null
     rcon_connected?: boolean | null // P2: RCON health status
     data_exists?: boolean // G8: Data exists on disk
+    image_compliance?: import('../../lib/api').ComplianceReport | null // M16: Compliance report
   }
   agentId: string // P4: Needed for RCON commands
   agentDefaultDataPath?: string | null
@@ -142,6 +143,7 @@ export function ServerOverview({
       rconConnected={server.rcon_connected ?? undefined}
       diskUsagePercent={diskUsagePercent ?? undefined}
       storage={storage ?? undefined}
+      compliance={server.image_compliance || undefined}
     />
   )
 

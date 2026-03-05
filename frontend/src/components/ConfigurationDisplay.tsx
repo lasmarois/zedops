@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Lock } from 'lucide-react'
-import type { Server } from '../lib/api'
+import type { Server, ComplianceReport } from '../lib/api'
 import { useImageDefaults } from '../hooks/useServers'
+import { FieldComplianceIndicator } from './FieldComplianceIndicator'
 
 interface ConfigurationDisplayProps {
   server: Server
@@ -39,12 +40,16 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
     ? server.server_data_path
     : <span className="text-muted-foreground italic">Using agent default ({actualDataPath})</span>
 
+  // Parse compliance report
+  const compliance: ComplianceReport | null = server.image_compliance || null
+
   // Helper to render a config field
   const renderField = (
     label: string,
     value: string | number | undefined | null | React.ReactNode,
     immutable = false,
-    sensitive = false
+    sensitive = false,
+    fieldId?: string
   ) => {
     const displayValue = value || <span className="text-muted-foreground italic">Not set</span>
     const maskedValue = sensitive && value ? '••••••••' : displayValue
@@ -58,6 +63,7 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
             </span>
           )}
           <span className="text-sm font-medium text-muted-foreground">{label}</span>
+          {fieldId && <FieldComplianceIndicator fieldId={fieldId} compliance={compliance} />}
         </div>
         <div className="col-span-2">
           <span className="text-sm">{maskedValue}</span>
@@ -98,8 +104,8 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
           <CardTitle className="text-lg">Access Control</CardTitle>
         </CardHeader>
         <CardContent>
-          {renderField('Admin Password', config.ADMIN_PASSWORD, false, true)}
-          {renderField('Server Password', config.SERVER_PASSWORD || 'None (public server)', false, config.SERVER_PASSWORD ? true : false)}
+          {renderField('Admin Password', config.ADMIN_PASSWORD, false, true, 'config.field.ADMIN_PASSWORD')}
+          {renderField('Server Password', config.SERVER_PASSWORD || 'None (public server)', false, config.SERVER_PASSWORD ? true : false, 'config.field.SERVER_PASSWORD')}
           {renderField('RCON Password', config.RCON_PASSWORD || (config.ADMIN_PASSWORD ? 'Same as admin password' : undefined), false, !!config.RCON_PASSWORD)}
         </CardContent>
       </Card>
@@ -238,10 +244,10 @@ export function ConfigurationDisplay({ server, onEdit }: ConfigurationDisplayPro
               <span>{fullRef} <Badge variant="outline" className="ml-2 text-xs">Custom</Badge></span>
             ) : fullRef
           })())}
-          {renderField('Beta Branch', config.BETABRANCH || 'none (stable)')}
+          {renderField('Beta Branch', config.BETABRANCH || 'none (stable)', false, false, 'config.field.BETABRANCH')}
           {renderField('Data Path', dataPathDisplay)}
-          {renderField('Timezone', config.TZ || `${getDefault('TZ', 'UTC')} (image default)`)}
-          {renderField('User ID (PUID)', config.PUID || `${getDefault('PUID', '1430')} (image default)`)}
+          {renderField('Timezone', config.TZ || `${getDefault('TZ', 'UTC')} (image default)`, false, false, 'config.field.TZ')}
+          {renderField('User ID (PUID)', config.PUID || `${getDefault('PUID', '1430')} (image default)`, false, false, 'config.field.PUID')}
         </CardContent>
       </Card>
 
