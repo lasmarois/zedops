@@ -212,6 +212,7 @@ func main() {
 		}
 		agent.updater = updater
 		updater.CheckOnce()
+		updater.StartPeriodicChecks(ctx, periodicUpdateInterval)
 	}
 
 	if err := agent.RunWithReconnect(ctx); err != nil && err != context.Canceled {
