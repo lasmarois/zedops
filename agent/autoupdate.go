@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,9 +12,15 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
+
+// periodicUpdateInterval is how often the agent polls the manager for a newer release.
+// Push notifications (agent.update.available) give instant rollout; this poll is the safety
+// net for agents that were disconnected when the push went out.
+const periodicUpdateInterval = 1 * time.Hour
 
 // VersionInfo represents the response from the version endpoint
 type VersionInfo struct {
@@ -25,7 +32,8 @@ type VersionInfo struct {
 type AutoUpdater struct {
 	managerURL      string
 	currentBinary   string
-	onBeforeRestart func() // Called before syscall.Exec to notify manager
+	onBeforeRestart func()     // Called before syscall.Exec to notify manager
+	checkMu         sync.Mutex // Ensures only one check/update runs at a time
 }
 
 // NewAutoUpdater creates a new auto updater
@@ -53,6 +61,23 @@ func (u *AutoUpdater) CheckOnce() {
 	go u.checkAndUpdate(false)
 }
 
+// StartPeriodicChecks polls the manager for a newer release every interval until ctx is done.
+func (u *AutoUpdater) StartPeriodicChecks(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Printf("Periodic update check (every %v)", interval)
+				u.checkAndUpdate(true)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
 // TriggerUpdate is called when manager pushes an update notification
 func (u *AutoUpdater) TriggerUpdate(version string) {
 	log.Printf("Received update notification from manager: version %s available", version)
@@ -62,6 +87,12 @@ func (u *AutoUpdater) TriggerUpdate(version string) {
 // checkAndUpdate checks for updates and applies them if available
 // bustCache: if true, adds timestamp to bypass Cloudflare cache
 func (u *AutoUpdater) checkAndUpdate(bustCache bool) {
+	if !u.checkMu.TryLock() {
+		log.Println("Update check already in progress, skipping")
+		return
+	}
+	defer u.checkMu.Unlock()
+
 	log.Println("Checking for updates...")
 
 	latestVersion, downloadURL, err := u.getLatestVersion(bustCache)
