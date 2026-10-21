@@ -86,31 +86,26 @@ async function getStoredAgentVersion(db: D1Database): Promise<ReturnType<typeof 
   }
 }
 
+/**
+ * GET /api/agent/version
+ * Returns the latest agent version for auto-update checks.
+ * No auth required - agents need to check before authenticating.
+ *
+ * Source of truth: app_settings.agent_version, written by the release workflow via
+ * POST /api/webhook/broadcast-update. The GitHub releases API is only consulted when nothing
+ * has been stored yet (fresh environment); it is unauthenticated and shares Cloudflare egress
+ * IPs, so it is rate-limited (403) too often to be on the hot path.
+ */
 app.get('/api/agent/version', async (c) => {
-  const GITHUB_REPO = AGENT_GITHUB_REPO;
-  const CACHE_KEY = 'agent-version-info';
-  const CACHE_TTL = 300; // 5 minutes — short enough for quick update propagation
-
-  // Try to get from Cloudflare Cache (skip if ?t= cache-bust param present)
-  const cache = caches.default;
-  const cacheUrl = new URL(c.req.url);
-  cacheUrl.pathname = `/__cache/${CACHE_KEY}`;
-  cacheUrl.search = ''; // Normalize cache key
-  const cacheRequest = new Request(cacheUrl.toString());
-  const bustCache = c.req.query('t') !== undefined;
-
-  if (!bustCache) {
-    const cachedResponse = await cache.match(cacheRequest);
-    if (cachedResponse) {
-      const data = await cachedResponse.json();
-      return c.json(data);
-    }
+  const stored = await getStoredAgentVersion(c.env.DB);
+  if (stored) {
+    return c.json(stored);
   }
 
-  // Fetch from GitHub releases API
+  console.warn('No stored agent version — falling back to GitHub releases API');
   try {
     const githubResponse = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases`,
+      `https://api.github.com/repos/${AGENT_GITHUB_REPO}/releases`,
       {
         headers: {
           'Accept': 'application/vnd.github.v3+json',
@@ -120,12 +115,8 @@ app.get('/api/agent/version', async (c) => {
     );
 
     if (!githubResponse.ok) {
-      // GitHub rate-limits unauthenticated calls per egress IP (shared across Workers), so this
-      // is expected to fail intermittently. Never answer with a made-up version: serve the last
-      // version recorded by the release webhook, then any colo-cached copy, else 503 so the
-      // agent logs an error and the next push notification retries.
       console.error(`GitHub API error: ${githubResponse.status} ${await githubResponse.text().catch(() => '')}`.slice(0, 300));
-      return agentVersionFallback(c, cache, cacheRequest);
+      return c.json({ error: 'Agent version temporarily unavailable' }, 503);
     }
 
     const releases = await githubResponse.json() as Array<{
@@ -134,7 +125,6 @@ app.get('/api/agent/version', async (c) => {
       prerelease: boolean;
     }>;
 
-    // Find latest agent release (tag starts with 'agent-v')
     const agentRelease = releases.find(
       (r) => r.tag_name.startsWith('agent-v') && !r.draft && !r.prerelease
     );
@@ -143,46 +133,24 @@ app.get('/api/agent/version', async (c) => {
       return c.json({ error: 'No agent release found' }, 404);
     }
 
-    // Extract version from tag (agent-v1.0.1 -> 1.0.1)
     const version = agentRelease.tag_name.replace('agent-v', '');
 
-    const responseData = {
-      version,
-      downloadUrls: {
-        'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/${agentRelease.tag_name}/zedops-agent-linux-amd64`,
-        'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/${agentRelease.tag_name}/zedops-agent-linux-arm64`,
-      },
-    };
+    // Remember it so the next check does not need GitHub at all
+    c.executionCtx.waitUntil(storeAgentVersion(c.env.DB, version));
 
-    // Cache the response
-    const responseToCache = new Response(JSON.stringify(responseData), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': `public, max-age=${CACHE_TTL}`,
-      },
-    });
-    c.executionCtx.waitUntil(cache.put(cacheRequest, responseToCache));
-
-    return c.json(responseData);
+    return c.json(agentVersionInfo(version));
   } catch (error) {
     console.error('Failed to fetch from GitHub:', error);
-    return agentVersionFallback(c, cache, cacheRequest);
+    return c.json({ error: 'Agent version temporarily unavailable' }, 503);
   }
 });
 
-/** Fallback chain for /api/agent/version when GitHub is unavailable. */
-async function agentVersionFallback(c: any, cache: Cache, cacheRequest: Request): Promise<Response> {
-  const stored = await getStoredAgentVersion(c.env.DB);
-  if (stored) {
-    console.log(`Serving stored agent version ${stored.version} (GitHub unavailable)`);
-    return c.json(stored);
-  }
-  const cached = await cache.match(cacheRequest);
-  if (cached) {
-    console.log('Serving colo-cached agent version (GitHub unavailable)');
-    return c.json(await cached.json());
-  }
-  return c.json({ error: 'Agent version temporarily unavailable' }, 503);
+/** Persist the latest released agent version (idempotent upsert). */
+async function storeAgentVersion(db: D1Database, version: string): Promise<void> {
+  await db.prepare(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ('agent_version', ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+  ).bind(JSON.stringify({ version }), Math.floor(Date.now() / 1000)).run();
 }
 
 /**
@@ -272,14 +240,12 @@ app.post('/api/webhook/broadcast-update', async (c) => {
     return c.json({ error: 'version is required' }, 400);
   }
 
-  // Record the released version so /api/agent/version can serve it even when GitHub is unreachable
+  // Record the released version — this is what /api/agent/version serves to agents
   try {
-    await c.env.DB.prepare(
-      `INSERT INTO app_settings (key, value, updated_at) VALUES ('agent_version', ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-    ).bind(JSON.stringify({ version }), Math.floor(Date.now() / 1000)).run();
+    await storeAgentVersion(c.env.DB, version);
   } catch (error) {
     console.error('Failed to store agent version:', error);
+    return c.json({ error: 'Failed to store agent version' }, 500);
   }
 
   // Get all connected agents from database
