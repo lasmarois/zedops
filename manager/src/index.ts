@@ -59,8 +59,35 @@ app.route('/api/servers', servers); // Global server endpoints
  * Fetches from GitHub releases API with 5-minute cache
  * No auth required - agents need to check before authenticating
  */
+const AGENT_GITHUB_REPO = 'lasmarois/zedops';
+
+/** Build the standard version-info payload for a given agent version (tag agent-v<version>). */
+function agentVersionInfo(version: string) {
+  const tag = `agent-v${version}`;
+  return {
+    version,
+    downloadUrls: {
+      'linux-amd64': `https://github.com/${AGENT_GITHUB_REPO}/releases/download/${tag}/zedops-agent-linux-amd64`,
+      'linux-arm64': `https://github.com/${AGENT_GITHUB_REPO}/releases/download/${tag}/zedops-agent-linux-arm64`,
+    },
+  };
+}
+
+/** Last known agent version as recorded by the release webhook (survives GitHub API outages). */
+async function getStoredAgentVersion(db: D1Database): Promise<ReturnType<typeof agentVersionInfo> | null> {
+  try {
+    const row = await db.prepare(`SELECT value FROM app_settings WHERE key = 'agent_version'`).first<{ value: string }>();
+    if (!row) return null;
+    const parsed = JSON.parse(row.value) as { version?: string };
+    return parsed.version ? agentVersionInfo(parsed.version) : null;
+  } catch (error) {
+    console.error('Failed to read stored agent version:', error);
+    return null;
+  }
+}
+
 app.get('/api/agent/version', async (c) => {
-  const GITHUB_REPO = 'lasmarois/zedops';
+  const GITHUB_REPO = AGENT_GITHUB_REPO;
   const CACHE_KEY = 'agent-version-info';
   const CACHE_TTL = 300; // 5 minutes — short enough for quick update propagation
 
@@ -93,15 +120,12 @@ app.get('/api/agent/version', async (c) => {
     );
 
     if (!githubResponse.ok) {
-      console.error(`GitHub API error: ${githubResponse.status}`);
-      // Fallback to hardcoded version if GitHub API fails
-      return c.json({
-        version: '1.0.1',
-        downloadUrls: {
-          'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-amd64`,
-          'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-arm64`,
-        },
-      });
+      // GitHub rate-limits unauthenticated calls per egress IP (shared across Workers), so this
+      // is expected to fail intermittently. Never answer with a made-up version: serve the last
+      // version recorded by the release webhook, then any colo-cached copy, else 503 so the
+      // agent logs an error and the next push notification retries.
+      console.error(`GitHub API error: ${githubResponse.status} ${await githubResponse.text().catch(() => '')}`.slice(0, 300));
+      return agentVersionFallback(c, cache, cacheRequest);
     }
 
     const releases = await githubResponse.json() as Array<{
@@ -142,16 +166,24 @@ app.get('/api/agent/version', async (c) => {
     return c.json(responseData);
   } catch (error) {
     console.error('Failed to fetch from GitHub:', error);
-    // Fallback to hardcoded version
-    return c.json({
-      version: '1.0.1',
-      downloadUrls: {
-        'linux-amd64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-amd64`,
-        'linux-arm64': `https://github.com/${GITHUB_REPO}/releases/download/agent-v1.0.1/zedops-agent-linux-arm64`,
-      },
-    });
+    return agentVersionFallback(c, cache, cacheRequest);
   }
 });
+
+/** Fallback chain for /api/agent/version when GitHub is unavailable. */
+async function agentVersionFallback(c: any, cache: Cache, cacheRequest: Request): Promise<Response> {
+  const stored = await getStoredAgentVersion(c.env.DB);
+  if (stored) {
+    console.log(`Serving stored agent version ${stored.version} (GitHub unavailable)`);
+    return c.json(stored);
+  }
+  const cached = await cache.match(cacheRequest);
+  if (cached) {
+    console.log('Serving colo-cached agent version (GitHub unavailable)');
+    return c.json(await cached.json());
+  }
+  return c.json({ error: 'Agent version temporarily unavailable' }, 503);
+}
 
 /**
  * POST /api/agent/validate-token
@@ -238,6 +270,16 @@ app.post('/api/webhook/broadcast-update', async (c) => {
 
   if (!version) {
     return c.json({ error: 'version is required' }, 400);
+  }
+
+  // Record the released version so /api/agent/version can serve it even when GitHub is unreachable
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ('agent_version', ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+    ).bind(JSON.stringify({ version }), Math.floor(Date.now() / 1000)).run();
+  } catch (error) {
+    console.error('Failed to store agent version:', error);
   }
 
   // Get all connected agents from database
