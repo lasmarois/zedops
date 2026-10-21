@@ -437,11 +437,64 @@ export interface Server {
   players: string[] | null;
   rcon_connected?: boolean | null; // P2: RCON health status
   data_exists: boolean;
+  image_compliance: ComplianceReport | null; // M16: Compliance check report (null = legacy, no check done)
   ini_mods: string | null; // Raw Mods= line from server INI file
   ini_workshop_items: string | null; // Raw WorkshopItems= line from server INI file
   deleted_at: number | null;
   created_at: number;
   updated_at: number;
+}
+
+// ─── Compliance Types (M16) ──────────────────────────────────────────
+
+export interface ComplianceReport {
+  success: boolean;
+  imageRef: string;
+  checkedAt: string; // ISO 8601
+  mode: 'image' | 'container';
+  discovered: DiscoveredProperties;
+  capabilities: CapabilityCheckResult[];
+  summary: ComplianceSummary;
+  error?: string;
+}
+
+export interface DiscoveredProperties {
+  volumes?: string[];
+  mounts?: MountInfo[];
+  envVars: Record<string, string>;
+  networks?: string[];
+  healthcheck: boolean;
+  exposedPorts?: string[];
+  health?: string;
+}
+
+export interface MountInfo {
+  source: string;
+  destination: string;
+  type: string;
+}
+
+export interface CapabilityCheckResult {
+  id: string;
+  name: string;
+  status: 'pass' | 'warn' | 'fail' | 'unknown';
+  category: 'config' | 'backup' | 'rcon' | 'storage' | 'health';
+  checks: CheckDetail[];
+}
+
+export interface CheckDetail {
+  type: 'mount' | 'env' | 'network';
+  key: string;
+  pass: boolean;
+  found: string | null;
+  detail?: string;
+}
+
+export interface ComplianceSummary {
+  pass: number;
+  warn: number;
+  fail: number;
+  unknown: number;
 }
 
 export interface ServerConfig {
@@ -457,6 +510,7 @@ export interface CreateServerRequest {
   udpPort?: number;
   rconPort?: number;
   server_data_path?: string; // M9.8.23: Optional per-server data path override
+  imageCompliance?: ComplianceReport; // M16: Pre-checked compliance report to store
 }
 
 export interface ServersResponse {
@@ -500,6 +554,59 @@ export async function fetchServers(
 /**
  * Create a new server
  */
+// ─── Compliance API (M16) ──────────────────────────────────────────
+
+/**
+ * Check image compliance before server creation.
+ * Sends image.compliance to agent via manager, returns report.
+ */
+export async function checkImageCompliance(
+  agentId: string,
+  registry: string,
+  imageTag: string
+): Promise<ComplianceReport> {
+  const response = await fetch(`${API_BASE}/api/agents/${agentId}/images/check`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ registry, imageTag }),
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to check image compliance');
+  }
+
+  return response.json();
+}
+
+/**
+ * Re-check compliance for an existing server's container.
+ */
+export async function recheckServerCompliance(
+  serverId: string
+): Promise<ComplianceReport> {
+  const response = await fetch(`${API_BASE}/api/servers/${serverId}/compliance/recheck`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    handleAuthError(response);
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to re-check compliance');
+  }
+
+  const result = await response.json();
+  return result.compliance;
+}
+
 export async function createServer(
   agentId: string,
   request: CreateServerRequest

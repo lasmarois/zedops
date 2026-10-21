@@ -9,7 +9,9 @@ import { useAllServers, usePurgeServer, useRestoreServer, useCreateServer } from
 import { useAgents } from "@/hooks/useAgents"
 import { Plus, Search, Trash2, ChevronDown, ChevronUp, RefreshCw, ShieldAlert } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import type { Server, CreateServerRequest } from "@/lib/api"
+import type { Server, CreateServerRequest, ComplianceReport } from "@/lib/api"
+import { checkImageCompliance, fetchAgentConfig } from "@/lib/api"
+import { ComplianceCheckModal } from "@/components/ComplianceCheckModal"
 import { ServerCard } from "@/components/ServerCard"
 import { ServerCardLayoutToggle } from "@/components/ServerCardLayoutToggle"
 import { useServerCardLayout } from "@/contexts/ServerCardLayoutContext"
@@ -83,6 +85,13 @@ export function ServerList() {
   // Confirmation dialog state
   const [confirmPurge, setConfirmPurge] = useState<ServerWithAgent | null>(null)
   const [confirmRestore, setConfirmRestore] = useState<ServerWithAgent | null>(null)
+
+  // M16: Compliance check state
+  const [complianceModalOpen, setComplianceModalOpen] = useState(false)
+  const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null)
+  const [complianceLoading, setComplianceLoading] = useState(false)
+  const [complianceError, setComplianceError] = useState<string | null>(null)
+  const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateServerRequest | null>(null)
 
   // Map API data to component format
   const allServers: ServerWithAgent[] = serversData?.servers?.map((server: Server) => ({
@@ -171,19 +180,58 @@ export function ServerList() {
     setIsModalOpen(true)
   }
 
-  // Handler for form submission
-  const handleCreateServer = (request: CreateServerRequest) => {
+  // M16: Step 1 — User submits form → trigger compliance check
+  const handleCreateServer = async (request: CreateServerRequest) => {
     if (!selectedAgentId) return
 
+    setPendingCreateRequest(request)
+    setComplianceReport(null)
+    setComplianceError(null)
+    setComplianceLoading(true)
+    setComplianceModalOpen(true)
+
+    try {
+      const agentConfig = await fetchAgentConfig(selectedAgentId)
+      const registry = request.image || agentConfig.steam_zomboid_registry
+      const report = await checkImageCompliance(selectedAgentId, registry, request.imageTag)
+      setComplianceReport(report)
+    } catch (err) {
+      setComplianceError(err instanceof Error ? err.message : 'Compliance check failed')
+    } finally {
+      setComplianceLoading(false)
+    }
+  }
+
+  // M16: Step 2 — User clicks Proceed
+  const handleComplianceProceed = () => {
+    if (!selectedAgentId || !pendingCreateRequest) return
+
+    const requestWithCompliance: CreateServerRequest = {
+      ...pendingCreateRequest,
+      ...(complianceReport ? { imageCompliance: complianceReport } : {}),
+    }
+
+    setComplianceModalOpen(false)
+
     createServerMutation.mutate(
-      { agentId: selectedAgentId, request },
+      { agentId: selectedAgentId, request: requestWithCompliance },
       {
         onSuccess: () => {
           setIsModalOpen(false)
           setSelectedAgentId(null)
+          setPendingCreateRequest(null)
+          setComplianceReport(null)
         },
       }
     )
+  }
+
+  // M16: Step 3 — User cancels
+  const handleComplianceCancel = () => {
+    setComplianceModalOpen(false)
+    setPendingCreateRequest(null)
+    setComplianceReport(null)
+    setComplianceError(null)
   }
 
   // Handler for modal cancel
@@ -377,6 +425,7 @@ export function ServerList() {
               config: server.config,
               server_data_path: server.serverDataPath,
               data_exists: server.dataExists,
+              image_compliance: null,
               ini_mods: server.iniMods,
               ini_workshop_items: server.iniWorkshopItems,
               deleted_at: server.deletedAt,
@@ -500,11 +549,21 @@ export function ServerList() {
               agentId={selectedAgentId}
               onSubmit={handleCreateServer}
               onCancel={handleModalCancel}
-              isSubmitting={createServerMutation.isPending}
+              isSubmitting={createServerMutation.isPending || complianceLoading}
             />
           )}
         </DialogContent>
       </Dialog>
+
+      {/* M16: Compliance check modal */}
+      <ComplianceCheckModal
+        report={complianceReport}
+        isLoading={complianceLoading}
+        error={complianceError}
+        open={complianceModalOpen}
+        onProceed={handleComplianceProceed}
+        onCancel={handleComplianceCancel}
+      />
 
       {/* Purge Confirmation Dialog */}
       <Dialog open={!!confirmPurge} onOpenChange={(open) => !open && setConfirmPurge(null)}>

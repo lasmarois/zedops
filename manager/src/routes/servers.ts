@@ -132,6 +132,7 @@ servers.get('/', async (c) => {
       image: row.image, // M9.8.32: Per-server image override
       image_tag: row.image_tag,
       image_version: row.container_id ? containerVersionMap[row.container_id] : undefined, // Resolved image version from OCI label
+      image_compliance: row.image_compliance ? JSON.parse(row.image_compliance as string) : null, // M16: Compliance report
       game_port: row.game_port,
       udp_port: row.udp_port,
       rcon_port: row.rcon_port,
@@ -280,6 +281,7 @@ servers.get('/:id', async (c) => {
       image: server.image, // M9.8.32: Per-server image override
       image_tag: server.image_tag,
       image_version: imageVersion, // Resolved image version from OCI label
+      image_compliance: server.image_compliance ? JSON.parse(server.image_compliance as string) : null, // M16: Compliance report
       game_port: server.game_port,
       udp_port: server.udp_port,
       rcon_port: server.rcon_port,
@@ -445,6 +447,115 @@ servers.get('/:serverId/metrics/history', async (c) => {
   } catch (error) {
     console.error('[Servers API] Error fetching metrics history:', error);
     return c.json({ error: 'Failed to fetch metrics history' }, 500);
+  }
+});
+
+/**
+ * POST /api/servers/:serverId/compliance/recheck
+ * Re-check compliance for an existing server's container
+ *
+ * Sends container.compliance to the agent, updates D1, returns new report.
+ * Permission: operator or higher
+ */
+servers.post('/:serverId/compliance/recheck', async (c) => {
+  const user = c.get('user');
+  const serverId = c.req.param('serverId');
+
+  // Require operator or higher
+  if (user.role === 'viewer') {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  try {
+    // Get server with agent info
+    const server = await c.env.DB.prepare(
+      `SELECT s.*, a.name as agent_name, a.status as agent_status
+       FROM servers s
+       LEFT JOIN agents a ON s.agent_id = a.id
+       WHERE s.id = ?`
+    ).bind(serverId).first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Permission check for non-admins
+    if (user.role !== 'admin') {
+      const hasAccess = await canViewServer(c.env.DB, user.id, user.role, serverId);
+      if (!hasAccess) {
+        return c.json({ error: 'Access denied' }, 403);
+      }
+    }
+
+    if (server.agent_status !== 'online') {
+      return c.json({ error: 'Agent is offline — cannot run compliance check' }, 503);
+    }
+
+    if (!server.container_id) {
+      return c.json({ error: 'Server has no container — cannot run container compliance check' }, 400);
+    }
+
+    // Send container.compliance to agent via DO
+    const doId = c.env.AGENT_CONNECTION.idFromName(server.agent_name as string);
+    const stub = c.env.AGENT_CONNECTION.get(doId);
+
+    const complianceResponse = await stub.fetch(`http://do/containers/${server.container_id}/compliance`, {
+      method: 'POST',
+    });
+
+    if (!complianceResponse.ok) {
+      const errorData: any = await complianceResponse.json();
+      return c.json({ error: errorData.error || 'Compliance check failed' }, complianceResponse.status);
+    }
+
+    const report: any = await complianceResponse.json();
+
+    // Store updated compliance report in D1
+    await c.env.DB.prepare(
+      `UPDATE servers SET image_compliance = ?, updated_at = ? WHERE id = ?`
+    ).bind(JSON.stringify(report), Date.now(), serverId).run();
+
+    return c.json({ success: true, compliance: report });
+  } catch (error) {
+    console.error('[Servers API] Error re-checking compliance:', error);
+    return c.json({ error: 'Failed to re-check compliance' }, 500);
+  }
+});
+
+/**
+ * GET /api/servers/:serverId/compliance
+ * Get stored compliance report for a server
+ *
+ * Permission: viewer or higher
+ */
+servers.get('/:serverId/compliance', async (c) => {
+  const user = c.get('user');
+  const serverId = c.req.param('serverId');
+
+  try {
+    const server = await c.env.DB.prepare(
+      'SELECT id, agent_id, image_compliance FROM servers WHERE id = ?'
+    ).bind(serverId).first();
+
+    if (!server) {
+      return c.json({ error: 'Server not found' }, 404);
+    }
+
+    // Permission check for non-admins
+    if (user.role !== 'admin') {
+      const hasAccess = await canViewServer(c.env.DB, user.id, user.role, serverId);
+      if (!hasAccess) {
+        return c.json({ error: 'Access denied' }, 403);
+      }
+    }
+
+    return c.json({
+      success: true,
+      compliance: server.image_compliance ? JSON.parse(server.image_compliance as string) : null,
+    });
+  } catch (error) {
+    console.error('[Servers API] Error fetching compliance:', error);
+    return c.json({ error: 'Failed to fetch compliance report' }, 500);
   }
 });
 

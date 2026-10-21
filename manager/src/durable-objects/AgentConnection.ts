@@ -32,6 +32,9 @@ import { logRconCommand, logAgentRegistered } from "../lib/audit";
 import { getAlertRecipientsForAgent } from "../lib/permissions";
 import { sendEmail, buildAgentOfflineEmailHtml, buildAgentRecoveredEmailHtml, buildAgentUpdatedEmailHtml, getEmailThemeColors } from "../lib/email";
 
+// WebSocket.readyState value for OPEN (CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3)
+const WS_READY_STATE_OPEN = 1;
+
 export class AgentConnection extends DurableObject {
   // Core agent state (restored from storage after hibernation)
   private agentId: string | null = null;
@@ -59,6 +62,10 @@ export class AgentConnection extends DurableObject {
   // In-memory cache for subscription lookups (invalidated on subscribe/unsubscribe)
   private containerSubCache: Map<string, string> | null = null; // subscriberId -> containerId
   private agentSubCache: Set<string> | null = null; // subscriberIds
+
+  // The agent WebSocket that most recently sent us a message (in-memory only;
+  // after hibernation we fall back to the newest OPEN socket by attachment seq).
+  private activeAgentWs: WebSocket | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -96,8 +103,27 @@ export class AgentConnection extends DurableObject {
    * Get the agent's WebSocket using hibernation-aware tag lookup.
    */
   private getAgentWebSocket(): WebSocket | null {
-    const sockets = this.ctx.getWebSockets("agent");
-    return sockets.length > 0 ? sockets[0] : null;
+    const open = this.getOpenAgentWebSockets();
+    if (open.length === 0) return null;
+    // Prefer the socket that most recently talked to us (set in handleAgentMessage).
+    if (this.activeAgentWs && open.includes(this.activeAgentWs)) return this.activeAgentWs;
+    // Otherwise the most recently accepted socket (highest connSeq attachment).
+    return open.reduce((best, ws) => (this.getConnSeq(ws) >= this.getConnSeq(best) ? ws : best), open[0]);
+  }
+
+  /** Agent sockets that are actually OPEN (excludes CLOSING/CLOSED stragglers). */
+  private getOpenAgentWebSockets(): WebSocket[] {
+    return this.ctx.getWebSockets("agent").filter((ws) => ws.readyState === WS_READY_STATE_OPEN);
+  }
+
+  /** Monotonic accept sequence stored on the socket at upgrade time (survives hibernation). */
+  private getConnSeq(ws: WebSocket): number {
+    try {
+      const att = ws.deserializeAttachment() as { connSeq?: number } | null;
+      return att?.connSeq ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -168,6 +194,8 @@ export class AgentConnection extends DurableObject {
     const tags = this.ctx.getTags(ws);
 
     if (tags.includes("agent")) {
+      // Replies must go back on the socket the message arrived on, never on a stale one.
+      this.activeAgentWs = ws;
       await this.handleAgentMessage(ws, message);
     } else if (tags.includes("ui")) {
       const subscriberId = this.getSubscriberId(ws);
@@ -187,10 +215,15 @@ export class AgentConnection extends DurableObject {
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     await this.restoreState();
 
+    // Complete the close handshake. Required on compatibility dates before 2026-04-07;
+    // otherwise the socket lingers in CLOSING state and keeps showing up in getWebSockets().
+    // With web_socket_auto_reply_to_close this is a safe no-op.
+    try { ws.close(code, reason); } catch { /* already closed */ }
+
     const tags = this.ctx.getTags(ws);
 
     if (tags.includes("agent")) {
-      await this.handleAgentClose(code, reason);
+      await this.handleAgentClose(ws, code, reason, wasClean);
     } else if (tags.includes("ui")) {
       const subscriberId = this.getSubscriberId(ws);
       if (subscriberId) {
@@ -209,7 +242,7 @@ export class AgentConnection extends DurableObject {
 
     if (tags.includes("agent")) {
       console.error("[AgentConnection] Agent WebSocket error:", error);
-      await this.handleAgentClose(1006, "WebSocket error");
+      await this.handleAgentClose(ws, 1006, "WebSocket error", false);
     } else if (tags.includes("ui")) {
       const subscriberId = this.getSubscriberId(ws);
       console.error(`[AgentConnection] UI WebSocket error (${subscriberId}):`, error);
@@ -252,6 +285,7 @@ export class AgentConnection extends DurableObject {
         agentId: this.agentId,
         isRegistered: this.isRegistered,
         agentWebSockets: agentSockets.length,
+        agentSocketStates: agentSockets.map((ws) => ({ readyState: ws.readyState, connSeq: this.getConnSeq(ws) })),
         uiWebSockets: uiSockets.length,
         logBuffers: this.logBuffers.size,
         rconSessions: this.rconSessions.size,
@@ -291,6 +325,15 @@ export class AgentConnection extends DurableObject {
         }), {
           headers: { "Content-Type": "application/json" },
         });
+      }
+    }
+
+    // M16: Container compliance check (relay to agent) — must be BEFORE generic container operation handler
+    if (url.pathname.startsWith("/containers/") && url.pathname.endsWith("/compliance") && request.method === "POST") {
+      const parts = url.pathname.split("/");
+      const containerId = parts[2];
+      if (containerId) {
+        return this.handleContainerComplianceRequest(containerId);
       }
     }
 
@@ -471,6 +514,11 @@ export class AgentConnection extends DurableObject {
       }
     }
 
+    // M16: Image compliance check (relay to agent)
+    if (url.pathname === "/images/compliance" && request.method === "POST") {
+      return this.handleImageComplianceRequest(request);
+    }
+
     // Force disconnect agent (called during agent removal)
     if (url.pathname === "/force-disconnect" && request.method === "POST") {
       const agentSocket = this.getAgentWebSocket();
@@ -522,11 +570,28 @@ export class AgentConnection extends DurableObject {
       return new Response("Expected Upgrade: websocket", { status: 426 });
     }
 
+    // One agent per DO: any socket still attached is stale (the agent only opens a new
+    // connection after it has given up on the old one). Close them so replies can never be
+    // routed to a half-open socket that Cloudflare has not reaped yet.
+    const stale = this.ctx.getWebSockets("agent");
+    for (const old of stale) {
+      try {
+        old.close(4001, "Superseded by new agent connection");
+      } catch (e) {
+        console.warn("[AgentConnection] Error closing stale agent socket:", e);
+      }
+    }
+    if (stale.length > 0) {
+      console.log(`[AgentConnection] Closed ${stale.length} stale agent socket(s) before accepting new connection`);
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
     // Accept with hibernation support — tag as "agent"
     this.ctx.acceptWebSocket(server, ["agent"]);
+    server.serializeAttachment({ connSeq: Date.now() });
+    this.activeAgentWs = server;
 
     // Capture client IP from Cloudflare headers
     this.clientIp = request.headers.get("CF-Connecting-IP") || null;
@@ -741,8 +806,20 @@ export class AgentConnection extends DurableObject {
   /**
    * Handle agent close — update DB status, clear storage
    */
-  private async handleAgentClose(code: number, reason: string): Promise<void> {
-    console.log(`[AgentConnection] Agent WebSocket closed: code=${code}, reason=${reason}`);
+  private async handleAgentClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+    console.log(`[AgentConnection] Agent WebSocket closed: code=${code}, reason=${reason}, wasClean=${wasClean}, connSeq=${this.getConnSeq(ws)}`);
+
+    if (this.activeAgentWs === ws) {
+      this.activeAgentWs = null;
+    }
+
+    // If another agent socket is still OPEN (the agent already reconnected and this is the
+    // old/superseded socket being reaped), the agent is NOT offline — leave state untouched.
+    const survivors = this.getOpenAgentWebSockets().filter((s) => s !== ws);
+    if (survivors.length > 0) {
+      console.log(`[AgentConnection] Stale agent socket closed but ${survivors.length} live socket(s) remain — agent stays online`);
+      return;
+    }
 
     if (this.isRegistered && this.agentId) {
       try {
@@ -3634,6 +3711,90 @@ export class AgentConnection extends DurableObject {
     } catch (error) {
       return new Response(JSON.stringify({
         error: error instanceof Error ? error.message : "Backup restore failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  // ─── M16: Compliance Check Handlers ──────────────────────────────
+
+  /**
+   * Relay image.compliance request to agent.
+   * 60s timeout (image pull may be slow on first run).
+   */
+  private async handleImageComplianceRequest(request: Request): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const { registry, imageTag } = body as { registry?: string; imageTag?: string };
+    if (!registry || !imageTag) {
+      return new Response(JSON.stringify({ error: "Missing required fields: registry, imageTag" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const reply = await this.sendMessageWithReply(
+        { subject: "image.compliance", data: { registry, imageTag } },
+        60000 // 60s timeout for image pull
+      );
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Image compliance check failed",
+      }), {
+        status: 504,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  /**
+   * Relay container.compliance request to agent.
+   * 30s timeout (no image pull needed).
+   */
+  private async handleContainerComplianceRequest(containerId: string): Promise<Response> {
+    if (!this.isRegistered || !this.agentId) {
+      return new Response(JSON.stringify({ error: "Agent not connected" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const reply = await this.sendMessageWithReply(
+        { subject: "container.compliance", data: { containerId } },
+        30000 // 30s timeout
+      );
+      const success = reply.data.success !== false;
+      return new Response(JSON.stringify(reply.data), {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Container compliance check failed",
       }), {
         status: 504,
         headers: { "Content-Type": "application/json" },
