@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -435,11 +436,20 @@ func (a *Agent) receiveMessages() {
 		var msg Message
 		err := a.conn.ReadJSON(&msg)
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("No data from manager for %v — link considered dead", readTimeout)
+			} else if ce, ok := err.(*websocket.CloseError); ok {
+				// Always log the close code: a clean 1000/1001 from the server is diagnostic.
+				log.Printf("WebSocket closed by manager: code=%d reason=%q", ce.Code, ce.Text)
+			} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				log.Println("WebSocket error:", err)
+			} else {
+				log.Println("WebSocket read error:", err)
 			}
 			return
 		}
+		// Any inbound message proves the link is alive — extend the dead-link deadline.
+		a.conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		log.Printf("Received: %s - %v", msg.Subject, msg.Data)
 

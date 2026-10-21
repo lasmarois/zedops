@@ -18,6 +18,12 @@ const (
 	backoffFactor    = 2.0
 	reconnectBackoff = 3 * time.Second // Fast fixed-interval retry after a healthy disconnect
 	reconnectWindow  = 2 * time.Minute // Use fast retries for this long before escalating
+
+	// Dead-link detection: the manager acks every heartbeat (30s) and relays other traffic.
+	// If nothing at all arrives for readTimeout, the link is considered dead and we reconnect
+	// instead of waiting for a TCP error that may never come (half-open connection).
+	readTimeout  = 90 * time.Second
+	pingInterval = 30 * time.Second
 )
 
 // ErrAuthFailure indicates a fatal authentication failure (invalid token, agent not found, etc.)
@@ -111,7 +117,7 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 
 		// Register or authenticate
 		if err := a.register(); err != nil {
-			a.conn.Close()
+			a.closeConn(websocket.CloseNormalClosure, "auth failed")
 
 			if errors.Is(err, ErrTransientAuth) {
 				// Transient failure — DO hibernation cold start or Worker redeploy
@@ -196,6 +202,12 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 		a.setAuthenticated(true)
 		log.Println("Agent authenticated successfully")
 
+		// Arm dead-link detection: every inbound frame (messages, pongs) extends the deadline.
+		a.conn.SetReadDeadline(time.Now().Add(readTimeout))
+		a.conn.SetPongHandler(func(string) error {
+			return a.conn.SetReadDeadline(time.Now().Add(readTimeout))
+		})
+
 		// Start heartbeat
 		heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
 		go a.sendHeartbeats(heartbeatCtx)
@@ -212,7 +224,7 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 		case <-done:
 			// Connection closed, clean up and reconnect
 			heartbeatCancel()
-			a.conn.Close()
+			a.closeConn(websocket.CloseGoingAway, "reconnecting")
 			a.setAuthenticated(false) // Mark as not authenticated (also records lastDisconnect)
 			a.cleanupOnDisconnect()   // Reset log streaming state
 			log.Println("Connection lost, reconnecting...")
@@ -239,9 +251,21 @@ func (a *Agent) RunWithReconnect(ctx context.Context) error {
 func (a *Agent) sendHeartbeats(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	pingTicker := time.NewTicker(pingInterval)
+	defer pingTicker.Stop()
 
 	for {
 		select {
+		case <-pingTicker.C:
+			// Protocol-level ping; the Cloudflare edge answers with a pong even while the
+			// Durable Object hibernates, so a missing pong means the link itself is dead.
+			a.connMutex.Lock()
+			err := a.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			a.connMutex.Unlock()
+			if err != nil {
+				log.Printf("Failed to send ping: %v", err)
+				return
+			}
 		case <-ticker.C:
 			// Collect host metrics (pass DockerClient for disk path discovery)
 			metrics, err := CollectHostMetrics(a.docker)
@@ -282,4 +306,17 @@ func (a *Agent) sendHeartbeats(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// closeConn sends a WebSocket close frame (best effort) and then closes the TCP connection.
+// Sending the close frame lets the manager's Durable Object reap the socket immediately
+// instead of leaving it half-open until Cloudflare detects the dead TCP connection.
+func (a *Agent) closeConn(code int, reason string) {
+	if a.conn == nil {
+		return
+	}
+	a.connMutex.Lock()
+	defer a.connMutex.Unlock()
+	_ = a.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, reason), time.Now().Add(2*time.Second))
+	a.conn.Close()
 }

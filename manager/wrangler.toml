@@ -1,6 +1,14 @@
 name = "zedops"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
+# Runtime auto-replies to WebSocket Close frames so sockets reach CLOSED promptly instead of
+# lingering in CLOSING (default behaviour only from compatibility_date 2026-04-07).
+compatibility_flags = ["web_socket_auto_reply_to_close"]
+
+# Workers Logs — persist console.log from Worker + Durable Objects (free tier: 200k events/day)
+[observability]
+enabled = true
+head_sampling_rate = 1
 
 # Static Assets (Frontend build output)
 # Assets are served first; run_worker_first routes API/WS to Worker code.
@@ -34,6 +42,10 @@ database_id = "0c225574-390c-4c51-ba42-8629c7b01f35"
 
 [env.dev]
 name = "zedops-dev"
+
+[env.dev.observability]
+enabled = true
+head_sampling_rate = 1
 
 [[env.dev.durable_objects.bindings]]
 name = "AGENT_CONNECTION"
